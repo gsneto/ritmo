@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ritmo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"><i data-lucide="activity"></i></span>
+          <div>
+            <p class="eyebrow">Rotina pessoal</p>
+            <h1>Ritmo</h1>
+          </div>
+        </div>
+          <button class="profile-button" id="profileButton" type="button" aria-label="Abrir ajustes de perfil">
+            <span class="profile-avatar" id="activeProfileInitials">A</span>
+            <span id="activeProfileName">Antonio</span>
+            <i data-lucide="settings-2"></i>
+          </button>
+      </header>
+
+      <nav class="view-nav" aria-label="Navegacao principal">
+        <button class="active" type="button" data-view-target="today" aria-label="Hoje">
+          <i data-lucide="calendar-check"></i><span>Hoje</span>
+        </button>
+        <button type="button" data-view-target="habits" aria-label="Habitos">
+          <i data-lucide="repeat-2"></i><span>Habitos</span>
+        </button>
+        <button type="button" data-view-target="tasks" aria-label="Tarefas">
+          <i data-lucide="list-todo"></i><span>Tarefas</span>
+        </button>
+        <button type="button" data-view-target="focus" aria-label="Foco">
+          <i data-lucide="timer"></i><span>Foco</span>
+        </button>
+        <button type="button" data-view-target="progress" aria-label="Evolucao">
+          <i data-lucide="chart-no-axes-column"></i><span>Evolucao</span>
+        </button>
+        <button type="button" data-view-target="settings" aria-label="Ajustes">
+          <i data-lucide="settings-2"></i><span>Ajustes</span>
+        </button>
+      </nav>
+
+      <main>
+        <section class="view" data-view="today">
+          <section class="hero">
+            <div class="hero-copy">
+              <p class="section-label">Resumo de hoje</p>
+              <h2 id="todayTitle">Seu progresso do dia</h2>
+              <p id="todaySubtitle">Um check-in por vez.</p>
+            </div>
+            <div class="hero-metrics">
+              <article class="metric"><span>Hoje</span><strong id="todayProgress">0%</strong></article>
+              <article class="metric"><span>Este mes</span><strong id="monthProgress">0%</strong></article>
+              <article class="metric"><span>Sequencia</span><strong id="streakValue">0 dias</strong></article>
+            </div>
+          </section>
+
+          <section class="content-grid">
+            <article class="panel">
+              <div class="panel-head">
+                <div><p class="section-label">Check-in</p><h2>Hoje</h2></div>
+                <span class="tiny-note" id="checkedCount">0 de 0 feitos</span>
+              </div>
+              <div class="habit-list" id="todayHabitList"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><div><p class="section-label">Agenda</p><h2>Para hoje</h2></div></div>
+              <div class="today-tasks" id="todayTasks"></div>
+            </article>
+          </section>
+        </section>
+
+        <section class="view" data-view="habits" hidden>
+          <section class="panel">
+            <div class="panel-head">
+              <div><p class="section-label">Cadastro</p><h2 id="entryTitle">Novo habito</h2></div>
+            </div>
+            <form class="entry-form" id="entryForm">
+              <input id="entryType" type="hidden" value="habit" />
+              <div class="entry-type" role="group" aria-label="Tipo de cadastro">
+                <button class="active" type="button" data-entry-type="habit">Habito</button>
+                <button type="button" data-entry-type="task">Tarefa</button>
+              </div>
+              <div class="entry-fields">
+                <label>Nome<input id="entryName" maxlength="60" placeholder="Ex: Caminhar 20 minutos" required /></label>
+                <label id="entryDateField" hidden>Data<input id="entryDate" type="date" /></label>
+                <label>Horario<input id="entryTime" type="time" required /></label>
+                <button class="primary-button" id="entrySubmit" type="submit">Adicionar habito</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><div><p class="section-label">Rotina</p><h2>Meus habitos</h2></div></div>
+            <div class="habit-list" id="habitList"></div>
+          </section>
+
+          <section class="panel workout-panel" id="workoutPanel" hidden>
+            <div class="panel-head">
+              <div><p class="section-label">Treino</p><h2>Treinos da semana</h2></div>
+              <button class="icon-button" id="closeWorkouts" type="button" title="Fechar treinos" aria-label="Fechar treinos"><i data-lucide="x"></i></button>
+            </div>
+            <div class="workout-list" id="workoutList"></div>
+          </section>
+        </section>
+
+        <section class="view" data-view="tasks" hidden>
+          <section class="panel">
+            <div class="panel-head">
+              <div><p class="section-label">Agenda</p><h2>Minhas tarefas</h2></div>
+              <button class="primary-button compact-button" id="newTaskButton" type="button"><i data-lucide="plus"></i><span>Nova tarefa</span></button>
+            </div>
+            <div class="task-filters" id="taskFilters" role="group" aria-label="Filtrar tarefas">
+              <button class="active" type="button" data-task-filter="all">Todas</button>
+              <button type="button" data-task-filter="pending">Pendentes</button>
+              <button type="button" data-task-filter="overdue">Atrasadas</button>
+              <button type="button" data-task-filter="completed">Concluidas</button>
+            </div>
+            <div class="task-list" id="taskList"></div>
+          </section>
+        </section>
+
+        <section class="view" data-view="focus" hidden>
+          <section class="panel focus-panel">
+            <div class="panel-head"><div><p class="section-label">Foco</p><h2>Pomodoro</h2></div></div>
+            <label class="focus-selector">Leitura<select id="focusHabitSelect"></select></label>
+            <div class="pomodoro-content" id="pomodoroPanel">
+              <div class="pomodoro-clock" id="pomodoroClock">25:00</div>
+              <div>
+                <p class="section-label" id="pomodoroPhase">Foco</p>
+                <h2 id="pomodoroHabitName">Leitura</h2>
+                <p class="pomodoro-copy" id="pomodoroDescription">25 minutos para ler sem interrupcoes.</p>
+                <p class="tiny-note" id="pomodoroCycle">Ciclo 1</p>
+                <div class="pomodoro-actions">
+                  <button class="primary-button" id="pomodoroStart" type="button">Iniciar foco</button>
+                  <button class="ghost-button" id="pomodoroReset" type="button">Reiniciar</button>
+                </div>
+              </div>
+            </div>
+            <p class="empty-state" id="focusEmpty" hidden>Nenhum habito de leitura cadastrado.</p>
+          </section>
+        </section>
+
+        <section class="view" data-view="progress" hidden>
+          <section class="content-grid evolution-grid">
+            <article class="panel">
+              <div class="panel-head"><div><p class="section-label">Mensal</p><h2>Consistencia</h2></div></div>
+              <div class="chart" id="monthlyChart" aria-label="Grafico mensal"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><div><p class="section-label">Semana</p><h2>Ultimos dias</h2></div></div>
+              <div class="week-history" id="weekHistory"></div>
+            </article>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><p class="section-label">Resumo</p><h2>Sua evolucao</h2></div></div>
+            <div class="history" id="historyList"></div>
+          </section>
+        </section>
+
+        <section class="view" data-view="settings" hidden>
+          <section class="panel settings-panel">
+            <div class="panel-head"><div><p class="section-label">Perfis</p><h2>Quem esta usando?</h2></div></div>
+            <div class="profile-cards" id="profileCards"></div>
+          </section>
+          <section class="panel settings-panel">
+            <div class="panel-head"><div><p class="section-label">Aparencia</p><h2>Tema</h2></div></div>
+            <div class="theme-switch" role="group" aria-label="Escolher tema">
+              <button type="button" data-theme-option="light"><i data-lucide="sun"></i><span>Claro</span></button>
+              <button type="button" data-theme-option="dark"><i data-lucide="moon"></i><span>Escuro</span></button>
+            </div>
+          </section>
+          <section class="panel data-panel">
+            <div class="panel-head"><div><p class="section-label">Dados</p><h2 id="resetProfileTitle">Dados de Antonio</h2></div></div>
+            <button class="danger-action" id="resetButton" type="button"><i data-lucide="trash-2"></i><span>Limpar dados deste perfil</span></button>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

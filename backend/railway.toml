@@ -1,0 +1,19 @@
+[railway]
+  plugin = "netlify"
+
+[build]
+  builder = "docker"
+  dockerfilePath = "Dockerfile"
+
+[deploy]
+  healthcheckPath = "/health"
+  healthcheckTimeout = 30
+  restartPolicyType = "ON_FAILURE"
+  restartPolicyMaxRetries = 10
+
+[variables]
+  DB_HOST = "${RITMO_DB_HOST}"
+  DB_PORT = "${RITMO_DB_PORT}"
+  DB_USER = "${RITMO_DB_USER}"
+  DB_PASSWORD = "${RITMO_DB_PASSWORD}"
+  DB_NAME = "${RITMO_DB_NAME}"
