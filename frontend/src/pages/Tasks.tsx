@@ -4,6 +4,7 @@ import { apiRoutes } from '../services/api'
 import type { Task } from '../services/api'
 import { Plus, Trash2, Pencil } from 'lucide-react'
 import { toLocalDateValue } from '../utils/date'
+import { useAppSearchParams } from '../router'
 
 interface TasksProps {
   userId: number
@@ -13,13 +14,15 @@ type FilterType = 'all' | 'pending' | 'overdue' | 'completed'
 type TaskStatus = 'pending' | 'overdue' | 'completed'
 
 export default function Tasks({ userId }: TasksProps) {
+  const [searchParams, setSearchParams] = useAppSearchParams()
+  const createRequested = searchParams.get('create') === '1'
   const [tasks, setTasks] = useState<Task[]>([])
   const [filter, setFilter] = useState<FilterType>('all')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editName, setEditName] = useState('')
   const [editDate, setEditDate] = useState('')
   const [editTime, setEditTime] = useState('')
-  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [showCreateForm, setShowCreateForm] = useState(createRequested)
   const [newName, setNewName] = useState('')
   const [newDate, setNewDate] = useState(() => toLocalDateValue())
   const [newTime, setNewTime] = useState('09:00')
@@ -27,6 +30,12 @@ export default function Tasks({ userId }: TasksProps) {
   useEffect(() => {
     loadTasks()
   }, [userId])
+
+  useEffect(() => {
+    if (!createRequested) return
+    setShowCreateForm(true)
+    setSearchParams({}, { replace: true })
+  }, [createRequested, setSearchParams])
 
   async function loadTasks() {
     try {
