@@ -693,30 +693,6 @@ export default function Focus({ userId }: FocusProps) {
         </div>
       </section>
 
-      <section className="reading-overview" aria-label="Resumo de leitura">
-        <article>
-          <TrendingUp aria-hidden="true" />
-          <div>
-            <span>Esta semana</span>
-            <strong>{summary.pages_this_week} páginas</strong>
-          </div>
-        </article>
-        <article>
-          <Clock aria-hidden="true" />
-          <div>
-            <span>Tempo de leitura</span>
-            <strong>{summary.duration_this_week} min</strong>
-          </div>
-        </article>
-        <article>
-          <Library aria-hidden="true" />
-          <div>
-            <span>Minha biblioteca</span>
-            <strong>{books.length} {books.length === 1 ? 'livro' : 'livros'}</strong>
-          </div>
-        </article>
-      </section>
-
       <section className="reading-panel">
         <header className="reading-panel-head">
           <div className="reading-heading-icon"><Library aria-hidden="true" /></div>
@@ -1203,6 +1179,30 @@ export default function Focus({ userId }: FocusProps) {
             )}
           </>
         )}
+      </section>
+
+      <section className="reading-overview" aria-label="Resumo de leitura">
+        <article>
+          <TrendingUp aria-hidden="true" />
+          <div>
+            <span>Esta semana</span>
+            <strong>{summary.pages_this_week} páginas</strong>
+          </div>
+        </article>
+        <article>
+          <Clock aria-hidden="true" />
+          <div>
+            <span>Tempo de leitura</span>
+            <strong>{summary.duration_this_week} min</strong>
+          </div>
+        </article>
+        <article>
+          <Library aria-hidden="true" />
+          <div>
+            <span>Minha biblioteca</span>
+            <strong>{books.length} {books.length === 1 ? 'livro' : 'livros'}</strong>
+          </div>
+        </article>
       </section>
 
       <section className="reading-history-panel">

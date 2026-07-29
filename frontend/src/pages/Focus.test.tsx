@@ -259,6 +259,20 @@ describe('Focus timer, library and reading journal', () => {
     expect(screen.getByText(/página 72/i)).toBeTruthy()
   })
 
+  it('places Minha biblioteca before the weekly summary cards', async () => {
+    await renderFocus()
+
+    const libraryPanel = screen
+      .getByRole('heading', { name: 'Livros, progresso e histórico' })
+      .closest('.reading-panel')
+    const summaryCards = screen.getByRole('region', {
+      name: 'Resumo de leitura',
+    })
+
+    expect(libraryPanel).toBeTruthy()
+    expect(libraryPanel?.nextElementSibling).toBe(summaryCards)
+  })
+
   it('updates book progress and preserves its original notes', async () => {
     await renderFocus()
 

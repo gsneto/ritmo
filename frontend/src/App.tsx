@@ -179,7 +179,11 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Topbar user={activeUser} onSettingsClick={handleSettingsClick} />
+      <Topbar
+        user={activeUser}
+        onSettingsClick={handleSettingsClick}
+        onThemeChange={changeTheme}
+      />
       <div className="identity-band" aria-hidden="true">
         <img src="/grafismo-indigena-ritmo.png" alt="" />
       </div>
@@ -196,7 +200,6 @@ export default function App() {
             user={activeUser}
             users={users}
             onUserChange={handleUserChange}
-            onThemeChange={changeTheme}
             onDataReset={handleDataReset}
             onChangeAccessCode={handleChangeAccessCode}
           />

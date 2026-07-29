@@ -62,10 +62,16 @@ body {
 }
 
 .topbar-greeting {
+  display: flex;
+  flex: 1 1 auto;
   min-width: 0;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
 }
 
 .topbar-greeting h1 {
+  min-width: 0;
   overflow: hidden;
   font-size: clamp(1.25rem, 3vw, 1.55rem);
   line-height: 1.15;
@@ -76,6 +82,50 @@ body {
 
 .topbar-greeting h1 span {
   color: var(--identity-red);
+}
+
+.topbar-greeting-emoji {
+  flex: 0 0 auto;
+  font-size: clamp(1.2rem, 3vw, 1.5rem);
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.topbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface-soft);
+}
+
+.topbar-theme-switch button {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.topbar-theme-switch button:hover {
+  color: var(--identity-red);
+}
+
+.topbar-theme-switch button.is-active {
+  background: var(--surface);
+  color: var(--identity-red);
+  box-shadow: 0 3px 10px rgba(40, 27, 21, 0.1);
 }
 
 .topbar-settings-button {
@@ -200,6 +250,23 @@ textarea:focus-visible,
 }
 
 @media (max-width: 760px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  body:has(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+    select:focus,
+    textarea:focus
+  ) .view-nav {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(calc(100% + 32px));
+  }
+
   .identity-band {
     height: 58px;
     margin: 8px 0 12px;
@@ -211,6 +278,11 @@ textarea:focus-visible,
     height: 40px;
   }
 
+  .topbar-theme-switch button {
+    width: 33px;
+    height: 33px;
+  }
+
   .today-hero::after {
     width: 64%;
     opacity: 0.14;
@@ -218,6 +290,18 @@ textarea:focus-visible,
 }
 
 @media (max-width: 390px) {
+  .topbar {
+    padding-inline: 12px;
+  }
+
+  .topbar-greeting {
+    gap: 5px;
+  }
+
+  .topbar-actions {
+    gap: 5px;
+  }
+
   .identity-band {
     height: 52px;
   }

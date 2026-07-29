@@ -40,6 +40,7 @@ interface ShoppingProps {
 }
 
 type ShoppingView = 'active' | 'history'
+type ShoppingDateChoice = 'today' | 'tomorrow' | 'other'
 
 const KIND_LABELS: Record<ShoppingKind, string> = {
   monthly: 'Mensal',
@@ -104,6 +105,19 @@ function formatMonth(monthValue: string): string {
     year: 'numeric',
   }).format(new Date(year, month - 1, 1))
   return formatted.charAt(0).toUpperCase() + formatted.slice(1)
+}
+
+function localDateWithOffset(days: number): string {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return toLocalDateValue(date)
+}
+
+function formatShortDate(dateValue: string): string {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+  }).format(new Date(`${dateValue}T12:00:00`))
 }
 
 function listRunningTotal(shoppingList: ShoppingList): number {
@@ -197,6 +211,8 @@ export default function Shopping({ userId }: ShoppingProps) {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newListName, setNewListName] = useState('')
   const [newListDate, setNewListDate] = useState(toLocalDateValue())
+  const [newListDateChoice, setNewListDateChoice] =
+    useState<ShoppingDateChoice>('today')
   const [newListKind, setNewListKind] = useState<ShoppingKind>('monthly')
   const [newListCategory, setNewListCategory] =
     useState<ShoppingCategory>('groceries')
@@ -402,10 +418,10 @@ export default function Shopping({ userId }: ShoppingProps) {
     event.preventDefault()
     if (!newListName.trim()) return
     if (saving || itemOperationRef.current !== null || finalizing) return
-    const submittedDate = new FormData(event.currentTarget).get('planned_date')
-    const plannedDate =
-      typeof submittedDate === 'string' && submittedDate
-        ? submittedDate
+    const plannedDate = newListDateChoice === 'today'
+      ? localDateWithOffset(0)
+      : newListDateChoice === 'tomorrow'
+        ? localDateWithOffset(1)
         : newListDate
     const budgetCents = newListBudget.trim()
       ? parsePriceToCents(newListBudget)
@@ -433,6 +449,8 @@ export default function Shopping({ userId }: ShoppingProps) {
       setSelectedListId(createdList.id)
       setNewListName('')
       setNewListBudget('')
+      setNewListDateChoice('today')
+      setNewListDate(localDateWithOffset(0))
       setShowCreateForm(false)
     } catch (createError) {
       console.error('Failed to create shopping list:', createError)
@@ -902,7 +920,7 @@ export default function Shopping({ userId }: ShoppingProps) {
                 </div>
               </div>
               <form className="shopping-create-form" onSubmit={createList}>
-                <label>
+                <label className="shopping-create-name">
                   Nome
                   <input
                     value={newListName}
@@ -910,21 +928,75 @@ export default function Shopping({ userId }: ShoppingProps) {
                     placeholder="Ex: Compra mensal, Fraldas, Corte de cabelo"
                     maxLength={200}
                     required
-                    autoFocus
                     disabled={saving}
                   />
                 </label>
-                <label>
-                  Data planejada
-                  <input
-                    type="date"
-                    name="planned_date"
-                    value={newListDate}
-                    onChange={event => setNewListDate(event.target.value)}
-                    required
-                    disabled={saving}
-                  />
-                </label>
+                <fieldset className="shopping-date-schedule">
+                  <legend>Data planejada</legend>
+                  <div className="shopping-date-options">
+                    <label className={
+                      newListDateChoice === 'today' ? 'is-selected' : ''
+                    }>
+                      <input
+                        type="radio"
+                        name="shopping_date_choice"
+                        value="today"
+                        checked={newListDateChoice === 'today'}
+                        onChange={() => setNewListDateChoice('today')}
+                        disabled={saving}
+                      />
+                      <span>
+                        <strong>Hoje</strong>
+                        <small>{formatShortDate(localDateWithOffset(0))}</small>
+                      </span>
+                    </label>
+                    <label className={
+                      newListDateChoice === 'tomorrow' ? 'is-selected' : ''
+                    }>
+                      <input
+                        type="radio"
+                        name="shopping_date_choice"
+                        value="tomorrow"
+                        checked={newListDateChoice === 'tomorrow'}
+                        onChange={() => setNewListDateChoice('tomorrow')}
+                        disabled={saving}
+                      />
+                      <span>
+                        <strong>Amanhã</strong>
+                        <small>{formatShortDate(localDateWithOffset(1))}</small>
+                      </span>
+                    </label>
+                    <label className={
+                      newListDateChoice === 'other' ? 'is-selected' : ''
+                    }>
+                      <input
+                        type="radio"
+                        name="shopping_date_choice"
+                        value="other"
+                        checked={newListDateChoice === 'other'}
+                        onChange={() => setNewListDateChoice('other')}
+                        disabled={saving}
+                      />
+                      <span>
+                        <strong>Outra data</strong>
+                        <small>Escolher</small>
+                      </span>
+                    </label>
+                  </div>
+                  {newListDateChoice === 'other' && (
+                    <label className="shopping-custom-date">
+                      Escolha a data
+                      <input
+                        type="date"
+                        value={newListDate}
+                        onChange={event => setNewListDate(event.target.value)}
+                        min={localDateWithOffset(0)}
+                        required
+                        disabled={saving}
+                      />
+                    </label>
+                  )}
+                </fieldset>
                 <label>
                   Tipo de compra
                   <select

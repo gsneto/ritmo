@@ -23,13 +23,17 @@ Atualizado em 29 de julho de 2026.
 - Biblioteca com vários livros, porcentagem, sessões, diário e notas por página.
 - PWA instalável, identidade indígena no ícone, tela offline e suporte a Web
   Push com agendador no backend.
+- Formulários móveis sem zoom automático, navegação inferior oculta durante a
+  digitação e nova compra sem abertura involuntária do teclado.
+- Compra planejada com atalhos Hoje, Amanhã e Outra data; biblioteca antes dos
+  resumos; saudação com arco e flecha e tema no cabeçalho.
 - Backup JSON completo e restauração atômica por perfil.
 - Migrações aditivas/preservadoras para os bancos SQLite existentes.
 
 ## Validações locais concluídas
 
 - Backend: `41 passed`.
-- Frontend: `40 passed` e build Vite de produção concluído.
+- Frontend: `44 passed` e build Vite de produção concluído.
 - `pip-audit` e `npm audit`: nenhuma vulnerabilidade conhecida.
 - API real local: saúde e uma rota de cada recurso responderam HTTP 200,
   incluindo backup e configuração de push.
@@ -38,6 +42,11 @@ Atualizado em 29 de julho de 2026.
   instalado, ativado e controlando a página.
 - Interface mobile `390 x 844`: Hoje, Hábitos, Tarefas, Compras, Foco e Ajustes
   sem rolagem horizontal e sem erro de API.
+- Formulário de compras mobile: nenhum campo recebe foco ao abrir, inputs
+  calculados em `16px`, barra inferior oculta durante o foco e seletor de data
+  condicional aprovado.
+- Cabeçalho, troca de tema, ordem da biblioteca e contenção do horário dos
+  hábitos conferidos em `390 x 844`.
 - Backup/restauração exercitados por teste de ida e volta com hábitos, tarefas,
   compras, treino e leitura.
 - Migração de hábitos/tarefas exercitada sobre esquema legado com preservação

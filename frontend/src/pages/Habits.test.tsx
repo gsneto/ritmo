@@ -75,6 +75,9 @@ describe('Habits upgraded experience', () => {
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50')
     expect(screen.getByText('Próximo hábito')).toBeTruthy()
     expect(screen.getAllByText('Treino em casa').length).toBeGreaterThan(0)
+    const workoutTime = screen.getByText('18:30', { selector: 'time' })
+    expect(workoutTime.getAttribute('datetime')).toBe('18:30')
+    expect(workoutTime.closest('.routine-habit-schedule')).toBeTruthy()
   })
 
   it('creates a habit with its selected weekdays', async () => {

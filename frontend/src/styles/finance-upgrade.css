@@ -57,6 +57,105 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.shopping-create-name {
+  align-self: start;
+}
+
+.shopping-date-schedule {
+  grid-column: span 2;
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.shopping-date-schedule legend {
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.shopping-date-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.shopping-date-options > label {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.shopping-date-options input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.shopping-date-options label > span {
+  display: grid;
+  min-height: 58px;
+  align-content: center;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--control);
+  color: var(--text);
+  text-align: center;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.shopping-date-options label:hover > span {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+}
+
+.shopping-date-options label.is-selected > span {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.shopping-date-options input:focus-visible + span {
+  outline: 3px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  outline-offset: 2px;
+}
+
+.shopping-date-options strong {
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+}
+
+.shopping-date-options small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.shopping-date-options label.is-selected small {
+  color: inherit;
+  opacity: 0.78;
+}
+
+.shopping-custom-date {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
 .shopping-money-field {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -510,6 +609,24 @@ section.shopping-price-history {
 
   .shopping-create-form {
     grid-template-columns: 1fr;
+  }
+
+  .shopping-date-schedule {
+    grid-column: auto;
+  }
+
+  .shopping-date-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .shopping-date-options label > span {
+    min-height: 60px;
+    padding: 7px 5px;
+  }
+
+  .shopping-date-options strong {
+    font-size: 0.72rem;
   }
 
   .shopping-repeat-toggle {

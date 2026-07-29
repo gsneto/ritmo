@@ -1,34 +1,63 @@
-# Ritmo
+<p align="center">
+  <img src="frontend/public/ritmo-icon-192.png" width="112" alt="Ícone do Ritmo com grafismo indígena">
+</p>
 
-Aplicativo pessoal de hábitos, tarefas, compras, finanças, foco, leitura,
-treinos e progresso.
+<h1 align="center">Ritmo</h1>
 
-## Recursos atuais
+<p align="center">
+  Seu cotidiano em um só lugar: hábitos, tarefas, compras, finanças, leitura e treinos.
+</p>
 
-- assistente **Hoje** que cruza horários, pendências, compras, treino e leitura;
-- hábitos por dias da semana e tarefas recorrentes;
-- listas de compras com check, quantidade, preço unitário, orçamento,
-  recorrência, histórico mensal, comparação e CSV;
-- treino em casa com cronômetro, descanso, carga, repetições, recordes e
-  sugestão de progressão;
-- biblioteca com vários livros, página atual, porcentagem, sessões e notas;
-- PWA instalável no iPhone e Android, tela offline e Web Push opcional;
-- backup JSON completo e restauração atômica por perfil.
+<p align="center">
+  <strong>React + TypeScript</strong> · <strong>FastAPI</strong> ·
+  <strong>SQLite/SQLAlchemy</strong> · <strong>PWA mobile-first</strong>
+</p>
 
-A arquitetura ativa é:
+## O que o Ritmo faz
 
-- `backend/`: API FastAPI e persistência SQLAlchemy;
-- `frontend/`: SPA React, TypeScript e Vite;
-- `vercel.json`: build do `frontend/` e fallback de rotas da SPA;
-- `.github/workflows/`: validação contínua e publicações manuais.
+| Área | Recursos |
+| --- | --- |
+| **Hoje** | Organiza horários, pendências, compras, treino e leitura em uma agenda inteligente |
+| **Hábitos** | Dias da semana, lembretes, check-in e acompanhamento de sequência |
+| **Tarefas** | Prazos e recorrências diárias, semanais ou mensais |
+| **Compras** | Lista com check, quantidade, preço, orçamento e conclusão no mercado |
+| **Finanças** | Histórico mensal, comparação, saldo, categorias, preço anterior e CSV |
+| **Treinos** | Cronômetro, descanso, séries, carga, recordes e sugestão de progressão |
+| **Foco e leitura** | Pomodoro, biblioteca, página atual, progresso, sessões e anotações |
+| **Seus dados** | Backup e restauração completos por perfil |
 
-O frontend e o backend são aplicações separadas. Em produção, o frontend deve
-receber a URL HTTPS completa da API em `VITE_API_URL`, incluindo o prefixo
-`/api`. O Vercel não hospeda nem redireciona o backend desta configuração.
+O aplicativo também oferece tema claro/escuro, instalação na tela inicial,
+experiência offline e suporte opcional a Web Push.
 
-## Desenvolvimento local
+## Identidade
 
-### Backend
+O visual do Ritmo incorpora um grafismo indígena fornecido pelo criador do
+projeto. A arte original é preservada no cabeçalho e nos ícones da PWA, sem
+reinterpretar seus traços.
+
+## Arquitetura
+
+```text
+frontend/  React + TypeScript + Vite
+    │
+    │ HTTPS /api
+    ▼
+backend/   FastAPI + SQLAlchemy
+    │
+    └── SQLite local ou banco persistente em produção
+```
+
+- `frontend/`: interface responsiva e instalável;
+- `backend/`: API, regras de negócio, migrações e agendador de notificações;
+- `vercel.json`: build do frontend e fallback das rotas;
+- `.github/workflows/`: testes e publicações manuais.
+
+Frontend e backend são aplicações separadas. Em produção, `VITE_API_URL` deve
+apontar para a URL HTTPS completa da API, terminando em `/api`.
+
+## Rodando localmente
+
+### 1. Backend
 
 ```powershell
 Set-Location backend
@@ -38,28 +67,20 @@ Copy-Item .env.example .env
 .\.venv\Scripts\python.exe -m uvicorn main:app --reload
 ```
 
-O SQLite local usa:
+Por padrão, o ambiente local usa:
 
 ```env
 DATABASE_URL=sqlite:///./ritmo.db
 RITMO_DEBUG=true
 ```
 
-A API estará disponível localmente em `http://localhost:8000`. Rotas úteis:
+Endereços úteis:
 
-- `GET /health`
-- `GET /api/users`
-- `GET /docs`
+- API: `http://localhost:8000`
+- documentação: `http://localhost:8000/docs`
+- verificação: `http://localhost:8000/health`
 
-Em produção, `RITMO_DEBUG=false` exige `APP_ACCESS_TOKEN`. O frontend envia essa chave
-no cabeçalho `X-Ritmo-Key`; ela não deve ser versionada.
-
-Para lembretes que chegam mesmo com a PWA fechada, configure no backend
-`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT`. A chave privada
-permanece somente no servidor. Sem essas variáveis, os alertas locais de
-check-in e cronômetro continuam disponíveis, mas o Web Push fica desativado.
-
-### Frontend
+### 2. Frontend
 
 Em outro terminal:
 
@@ -70,13 +91,30 @@ npm ci
 npm run dev
 ```
 
-Para desenvolvimento local:
+Configuração local:
 
 ```env
 VITE_API_URL=http://localhost:8000/api
 ```
 
-## Validação
+## Segurança e notificações
+
+Em produção, use `RITMO_DEBUG=false`, configure `APP_ACCESS_TOKEN` e limite
+`CORS_ORIGINS` aos domínios reais. O token é enviado pelo frontend no cabeçalho
+`X-Ritmo-Key` e nunca deve ser versionado.
+
+Para receber lembretes mesmo com a PWA fechada, configure somente no servidor:
+
+```env
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:voce@exemplo.com
+```
+
+Sem essas chaves, os lembretes locais e os cronômetros continuam funcionando,
+mas o Web Push permanece desativado.
+
+## Testes
 
 ```powershell
 Set-Location backend
@@ -88,13 +126,21 @@ npm test
 npm run build
 ```
 
-O build não comprova sozinho que a API, o banco e a interface mobile funcionam
-juntos. Consulte [DEPLOY.md](DEPLOY.md) para o fluxo de preview, smoke tests e
-promoção, e [STATUS.md](STATUS.md) para o estado atual.
+O build isolado não comprova integração, persistência ou experiência móvel.
+Antes de publicar, execute também os testes reais de API e interface descritos
+em [DEPLOY.md](DEPLOY.md). O estado validado mais recente fica registrado em
+[STATUS.md](STATUS.md).
 
-## Regra de publicação
+## Publicação segura
 
-Push e pull request executam testes; não promovem automaticamente esta migração
-para produção pelos workflows do repositório. Preview e produção exigem execução
-manual, e produção exige confirmação explícita. A versão antiga deve permanecer
-online até a nova versão passar pelos testes de API e interface mobile.
+O envio de código ao GitHub executa validações, mas não deve substituir
+automaticamente a versão antiga. O fluxo correto é:
+
+1. validar backend, banco, testes e build;
+2. publicar a API em ambiente persistente;
+3. criar um preview HTTPS do frontend;
+4. testar instalação, persistência e notificações em um iPhone físico;
+5. promover manualmente para produção somente após aprovação.
+
+Assim, a versão antiga permanece disponível enquanto o novo Ritmo é
+comprovado em um ambiente separado.

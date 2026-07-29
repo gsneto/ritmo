@@ -253,7 +253,13 @@ describe('shopping assistant flow', () => {
     render(<Shopping userId={1} />)
     await screen.findByRole('heading', { name: 'Compra mensal' })
     fireEvent.click(screen.getByRole('button', { name: 'Nova compra' }))
-    fireEvent.change(screen.getByLabelText('Nome'), {
+    const nameInput = screen.getByLabelText('Nome')
+    expect(nameInput.hasAttribute('autofocus')).toBe(false)
+    expect(
+      (screen.getByRole('radio', { name: /Hoje/ }) as HTMLInputElement).checked,
+    ).toBe(true)
+    expect(screen.queryByLabelText('Escolha a data')).toBeNull()
+    fireEvent.change(nameInput, {
       target: { value: 'Fraldas da filha' },
     })
     fireEvent.change(screen.getByLabelText('Tipo de compra'), {
@@ -274,6 +280,76 @@ describe('shopping assistant flow', () => {
         category: 'child',
         planned_date: '2026-07-29',
         budget_cents: 30_000,
+        repeat_enabled: true,
+      })
+    })
+  })
+
+  it('uses tomorrow as planned date without opening the calendar input', async () => {
+    mockInitialData()
+    vi.mocked(apiRoutes.createShoppingList).mockResolvedValue({
+      data: {
+        ...activeList,
+        name: 'Compra de amanhã',
+        planned_date: '2026-07-30',
+      },
+    } as never)
+
+    render(<Shopping userId={1} />)
+    await screen.findByRole('heading', { name: 'Compra mensal' })
+    fireEvent.click(screen.getByRole('button', { name: 'Nova compra' }))
+    fireEvent.change(screen.getByLabelText('Nome'), {
+      target: { value: 'Compra de amanhã' },
+    })
+    fireEvent.click(screen.getByRole('radio', { name: /Amanhã/ }))
+
+    expect(screen.queryByLabelText('Escolha a data')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Criar lista' }))
+
+    await waitFor(() => {
+      expect(apiRoutes.createShoppingList).toHaveBeenCalledWith(1, {
+        name: 'Compra de amanhã',
+        kind: 'monthly',
+        category: 'groceries',
+        planned_date: '2026-07-30',
+        budget_cents: null,
+        repeat_enabled: true,
+      })
+    })
+  })
+
+  it('shows the calendar only for another date and sends the chosen day', async () => {
+    mockInitialData()
+    vi.mocked(apiRoutes.createShoppingList).mockResolvedValue({
+      data: {
+        ...activeList,
+        name: 'Compra agendada',
+        planned_date: '2026-08-12',
+      },
+    } as never)
+
+    render(<Shopping userId={1} />)
+    await screen.findByRole('heading', { name: 'Compra mensal' })
+    fireEvent.click(screen.getByRole('button', { name: 'Nova compra' }))
+    expect(screen.queryByLabelText('Escolha a data')).toBeNull()
+
+    fireEvent.click(screen.getByRole('radio', { name: /Outra data/ }))
+    const customDate = screen.getByLabelText('Escolha a data')
+    fireEvent.change(screen.getByLabelText('Nome'), {
+      target: { value: 'Compra agendada' },
+    })
+    fireEvent.change(customDate, {
+      target: { value: '2026-08-12' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Criar lista' }))
+
+    await waitFor(() => {
+      expect(apiRoutes.createShoppingList).toHaveBeenCalledWith(1, {
+        name: 'Compra agendada',
+        kind: 'monthly',
+        category: 'groceries',
+        planned_date: '2026-08-12',
+        budget_cents: null,
         repeat_enabled: true,
       })
     })

@@ -559,10 +559,16 @@ export default function Habits({ userId }: HabitsProps) {
                           <strong>{habit.name}</strong>
                           {isDone && <span className="routine-status done">Feito hoje</span>}
                         </div>
-                        <small>
-                          <Clock3 size={15} aria-hidden="true" /> {habit.time}
-                          <span aria-hidden="true">·</span>
-                          <CalendarDays size={15} aria-hidden="true" /> {daysSummary(configuredDays(habit))}
+                        <small className="routine-habit-schedule">
+                          <span className="routine-habit-time">
+                            <Clock3 size={15} aria-hidden="true" />
+                            <time dateTime={habit.time}>{habit.time}</time>
+                          </span>
+                          <span className="routine-schedule-separator" aria-hidden="true">·</span>
+                          <span className="routine-habit-days">
+                            <CalendarDays size={15} aria-hidden="true" />
+                            {daysSummary(configuredDays(habit))}
+                          </span>
                         </small>
                       </div>
 

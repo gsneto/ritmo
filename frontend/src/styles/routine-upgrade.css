@@ -770,6 +770,34 @@ html[data-theme="dark"] .routine-task-hero {
   flex: 0 0 auto;
 }
 
+.routine-habit-schedule {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.routine-habit-time,
+.routine-habit-days {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.routine-habit-time {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.routine-habit-days {
+  flex: 1 1 120px;
+  overflow-wrap: anywhere;
+}
+
+.routine-schedule-separator {
+  flex: 0 0 auto;
+}
+
 .routine-status {
   display: inline-flex;
   align-items: center;
