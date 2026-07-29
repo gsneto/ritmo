@@ -1,6 +1,7 @@
 from models.habit import Habit, HabitCheckIn
+from models.reading import ReadingBook
 from models.task import Task
-from models.workout import Exercise, Workout
+from models.workout import Exercise, Workout, WorkoutSession
 
 
 def test_workout_replacement_validation_and_safe_reset(
@@ -58,6 +59,34 @@ def test_workout_replacement_validation_and_safe_reset(
         headers=auth_headers,
         json={"name": "Planejar", "date": habit["created_at"], "time": "20:00"},
     )
+    client.put(
+        f"/api/users/{user_id}/reading-book",
+        headers=auth_headers,
+        json={
+            "title": "Livro de teste",
+            "current_page": 12,
+            "total_pages": 120,
+            "notes": "Uma anotação",
+        },
+    )
+    session = client.post(
+        f"/api/users/{user_id}/workouts/{replacement.json()[0]['id']}/sessions",
+        headers=auth_headers,
+        json={
+            "idempotency_key": "reset-workout-session-001",
+            "rest_seconds": 60,
+        },
+    ).json()
+    set_id = session["exercises"][0]["sets"][0]["id"]
+    client.put(
+        f"/api/workout-session-sets/{set_id}",
+        headers=auth_headers,
+        json={"completed": True, "weight_kg": "6.00", "reps_completed": 10},
+    )
+    client.post(
+        f"/api/workout-sessions/{session['id']}/finish",
+        headers=auth_headers,
+    )
 
     reset = client.delete(f"/api/users/{user_id}/data", headers=auth_headers)
     assert reset.status_code == 200
@@ -69,6 +98,14 @@ def test_workout_replacement_validation_and_safe_reset(
         f"/api/users/{user_id}/tasks",
         headers=auth_headers,
     ).json() == []
+    assert client.get(
+        f"/api/users/{user_id}/reading-book",
+        headers=auth_headers,
+    ).json() is None
+    assert client.get(
+        f"/api/users/{user_id}/workout-history",
+        headers=auth_headers,
+    ).json()["total_sessions"] == 0
 
     restored = client.get(
         f"/api/users/{user_id}/workouts",
@@ -81,13 +118,15 @@ def test_workout_replacement_validation_and_safe_reset(
         assert db.query(Habit).filter(Habit.user_id == user_id).count() == 0
         assert db.query(Task).filter(Task.user_id == user_id).count() == 0
         assert db.query(Workout).filter(Workout.user_id == user_id).count() == 7
+        assert db.query(WorkoutSession).filter_by(user_id=user_id).count() == 0
+        assert db.query(ReadingBook).filter_by(user_id=user_id).count() == 0
         assert db.query(HabitCheckIn).count() == 0
         assert (
             db.query(Exercise)
             .join(Workout)
             .filter(Workout.user_id == user_id)
             .count()
-            == 9
+            == sum(len(workout["exercises"]) for workout in restored)
         )
         assert (
             db.query(Exercise)

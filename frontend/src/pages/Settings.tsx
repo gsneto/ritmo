@@ -25,7 +25,7 @@ export default function Settings({
   const [isResetting, setIsResetting] = useState(false)
 
   async function handleReset() {
-    if (!confirm(`Limpar TODOS os dados de ${user.name}?\n\nIsso remove:\n- Todos os hábitos\n- Todas as tarefas\n- Todos os treinos\n- Todas as listas de compras\n- Todo o histórico de gastos\n\nEsta ação não pode ser desfeita.`)) return
+    if (!confirm(`Limpar TODOS os dados de ${user.name}?\n\nIsso remove:\n- Todos os hábitos\n- Todas as tarefas\n- O plano e o histórico de treinos\n- O livro e suas anotações\n- Todas as listas de compras\n- Todo o histórico de gastos\n\nEsta ação não pode ser desfeita.`)) return
 
     setIsResetting(true)
     try {

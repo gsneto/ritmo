@@ -18,6 +18,17 @@ class User(Base):
     habits = relationship("Habit", back_populates="user", cascade="all, delete-orphan")
     tasks = relationship("Task", back_populates="user", cascade="all, delete-orphan")
     workouts = relationship("Workout", back_populates="user", cascade="all, delete-orphan")
+    workout_sessions = relationship(
+        "WorkoutSession",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    reading_book = relationship(
+        "ReadingBook",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
     shopping_lists = relationship(
         "ShoppingList",
         back_populates="user",
