@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from config import Settings, get_settings
 from database import SessionLocal, get_db, init_db
-from routers import habits, stats, tasks, users, workouts
+from routers import habits, shopping, stats, tasks, users, workouts
 from security import require_api_key
 from seed import seed_default_data
 from time_utils import app_today
@@ -45,7 +45,7 @@ def create_app(
     application = FastAPI(
         title=settings.APP_NAME,
         description="API FastAPI do Ritmo",
-        version="1.1.0",
+        version="1.2.0",
         lifespan=lifespan,
         docs_url="/docs" if docs_enabled else None,
         redoc_url="/redoc" if docs_enabled else None,
@@ -76,14 +76,15 @@ def create_app(
     application.include_router(tasks.router, dependencies=protected)
     application.include_router(workouts.router, dependencies=protected)
     application.include_router(stats.router, dependencies=protected)
+    application.include_router(shopping.router, dependencies=protected)
 
     @application.get("/")
     def root():
-        return {"message": settings.APP_NAME, "version": "1.1.0"}
+        return {"message": settings.APP_NAME, "version": "1.2.0"}
 
     @application.get("/api", dependencies=protected)
     def api_root():
-        return {"message": settings.APP_NAME, "version": "1.1.0"}
+        return {"message": settings.APP_NAME, "version": "1.2.0"}
 
     @application.get("/health")
     def health(db: Session = Depends(get_db)):

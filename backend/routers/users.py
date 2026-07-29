@@ -60,7 +60,7 @@ def update_theme(user_id: int, data: ThemeUpdate, db: Session = Depends(get_db))
 
 @router.delete("/{user_id}/data")
 def reset_user_data(user_id: int, db: Session = Depends(get_db)):
-    """Reset all data for a user (habits, tasks, workouts)."""
+    """Reset all personal data for a user."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -73,6 +73,8 @@ def reset_user_data(user_id: int, db: Session = Depends(get_db)):
             db.delete(task)
         for workout in list(user.workouts):
             db.delete(workout)
+        for shopping_list in list(user.shopping_lists):
+            db.delete(shopping_list)
         db.flush()
 
         # Reset means a clean usable app, including the seven default workouts.

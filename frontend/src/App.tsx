@@ -10,6 +10,7 @@ import type { User } from './services/api'
 import Today from './pages/Today'
 import Habits from './pages/Habits'
 import Tasks from './pages/Tasks'
+import Shopping from './pages/Shopping'
 import Focus from './pages/Focus'
 import Progress from './pages/Progress'
 import Settings from './pages/Settings'
@@ -19,7 +20,15 @@ import AccessCodeGate from './components/AccessCodeGate'
 import { useAppRouter } from './router'
 
 type AppStatus = 'loading' | 'ready' | 'error' | 'access'
-const VALID_PATHS = new Set(['/today', '/habits', '/tasks', '/focus', '/progress', '/settings'])
+const VALID_PATHS = new Set([
+  '/today',
+  '/habits',
+  '/tasks',
+  '/shopping',
+  '/focus',
+  '/progress',
+  '/settings',
+])
 
 export default function App() {
   const { pathname, navigate } = useAppRouter()
@@ -173,6 +182,7 @@ export default function App() {
         {activePath === '/today' && <Today userId={activeUser.id} />}
         {activePath === '/habits' && <Habits userId={activeUser.id} />}
         {activePath === '/tasks' && <Tasks userId={activeUser.id} />}
+        {activePath === '/shopping' && <Shopping userId={activeUser.id} />}
         {activePath === '/focus' && <Focus userId={activeUser.id} />}
         {activePath === '/progress' && <Progress userId={activeUser.id} />}
         {activePath === '/settings' && (

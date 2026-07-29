@@ -44,6 +44,38 @@ export interface Task {
   created_at: string
 }
 
+export type ShoppingKind = 'monthly' | 'weekly' | 'one_time'
+
+export interface ShoppingItem {
+  id: number
+  shopping_list_id: number
+  name: string
+  checked_at: string | null
+  price_cents: number | null
+  created_at: string
+}
+
+export interface ShoppingList {
+  id: number
+  user_id: number
+  name: string
+  kind: ShoppingKind
+  planned_date: string
+  completed_on: string | null
+  completed_at: string | null
+  total_cents: number
+  created_at: string
+  items: ShoppingItem[]
+}
+
+export interface MonthlyExpenseSummary {
+  month: string
+  total_cents: number
+  purchase_count: number
+  average_cents: number
+  lists: ShoppingList[]
+}
+
 export interface Exercise {
   id: number
   name: string
@@ -172,6 +204,40 @@ export const apiRoutes = {
     api.put<Task>(`/tasks/${taskId}`, data),
   deleteTask: (taskId: number) => api.delete(`/tasks/${taskId}`),
   completeTask: (taskId: number) => api.post<Task>(`/tasks/${taskId}/complete`),
+
+  // Shopping and expenses
+  getShoppingLists: (userId: number, completed = false) =>
+    api.get<ShoppingList[]>(`/users/${userId}/shopping-lists`, {
+      params: { completed },
+    }),
+  createShoppingList: (
+    userId: number,
+    data: { name: string; kind: ShoppingKind; planned_date: string },
+  ) => api.post<ShoppingList>(`/users/${userId}/shopping-lists`, data),
+  updateShoppingList: (
+    listId: number,
+    data: { name?: string; kind?: ShoppingKind; planned_date?: string },
+  ) => api.put<ShoppingList>(`/shopping-lists/${listId}`, data),
+  deleteShoppingList: (listId: number) =>
+    api.delete(`/shopping-lists/${listId}`),
+  addShoppingItem: (listId: number, name: string) =>
+    api.post<ShoppingItem>(`/shopping-lists/${listId}/items`, { name }),
+  updateShoppingItem: (itemId: number, name: string) =>
+    api.put<ShoppingItem>(`/shopping-items/${itemId}`, { name }),
+  checkShoppingItem: (
+    itemId: number,
+    data: { checked: boolean; price_cents?: number },
+  ) => api.put<ShoppingItem>(`/shopping-items/${itemId}/check`, data),
+  deleteShoppingItem: (itemId: number) =>
+    api.delete(`/shopping-items/${itemId}`),
+  finishShoppingList: (listId: number) =>
+    api.post<ShoppingList>(`/shopping-lists/${listId}/finish`),
+  reopenShoppingList: (listId: number) =>
+    api.post<ShoppingList>(`/shopping-lists/${listId}/reopen`),
+  getShoppingHistory: (userId: number, month: string) =>
+    api.get<MonthlyExpenseSummary>(`/users/${userId}/shopping-history`, {
+      params: { month },
+    }),
 
   // Workouts
   getWorkouts: (userId: number) => api.get<Workout[]>(`/users/${userId}/workouts`),

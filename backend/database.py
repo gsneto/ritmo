@@ -95,7 +95,7 @@ def init_db(
     session_factory: sessionmaker | None = None,
 ) -> None:
     """Initialize database tables."""
-    from models import user, habit, task, workout  # noqa
+    from models import habit, shopping, task, user, workout  # noqa
 
     selected_engine = bind or engine
     selected_session_factory = session_factory or SessionLocal
