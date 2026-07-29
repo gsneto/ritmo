@@ -80,6 +80,16 @@ describe('Habits upgraded experience', () => {
     expect(workoutTime.closest('.routine-habit-schedule')).toBeTruthy()
   })
 
+  it('places the new habit form directly below the progress hero', async () => {
+    const { container } = render(<Habits userId={1} />)
+
+    await screen.findByText('Hábitos de hoje')
+    const createPanel = container.querySelector('.routine-create-panel')
+
+    expect(createPanel).toBeTruthy()
+    expect(createPanel?.previousElementSibling?.classList.contains('routine-habit-hero')).toBe(true)
+  })
+
   it('creates a habit with its selected weekdays', async () => {
     render(<Habits userId={1} />)
 

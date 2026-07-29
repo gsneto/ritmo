@@ -209,6 +209,7 @@ export default function Shopping({ userId }: ShoppingProps) {
   const [selectedListId, setSelectedListId] = useState<number | null>(null)
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [createFormRevealRequest, setCreateFormRevealRequest] = useState(0)
   const [newListName, setNewListName] = useState('')
   const [newListDate, setNewListDate] = useState(toLocalDateValue())
   const [newListDateChoice, setNewListDateChoice] =
@@ -242,6 +243,7 @@ export default function Shopping({ userId }: ShoppingProps) {
   const historyRequestIdRef = useRef(0)
   const itemOperationRef = useRef<number | null>(null)
   const finishDialogRef = useRef<HTMLElement | null>(null)
+  const createPanelRef = useRef<HTMLElement | null>(null)
 
   const selectedList = useMemo(
     () => lists.find(item => item.id === selectedListId) || null,
@@ -284,6 +286,38 @@ export default function Shopping({ userId }: ShoppingProps) {
       void loadHistory(selectedMonth)
     }
   }, [selectedMonth, userId, view])
+
+  useEffect(() => {
+    if (
+      view !== 'active'
+      || !showCreateForm
+      || createFormRevealRequest === 0
+    ) {
+      return
+    }
+
+    let secondFrame = 0
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const panel = createPanelRef.current
+        if (!panel) return
+
+        const reduceMotion = window.matchMedia?.(
+          '(prefers-reduced-motion: reduce)',
+        ).matches
+        panel.scrollIntoView({
+          behavior: reduceMotion ? 'auto' : 'smooth',
+          block: 'start',
+        })
+        panel.focus({ preventScroll: true })
+      })
+    })
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      if (secondFrame) window.cancelAnimationFrame(secondFrame)
+    }
+  }, [createFormRevealRequest, showCreateForm, view])
 
   useEffect(() => {
     if (!confirmingFinish) return
@@ -458,6 +492,12 @@ export default function Shopping({ userId }: ShoppingProps) {
     } finally {
       setSaving(false)
     }
+  }
+
+  function openCreateForm() {
+    setView('active')
+    setShowCreateForm(true)
+    setCreateFormRevealRequest(current => current + 1)
   }
 
   async function deleteList(shoppingList: ShoppingList) {
@@ -770,10 +810,7 @@ export default function Shopping({ userId }: ShoppingProps) {
             className="shopping-hero-action"
             type="button"
             disabled={hasPendingMutation}
-            onClick={() => {
-              setView('active')
-              setShowCreateForm(true)
-            }}
+            onClick={openCreateForm}
           >
             <Plus size={18} aria-hidden="true" />
             Nova compra
@@ -912,11 +949,16 @@ export default function Shopping({ userId }: ShoppingProps) {
       {view === 'active' && (
         <>
           {showCreateForm && (
-            <section className="panel shopping-create-panel">
+            <section
+              ref={createPanelRef}
+              className="panel shopping-create-panel"
+              tabIndex={-1}
+              aria-labelledby="shopping-create-title"
+            >
               <div className="panel-head">
                 <div>
                   <p className="section-label">Planejamento</p>
-                  <h2>Nova compra ou gasto</h2>
+                  <h2 id="shopping-create-title">Nova compra ou gasto</h2>
                 </div>
               </div>
               <form className="shopping-create-form" onSubmit={createList}>

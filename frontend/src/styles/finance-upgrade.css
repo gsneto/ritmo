@@ -57,6 +57,15 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.shopping-create-panel {
+  scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 82px);
+}
+
+.shopping-create-panel:focus {
+  outline: 3px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  outline-offset: 3px;
+}
+
 .shopping-create-name {
   align-self: start;
 }

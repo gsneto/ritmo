@@ -322,6 +322,55 @@ export default function Today({ userId }: TodayProps) {
         </div>
       </section>
 
+      <section className="today-checkin-section" aria-label="Check-in de hábitos">
+        <article className="panel today-panel">
+          <div className="panel-head">
+            <div>
+              <p className="section-label">Check-in</p>
+              <h2>Hábitos de hoje</h2>
+            </div>
+            <AppLink to="/habits" className="panel-link">
+              <span>Ver todos</span>
+              <ArrowRight size={15} aria-hidden="true" />
+            </AppLink>
+          </div>
+          <div className="today-panel-summary">
+            <span><Sparkles size={15} aria-hidden="true" /> {todayStats?.checked_count || '0 de 0 feitos'}</span>
+            {totalHabits > 0 && <strong>{progressPercent}%</strong>}
+          </div>
+          <div className="habit-list today-habit-list" id="todayHabitList">
+            {todayStats?.habits_today.length === 0 ? (
+              <div className="empty-state today-empty-state">
+                <Circle size={22} aria-hidden="true" />
+                <div>
+                  <strong>Nenhum hábito para hoje</strong>
+                  <span>Adicione algo simples para começar.</span>
+                </div>
+              </div>
+            ) : (
+              todayStats?.habits_today.map((habit) => (
+                <article key={habit.id} className={`today-routine-item ${habit.done ? 'is-done' : ''}`}>
+                  <div className="habit-details">
+                    <strong>{habit.name}</strong>
+                    <small>{habit.done ? 'Concluído hoje' : 'Ainda não marcado'}</small>
+                  </div>
+                  <span className="today-time-chip"><Clock3 size={14} aria-hidden="true" /> {habit.time}</span>
+                  <button
+                    className={`today-check-action ${habit.done ? 'done' : ''}`}
+                    onClick={() => toggleCheckIn(habit.id, habit.done)}
+                    type="button"
+                    aria-label={`${habit.done ? 'Desmarcar' : 'Marcar'} ${habit.name} hoje`}
+                  >
+                    {habit.done ? <CheckCircle2 size={18} aria-hidden="true" /> : <Circle size={18} aria-hidden="true" />}
+                    <span>{habit.done ? 'Feito' : 'Marcar'}</span>
+                  </button>
+                </article>
+              ))
+            )}
+          </div>
+        </article>
+      </section>
+
       <section className="today-assistant" aria-labelledby="today-assistant-title">
         <article className="assistant-next-card">
           <span className="assistant-icon" aria-hidden="true">
@@ -394,53 +443,7 @@ export default function Today({ userId }: TodayProps) {
         </div>
       </section>
 
-      <section className="content-grid today-content-grid">
-        <article className="panel today-panel">
-          <div className="panel-head">
-            <div>
-              <p className="section-label">Check-in</p>
-              <h2>Hábitos de hoje</h2>
-            </div>
-            <AppLink to="/habits" className="panel-link">
-              <span>Ver todos</span>
-              <ArrowRight size={15} aria-hidden="true" />
-            </AppLink>
-          </div>
-          <div className="today-panel-summary">
-            <span><Sparkles size={15} aria-hidden="true" /> {todayStats?.checked_count || '0 de 0 feitos'}</span>
-            {totalHabits > 0 && <strong>{progressPercent}%</strong>}
-          </div>
-          <div className="habit-list today-habit-list" id="todayHabitList">
-            {todayStats?.habits_today.length === 0 ? (
-              <div className="empty-state today-empty-state">
-                <Circle size={22} aria-hidden="true" />
-                <div>
-                  <strong>Nenhum hábito para hoje</strong>
-                  <span>Adicione algo simples para começar.</span>
-                </div>
-              </div>
-            ) : (
-              todayStats?.habits_today.map((habit) => (
-                <article key={habit.id} className={`today-routine-item ${habit.done ? 'is-done' : ''}`}>
-                  <div className="habit-details">
-                    <strong>{habit.name}</strong>
-                    <small>{habit.done ? 'Concluído hoje' : 'Ainda não marcado'}</small>
-                  </div>
-                  <span className="today-time-chip"><Clock3 size={14} aria-hidden="true" /> {habit.time}</span>
-                  <button
-                    className={`today-check-action ${habit.done ? 'done' : ''}`}
-                    onClick={() => toggleCheckIn(habit.id, habit.done)}
-                    type="button"
-                    aria-label={`${habit.done ? 'Desmarcar' : 'Marcar'} ${habit.name} hoje`}
-                  >
-                    {habit.done ? <CheckCircle2 size={18} aria-hidden="true" /> : <Circle size={18} aria-hidden="true" />}
-                    <span>{habit.done ? 'Feito' : 'Marcar'}</span>
-                  </button>
-                </article>
-              ))
-            )}
-          </div>
-        </article>
+      <section className="today-agenda-section" aria-label="Agenda de hoje">
         <article className="panel today-panel agenda-panel">
           <div className="panel-head">
             <div>

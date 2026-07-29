@@ -285,6 +285,52 @@ describe('shopping assistant flow', () => {
     })
   })
 
+  it('reveals the new purchase form without focusing a text input', async () => {
+    mockInitialData()
+    const scrollIntoView = vi.fn()
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+    const originalRequestAnimationFrame = window.requestAnimationFrame
+    const originalCancelAnimationFrame = window.cancelAnimationFrame
+
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+    window.requestAnimationFrame = callback => {
+      callback(0)
+      return 1
+    }
+    window.cancelAnimationFrame = vi.fn()
+
+    try {
+      render(<Shopping userId={1} />)
+      await screen.findByRole('heading', { name: 'Compra mensal' })
+      fireEvent.click(screen.getByRole('button', { name: 'Nova compra' }))
+
+      const formHeading = screen.getByRole('heading', {
+        name: 'Nova compra ou gasto',
+      })
+      const formPanel = formHeading.closest('section')
+      const nameInput = screen.getByLabelText('Nome')
+
+      await waitFor(() => {
+        expect(scrollIntoView).toHaveBeenCalledWith({
+          behavior: 'smooth',
+          block: 'start',
+        })
+      })
+      expect(document.activeElement).toBe(formPanel)
+      expect(document.activeElement).not.toBe(nameInput)
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+        configurable: true,
+        value: originalScrollIntoView,
+      })
+      window.requestAnimationFrame = originalRequestAnimationFrame
+      window.cancelAnimationFrame = originalCancelAnimationFrame
+    }
+  })
+
   it('uses tomorrow as planned date without opening the calendar input', async () => {
     mockInitialData()
     vi.mocked(apiRoutes.createShoppingList).mockResolvedValue({

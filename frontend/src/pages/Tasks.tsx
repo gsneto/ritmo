@@ -27,6 +27,7 @@ interface TasksProps {
 
 type FilterType = 'all' | 'today' | 'pending' | 'overdue' | 'completed'
 type TaskStatus = 'pending' | 'overdue' | 'completed'
+type PlannedDateChoice = 'today' | 'tomorrow' | 'other'
 
 interface TaskGroup {
   key: 'overdue' | 'today' | 'upcoming' | 'completed'
@@ -46,6 +47,13 @@ function recurrenceLabel(recurrence: TaskRecurrence): string {
   return RECURRENCE_OPTIONS.find(option => option.value === recurrence)?.label ?? 'Não repetir'
 }
 
+function formatShortDate(dateValue: string): string {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+  }).format(new Date(`${dateValue}T12:00:00`))
+}
+
 export default function Tasks({ userId }: TasksProps) {
   const [searchParams, setSearchParams] = useAppSearchParams()
   const createRequested = searchParams.get('create') === '1'
@@ -60,6 +68,7 @@ export default function Tasks({ userId }: TasksProps) {
   const [showCreateForm, setShowCreateForm] = useState(createRequested)
   const [newName, setNewName] = useState('')
   const [newDate, setNewDate] = useState(() => toLocalDateValue())
+  const [newDateChoice, setNewDateChoice] = useState<PlannedDateChoice>('today')
   const [newTime, setNewTime] = useState('09:00')
   const [newRecurrence, setNewRecurrence] = useState<TaskRecurrence>('none')
   const [loading, setLoading] = useState(true)
@@ -208,19 +217,25 @@ export default function Tasks({ userId }: TasksProps) {
   async function createTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const trimmedName = newName.trim()
-    if (!trimmedName || !newDate || busyKey) return
+    const plannedDate = newDateChoice === 'today'
+      ? today
+      : newDateChoice === 'tomorrow'
+        ? tomorrow
+        : newDate
+    if (!trimmedName || !plannedDate || busyKey) return
 
     setBusyKey('create')
     setError('')
     try {
       await apiRoutes.createTask(userId, {
         name: trimmedName,
-        date: newDate,
+        date: plannedDate,
         time: newTime || '09:00',
         recurrence: newRecurrence,
       })
       setNewName('')
       setNewDate(today)
+      setNewDateChoice('today')
       setNewTime('09:00')
       setNewRecurrence('none')
       setShowCreateForm(false)
@@ -410,15 +425,66 @@ export default function Tasks({ userId }: TasksProps) {
                 placeholder="Ex: Pagar a conta de luz"
               />
             </label>
-            <label>
-              Data
-              <input
-                type="date"
-                value={newDate}
-                onChange={event => setNewDate(event.target.value)}
-                required
-              />
-            </label>
+            <fieldset className="routine-date-schedule">
+              <legend>Data planejada</legend>
+              <div className="routine-date-options">
+                <label className={newDateChoice === 'today' ? 'is-selected' : ''}>
+                  <input
+                    type="radio"
+                    name="task_date_choice"
+                    value="today"
+                    checked={newDateChoice === 'today'}
+                    onChange={() => setNewDateChoice('today')}
+                    disabled={busyKey === 'create'}
+                  />
+                  <span>
+                    <strong>Hoje</strong>
+                    <small>{formatShortDate(today)}</small>
+                  </span>
+                </label>
+                <label className={newDateChoice === 'tomorrow' ? 'is-selected' : ''}>
+                  <input
+                    type="radio"
+                    name="task_date_choice"
+                    value="tomorrow"
+                    checked={newDateChoice === 'tomorrow'}
+                    onChange={() => setNewDateChoice('tomorrow')}
+                    disabled={busyKey === 'create'}
+                  />
+                  <span>
+                    <strong>Amanhã</strong>
+                    <small>{formatShortDate(tomorrow)}</small>
+                  </span>
+                </label>
+                <label className={newDateChoice === 'other' ? 'is-selected' : ''}>
+                  <input
+                    type="radio"
+                    name="task_date_choice"
+                    value="other"
+                    checked={newDateChoice === 'other'}
+                    onChange={() => setNewDateChoice('other')}
+                    disabled={busyKey === 'create'}
+                  />
+                  <span>
+                    <strong>Outra data</strong>
+                    <small>Escolher</small>
+                  </span>
+                </label>
+              </div>
+              {newDateChoice === 'other' && (
+                <label className="routine-custom-date">
+                  Escolha a data
+                  <input
+                    type="date"
+                    value={newDate}
+                    onChange={event => setNewDate(event.target.value)}
+                    min={today}
+                    required
+                    disabled={busyKey === 'create'}
+                  />
+                </label>
+              )}
+            </fieldset>
             <label>
               Horário
               <input
@@ -439,23 +505,6 @@ export default function Tasks({ userId }: TasksProps) {
                 ))}
               </select>
             </label>
-            <div className="routine-quick-dates" aria-label="Atalhos de data">
-              <span>Agendar para</span>
-              <button
-                type="button"
-                className={newDate === today ? 'is-active' : ''}
-                onClick={() => setNewDate(today)}
-              >
-                Hoje
-              </button>
-              <button
-                type="button"
-                className={newDate === tomorrow ? 'is-active' : ''}
-                onClick={() => setNewDate(tomorrow)}
-              >
-                Amanhã
-              </button>
-            </div>
             <div className="routine-editor-actions routine-create-actions">
               <button
                 className="primary-button"

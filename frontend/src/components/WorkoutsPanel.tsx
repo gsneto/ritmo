@@ -6,7 +6,6 @@ import {
   Dumbbell,
   History,
   Home,
-  Pause,
   Pencil,
   Play,
   Plus,
@@ -23,6 +22,8 @@ import {
   type WorkoutHistory,
   type WorkoutInput,
   type WorkoutSession,
+  type WorkoutSessionExercise,
+  type WorkoutSessionSet,
   type WorkoutTemplate,
 } from '../services/workoutSessionApi'
 import '../styles/workout-session.css'
@@ -52,6 +53,21 @@ interface RestTimer {
   remaining: number
   running: boolean
 }
+
+type GuidedStep = 'weight' | 'ready' | 'series' | 'rest' | 'complete'
+
+interface GuidedSetContext {
+  exercise: WorkoutSessionExercise
+  exerciseIndex: number
+  set: WorkoutSessionSet
+}
+
+const GUIDED_STEPS: Array<{ id: Exclude<GuidedStep, 'complete'>; label: string }> = [
+  { id: 'weight', label: 'Peso' },
+  { id: 'ready', label: 'Confirmar' },
+  { id: 'series', label: 'Série' },
+  { id: 'rest', label: 'Descanso' },
+]
 
 const EMPTY_HISTORY: WorkoutHistory = {
   total_sessions: 0,
@@ -219,6 +235,28 @@ export function sessionInputDefaults(session: WorkoutSession): {
   return { weights, reps }
 }
 
+export function findNextIncompleteSet(
+  session: WorkoutSession,
+): GuidedSetContext | null {
+  for (const [exerciseIndex, exercise] of session.exercises.entries()) {
+    const set = exercise.sets.find(item => !item.completed_at)
+    if (set) return { exercise, exerciseIndex, set }
+  }
+  return null
+}
+
+function findSetContext(
+  session: WorkoutSession,
+  setId: number | null,
+): GuidedSetContext | null {
+  if (setId === null) return null
+  for (const [exerciseIndex, exercise] of session.exercises.entries()) {
+    const set = exercise.sets.find(item => item.id === setId)
+    if (set) return { exercise, exerciseIndex, set }
+  }
+  return null
+}
+
 function historyDate(value: string | null): string {
   if (!value) return ''
   return new Intl.DateTimeFormat('pt-BR', {
@@ -236,9 +274,16 @@ export default function WorkoutsPanel({
   const [workouts, setWorkouts] = useState<WorkoutTemplate[]>([])
   const [activeSession, setActiveSession] = useState<WorkoutSession | null>(null)
   const [historyData, setHistoryData] = useState<WorkoutHistory>(EMPTY_HISTORY)
+  const [preparedWorkout, setPreparedWorkout] = useState<WorkoutTemplate | null>(null)
+  const [guidedStep, setGuidedStep] = useState<GuidedStep>('weight')
+  const [currentSetId, setCurrentSetId] = useState<number | null>(null)
+  const [preparedWeight, setPreparedWeight] = useState('')
+  const [preparedReps, setPreparedReps] = useState('')
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [editData, setEditData] = useState<WorkoutData | null>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [seriesElapsedSeconds, setSeriesElapsedSeconds] = useState(0)
+  const [setStartedAt, setSetStartedAt] = useState<number | null>(null)
   const [restTimer, setRestTimer] = useState<RestTimer>({
     remaining: 0,
     running: false,
@@ -263,6 +308,13 @@ export default function WorkoutsPanel({
 
   useEffect(() => {
     setRestTimer({ remaining: 0, running: false })
+    setPreparedWorkout(null)
+    setGuidedStep('weight')
+    setCurrentSetId(null)
+    setPreparedWeight('')
+    setPreparedReps('')
+    setSeriesElapsedSeconds(0)
+    setSetStartedAt(null)
     setEditingIndex(null)
     setEditData(null)
     setShowFinishConfirm(false)
@@ -285,6 +337,19 @@ export default function WorkoutsPanel({
   }, [activeSession?.id, activeSession?.started_at])
 
   useEffect(() => {
+    if (guidedStep !== 'series' || setStartedAt === null) {
+      setSeriesElapsedSeconds(0)
+      return
+    }
+    const updateSetElapsed = () => {
+      setSeriesElapsedSeconds(Math.max(0, Math.floor((Date.now() - setStartedAt) / 1000)))
+    }
+    updateSetElapsed()
+    const interval = window.setInterval(updateSetElapsed, 1000)
+    return () => window.clearInterval(interval)
+  }, [guidedStep, setStartedAt])
+
+  useEffect(() => {
     if (!restTimer.running || restTimer.remaining <= 0) return
     const interval = window.setInterval(() => {
       setRestTimer(current => {
@@ -295,18 +360,39 @@ export default function WorkoutsPanel({
       })
     }, 1000)
     return () => window.clearInterval(interval)
-  }, [restTimer.running, restTimer.remaining > 0])
+  }, [restTimer.running])
 
-  function adoptSession(session: WorkoutSession | null) {
+  useEffect(() => {
+    if (
+      guidedStep === 'rest'
+      && restTimer.remaining === 0
+      && !restTimer.running
+    ) {
+      setGuidedStep('weight')
+    }
+  }, [guidedStep, restTimer.remaining, restTimer.running])
+
+  function adoptSession(session: WorkoutSession | null, resetGuide = false) {
     setActiveSession(session)
     if (!session) {
       setWeightInputs({})
       setRepInputs({})
+      setCurrentSetId(null)
+      setGuidedStep('weight')
+      setSetStartedAt(null)
+      setSeriesElapsedSeconds(0)
       return
     }
     const defaults = sessionInputDefaults(session)
     setWeightInputs(defaults.weights)
     setRepInputs(defaults.reps)
+    if (resetGuide) {
+      const next = findNextIncompleteSet(session)
+      setCurrentSetId(next?.set.id ?? null)
+      setGuidedStep(next ? 'weight' : 'complete')
+      setSetStartedAt(null)
+      setSeriesElapsedSeconds(0)
+    }
   }
 
   async function loadPanel() {
@@ -319,7 +405,7 @@ export default function WorkoutsPanel({
         workoutSessionApi.getHistory(userId),
       ])
       setWorkouts(templates)
-      adoptSession(session)
+      adoptSession(session, true)
       setHistoryData({
         ...history,
         exercise_progress: history.exercise_progress ?? [],
@@ -492,8 +578,72 @@ export default function WorkoutsPanel({
     }
   }
 
-  async function startSession(workout: WorkoutTemplate) {
+  function prepareSession(workout: WorkoutTemplate) {
     if (workout.exercises.length === 0) return
+    const firstExercise = workout.exercises[0]
+    const progress = historyData.exercise_progress.find(item => (
+      exerciseKey(item.exercise_name) === exerciseKey(firstExercise.name)
+    ))
+    const suggestedWeight = progress?.suggested_weight_kg
+      ?? progress?.last_weight_kg
+      ?? ''
+    setPreparedWorkout(workout)
+    setPreparedWeight(
+      suggestedWeight === '' ? '' : String(Number(suggestedWeight)),
+    )
+    setPreparedReps(plannedReps(firstExercise.reps))
+    setGuidedStep('weight')
+    setCurrentSetId(null)
+    setRestTimer({ remaining: 0, running: false })
+    setSetStartedAt(null)
+    setSeriesElapsedSeconds(0)
+    setError('')
+  }
+
+  function cancelPreparation() {
+    setPreparedWorkout(null)
+    setPreparedWeight('')
+    setPreparedReps('')
+    setGuidedStep('weight')
+    setError('')
+  }
+
+  function validateCurrentSet(): boolean {
+    const weightText = preparedWorkout
+      ? preparedWeight
+      : (currentSetId === null ? '' : weightInputs[currentSetId] ?? '')
+    if (parseWeight(weightText) === null) {
+      setError('Informe o peso que você vai usar, como 8 ou 8,5 kg.')
+      return false
+    }
+    const repsText = preparedWorkout
+      ? preparedReps.trim()
+      : (currentSetId === null ? '' : repInputs[currentSetId]?.trim() ?? '')
+    const reps = repsText ? Number(repsText) : undefined
+    if (reps !== undefined && (!Number.isInteger(reps) || reps < 1 || reps > 1000)) {
+      setError('Informe uma quantidade válida de repetições.')
+      return false
+    }
+    setError('')
+    return true
+  }
+
+  function advanceToConfirmation() {
+    if (!validateCurrentSet()) return
+    setGuidedStep('ready')
+  }
+
+  async function startCurrentSeries() {
+    if (!validateCurrentSet()) return
+    if (activeSession && currentSetId !== null) {
+      setGuidedStep('series')
+      setSetStartedAt(Date.now())
+      setSeriesElapsedSeconds(0)
+      return
+    }
+    if (!preparedWorkout) return
+
+    const workout = preparedWorkout
     setStartingWorkoutId(workout.id)
     setError('')
     const key = idempotencyKeys.current[workout.id]
@@ -508,19 +658,38 @@ export default function WorkoutsPanel({
       )
       delete idempotencyKeys.current[workout.id]
       adoptSession(session)
+      const next = findNextIncompleteSet(session)
+      if (!next) {
+        setError('Este treino não possui uma série disponível.')
+        setGuidedStep('complete')
+        return
+      }
+      const defaults = sessionInputDefaults(session)
+      setWeightInputs({
+        ...defaults.weights,
+        [next.set.id]: String(Number(parseWeight(preparedWeight))),
+      })
+      setRepInputs({
+        ...defaults.reps,
+        [next.set.id]: preparedReps.trim(),
+      })
+      setCurrentSetId(next.set.id)
+      setPreparedWorkout(null)
+      setGuidedStep('series')
+      setSetStartedAt(Date.now())
+      setSeriesElapsedSeconds(0)
       setRestTimer({ remaining: 0, running: false })
     } catch {
-      setError('Não foi possível iniciar. Verifique se já existe um treino aberto.')
+      setError('Não foi possível começar a série. Verifique sua conexão e tente novamente.')
     } finally {
       setStartingWorkoutId(null)
     }
   }
 
-  async function completeSet(setId: number) {
-    if (!activeSession) return
-    const activeExercise = activeSession.exercises.find(exercise => (
-      exercise.sets.some(set => set.id === setId)
-    ))
+  async function completeCurrentSet() {
+    if (!activeSession || currentSetId === null) return
+    const setId = currentSetId
+    const context = findSetContext(activeSession, setId)
     const weight = parseWeight(weightInputs[setId] ?? '')
     if (weight === null) {
       setError('Informe um peso válido, como 8 ou 8,5 kg.')
@@ -542,12 +711,21 @@ export default function WorkoutsPanel({
         ...(reps === undefined ? {} : { reps_completed: reps }),
       })
       adoptSession(session)
-      if (session.completed_sets < session.total_sets) {
+      setSetStartedAt(null)
+      setSeriesElapsedSeconds(0)
+      const next = findNextIncompleteSet(session)
+      if (next) {
+        setCurrentSetId(next.set.id)
         setRestTimer({
-          remaining: activeExercise?.progress?.rest_seconds
+          remaining: context?.exercise.progress?.rest_seconds
             ?? session.rest_seconds,
           running: true,
         })
+        setGuidedStep('rest')
+      } else {
+        setCurrentSetId(null)
+        setRestTimer({ remaining: 0, running: false })
+        setGuidedStep('complete')
       }
     } catch {
       setError('Não foi possível registrar esta série.')
@@ -564,6 +742,11 @@ export default function WorkoutsPanel({
         completed: false,
       })
       adoptSession(session)
+      setCurrentSetId(setId)
+      setRestTimer({ remaining: 0, running: false })
+      setGuidedStep('weight')
+      setSetStartedAt(null)
+      setSeriesElapsedSeconds(0)
     } catch {
       setError('Não foi possível desfazer esta série.')
     } finally {
@@ -613,6 +796,67 @@ export default function WorkoutsPanel({
   const progressByExercise = new Map(
     exerciseProgress.map(progress => [exerciseKey(progress.exercise_name), progress]),
   )
+  const currentContext = activeSession
+    ? findSetContext(activeSession, currentSetId)
+    : null
+  const preparedExercise = preparedWorkout?.exercises[0] ?? null
+  const currentExerciseName = currentContext?.exercise.name
+    ?? preparedExercise?.name
+    ?? ''
+  const currentProgress = currentContext?.exercise.progress
+    ?? (
+      preparedExercise
+        ? progressByExercise.get(exerciseKey(preparedExercise.name))
+        : null
+    )
+  const currentWeight = preparedWorkout
+    ? preparedWeight
+    : (
+        currentSetId === null
+          ? ''
+          : weightInputs[currentSetId] ?? ''
+      )
+  const currentReps = preparedWorkout
+    ? preparedReps
+    : (
+        currentSetId === null
+          ? ''
+          : repInputs[currentSetId] ?? ''
+      )
+  const currentSetNumber = currentContext?.set.set_number ?? 1
+  const currentTargetSets = currentContext?.exercise.target_sets
+    ?? preparedExercise?.sets
+    ?? '—'
+  const currentPlannedReps = currentContext?.exercise.planned_reps
+    ?? preparedExercise?.reps
+    ?? null
+  const guidedStepIndex = guidedStep === 'complete'
+    ? GUIDED_STEPS.length
+    : GUIDED_STEPS.findIndex(step => step.id === guidedStep)
+  const guidedStatus = guidedStep === 'series'
+    ? 'SÉRIE EM ANDAMENTO'
+    : guidedStep === 'rest'
+      ? 'DESCANSO'
+      : guidedStep === 'complete'
+        ? 'TREINO CONCLUÍDO'
+        : 'PREPARANDO'
+  const currentRestOptions = Array.from(new Set([
+    45,
+    60,
+    75,
+    90,
+    120,
+    currentProgress?.rest_seconds ?? 60,
+  ])).sort((left, right) => left - right)
+  const currentIncrementOptions = Array.from(new Set([
+    '0.50',
+    '1.00',
+    '2.00',
+    currentProgress ? Number(currentProgress.increment_kg).toFixed(2) : '1.00',
+  ])).sort((left, right) => Number(left) - Number(right))
+  const preferenceIsSaving = currentProgress
+    ? savingPreferenceKey === exerciseKey(currentProgress.exercise_name)
+    : false
 
   return (
     <section className="panel workout-panel guided-workout-panel">
@@ -635,285 +879,396 @@ export default function WorkoutsPanel({
       {error && <p className="workout-session-alert" role="alert">{error}</p>}
       {loading && <p className="workout-session-loading">Preparando seus treinos…</p>}
 
-      {!loading && activeSession ? (
+      {!loading && (activeSession || preparedWorkout) ? (
         <div className="guided-session" aria-label="Treino guiado em andamento">
           <header className="guided-session-hero">
             <div>
-              <span className="guided-live-chip"><span /> AO VIVO</span>
-              <p>{activeSession.workout_day}</p>
-              <h3>{activeSession.workout_title}</h3>
+              <span className="guided-live-chip"><span /> {guidedStatus}</span>
+              <p>{activeSession?.workout_day ?? preparedWorkout?.day}</p>
+              <h3>{activeSession?.workout_title ?? preparedWorkout?.title}</h3>
             </div>
             <div className="guided-main-timer" aria-label="Tempo total de treino">
               <Clock3 size={19} aria-hidden="true" />
-              <span>Tempo total</span>
-              <strong>{formatTimer(elapsedSeconds)}</strong>
+              <span>{activeSession ? 'Tempo total' : 'Cronômetro'}</span>
+              <strong>{activeSession ? formatTimer(elapsedSeconds) : 'Aguardando'}</strong>
             </div>
           </header>
 
-          <div className="guided-progress-row">
-            <div>
-              <span>Séries concluídas</span>
-              <strong>{activeSession.completed_sets} de {activeSession.total_sets}</strong>
-            </div>
-            <div
-              className="guided-progress-track"
-              role="progressbar"
-              aria-label="Progresso das séries"
-              aria-valuemin={0}
-              aria-valuemax={activeSession.total_sets}
-              aria-valuenow={activeSession.completed_sets}
-            >
-              <span
-                style={{
-                  width: `${activeSession.total_sets
-                    ? (activeSession.completed_sets / activeSession.total_sets) * 100
-                    : 0}%`,
-                }}
-              />
-            </div>
-          </div>
-
-          {restTimer.remaining > 0 && (
-            <aside className="guided-rest-card" aria-label="Cronômetro de descanso">
-              <div className="guided-rest-clock">
-                <TimerReset size={22} aria-hidden="true" />
-                <div>
-                  <span>Descanso</span>
-                  <strong role="timer">{formatTimer(restTimer.remaining)}</strong>
-                </div>
-              </div>
-              <div className="guided-rest-actions">
-                <button
-                  type="button"
-                  onClick={() => setRestTimer(current => ({
-                    ...current,
-                    running: !current.running,
-                  }))}
-                >
-                  {restTimer.running
-                    ? <Pause size={16} aria-hidden="true" />
-                    : <Play size={16} aria-hidden="true" />}
-                  {restTimer.running ? 'Pausar' : 'Continuar'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRestTimer(current => ({
-                    ...current,
-                    remaining: Math.min(current.remaining + 30, 600),
-                  }))}
-                >
-                  <Plus size={16} aria-hidden="true" />
-                  30s
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRestTimer({ remaining: 0, running: false })}
-                >
-                  <SkipForward size={16} aria-hidden="true" />
-                  Pular
-                </button>
-              </div>
-            </aside>
-          )}
-
-          <div className="guided-exercise-list">
-            {activeSession.exercises.map((exercise, exerciseIndex) => {
-              const exerciseDone = exercise.sets.every(set => set.completed_at)
-              const progress = exercise.progress
-              const preferenceIsSaving = progress
-                ? savingPreferenceKey === exerciseKey(progress.exercise_name)
-                : false
-              const restOptions = Array.from(new Set([
-                45,
-                60,
-                75,
-                90,
-                120,
-                progress?.rest_seconds ?? 60,
-              ])).sort((left, right) => left - right)
-              const incrementOptions = Array.from(new Set([
-                '0.50',
-                '1.00',
-                '2.00',
-                progress ? Number(progress.increment_kg).toFixed(2) : '1.00',
-              ])).sort((left, right) => Number(left) - Number(right))
+          <ol className="guided-timeline" aria-label="Etapas de cada série">
+            {GUIDED_STEPS.map((step, index) => {
+              const isCurrent = guidedStep !== 'complete' && index === guidedStepIndex
+              const isDone = guidedStep === 'complete' || index < guidedStepIndex
               return (
-                <article
-                  key={exercise.id}
-                  className={`guided-exercise-card ${exerciseDone ? 'is-complete' : ''}`}
+                <li
+                  key={step.id}
+                  className={`${isCurrent ? 'is-current' : ''} ${isDone ? 'is-done' : ''}`}
+                  aria-current={isCurrent ? 'step' : undefined}
                 >
-                  <div className="guided-exercise-head">
-                    <span>{String(exerciseIndex + 1).padStart(2, '0')}</span>
-                    <div>
-                      <h4>{exercise.name}</h4>
-                      <p>
-                        {exercise.target_sets} séries
-                        {exercise.planned_reps ? ` • ${exercise.planned_reps} reps` : ''}
-                      </p>
-                    </div>
-                     {exerciseDone && <CheckCircle2 size={20} aria-label="Exercício concluído" />}
-                   </div>
-                  {progress && (
-                    <div className="guided-exercise-insights">
-                      <div className="guided-exercise-metrics">
-                        <span>
-                          <History size={14} aria-hidden="true" />
-                          <small>Última sessão</small>
-                          <strong>
-                            {progress.last_weight_kg === null
-                              ? 'Primeiro registro'
-                              : (
-                                  `${formatKg(progress.last_weight_kg)} kg × `
-                                  + `${progress.last_reps_completed ?? '—'} reps · `
-                                  + `${progress.last_completed_sets}/${progress.last_target_sets ?? '—'} séries`
-                                )}
-                          </strong>
-                        </span>
-                        <span>
-                          <Trophy size={14} aria-hidden="true" />
-                          <small>Recorde pessoal</small>
-                          <strong>
-                            {progress.personal_record_weight_kg === null
-                              ? 'Ainda sem recorde'
-                              : `${formatKg(progress.personal_record_weight_kg)} kg`}
-                          </strong>
-                        </span>
-                      </div>
-                      <p
-                        className={`guided-progression-hint is-${progress.suggestion_action}`}
-                      >
-                        <TrendingUp size={16} aria-hidden="true" />
-                        <span>{progress.suggestion_text}</span>
-                      </p>
-                      <div className="guided-exercise-preferences">
-                        <label>
-                          Descanso após a série
-                          <select
-                            value={progress.rest_seconds}
-                            onChange={event => void updateExercisePreference(
-                              progress,
-                              Number(event.target.value),
-                              Number(progress.increment_kg).toFixed(2),
-                            )}
-                            disabled={preferenceIsSaving}
-                          >
-                            {restOptions.map(seconds => (
-                              <option key={seconds} value={seconds}>{seconds}s</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Aumento sugerido
-                          <select
-                            value={Number(progress.increment_kg).toFixed(2)}
-                            onChange={event => void updateExercisePreference(
-                              progress,
-                              progress.rest_seconds,
-                              event.target.value,
-                            )}
-                            disabled={preferenceIsSaving}
-                          >
-                            {incrementOptions.map(increment => (
-                              <option key={increment} value={increment}>
-                                +{formatKg(increment)} kg
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        {preferenceIsSaving && <small>Salvando…</small>}
-                      </div>
-                      <small className="guided-progression-disclaimer">
-                        Sugestão automática baseada apenas nos seus registros; não substitui orientação profissional.
-                      </small>
-                    </div>
-                  )}
-                  <div className="guided-set-list">
-                    <div className="guided-set-labels" aria-hidden="true">
-                      <span>Série</span>
-                      <span>Peso usado</span>
-                      <span>Reps</span>
-                      <span />
-                    </div>
-                    {exercise.sets.map(set => {
-                      const completed = Boolean(set.completed_at)
-                      return (
-                        <div
-                          key={set.id}
-                          className={`guided-set-row ${completed ? 'is-complete' : ''}`}
-                        >
-                          <strong>{set.set_number}</strong>
-                          <label>
-                            <span className="sr-only">Peso da série {set.set_number}</span>
-                            <input
-                              value={weightInputs[set.id] ?? ''}
-                              onChange={event => setWeightInputs(current => ({
-                                ...current,
-                                [set.id]: event.target.value,
-                              }))}
-                              inputMode="decimal"
-                              placeholder="0,0"
-                              disabled={completed}
-                              aria-label={`Peso da série ${set.set_number} em kg`}
-                            />
-                            <small>kg</small>
-                          </label>
-                          <input
-                            className="guided-reps-input"
-                            value={repInputs[set.id] ?? ''}
-                            onChange={event => setRepInputs(current => ({
-                              ...current,
-                              [set.id]: event.target.value.replace(/\D/g, ''),
-                            }))}
-                            inputMode="numeric"
-                            placeholder="—"
-                            disabled={completed}
-                            aria-label={`Repetições da série ${set.set_number}`}
-                          />
-                          {completed ? (
-                            <button
-                              className="guided-set-undo"
-                              type="button"
-                              onClick={() => void clearSet(set.id)}
-                              disabled={savingSetId === set.id}
-                              aria-label={`Desfazer série ${set.set_number}`}
-                            >
-                              <RotateCcw size={15} aria-hidden="true" />
-                            </button>
-                          ) : (
-                            <button
-                              className="guided-set-complete"
-                              type="button"
-                              onClick={() => void completeSet(set.id)}
-                              disabled={savingSetId === set.id}
-                              aria-label={`Concluir série ${set.set_number}`}
-                            >
-                              <Check size={17} aria-hidden="true" />
-                              <span>Feita</span>
-                            </button>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </article>
+                  <span>{isDone ? <Check size={14} aria-hidden="true" /> : index + 1}</span>
+                  <small>{step.label}</small>
+                </li>
               )
             })}
-          </div>
+          </ol>
 
-          <div className="guided-finish-bar">
-            <div>
-              <span>{activeSession.completed_sets}/{activeSession.total_sets} séries</span>
-              <strong>{Number(activeSession.max_weight_kg).toLocaleString('pt-BR')} kg máximo</strong>
+          {activeSession && (
+            <div className="guided-progress-row">
+              <div>
+                <span>Progresso</span>
+                <strong>{activeSession.completed_sets} de {activeSession.total_sets} séries</strong>
+              </div>
+              <div
+                className="guided-progress-track"
+                role="progressbar"
+                aria-label="Progresso das séries"
+                aria-valuemin={0}
+                aria-valuemax={activeSession.total_sets}
+                aria-valuenow={activeSession.completed_sets}
+              >
+                <span
+                  style={{
+                    width: `${activeSession.total_sets
+                      ? (activeSession.completed_sets / activeSession.total_sets) * 100
+                      : 0}%`,
+                  }}
+                />
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowFinishConfirm(true)}
-              disabled={activeSession.completed_sets === 0}
-            >
-              <CheckCircle2 size={18} aria-hidden="true" />
-              Finalizar treino
-            </button>
-          </div>
+          )}
+
+          <article className={`guided-step-card is-${guidedStep}`}>
+            {guidedStep !== 'complete' ? (
+              <>
+                <header className="guided-step-head">
+                  <span>
+                    {currentContext
+                      ? `Exercício ${currentContext.exerciseIndex + 1}`
+                      : 'Primeiro exercício'}
+                  </span>
+                  <h4>{currentExerciseName}</h4>
+                  <p>
+                    Série {currentSetNumber} de {currentTargetSets}
+                    {currentPlannedReps ? ` • meta de ${currentPlannedReps} reps` : ''}
+                  </p>
+                </header>
+
+                {guidedStep === 'weight' && (
+                  <div className="guided-step-content">
+                    <div>
+                      <p className="section-label">Passo 1</p>
+                      <h3>Qual peso você vai usar?</h3>
+                      <p>Escolha antes de iniciar. O cronômetro ainda está parado.</p>
+                    </div>
+                    {currentProgress && (
+                      <p className={`guided-progression-hint is-${currentProgress.suggestion_action}`}>
+                        <TrendingUp size={16} aria-hidden="true" />
+                        <span>{currentProgress.suggestion_text}</span>
+                      </p>
+                    )}
+                    <div className="guided-weight-fields">
+                      <label>
+                        Peso
+                        <span>
+                          <input
+                            value={currentWeight}
+                            onChange={event => {
+                              if (preparedWorkout) {
+                                setPreparedWeight(event.target.value)
+                              } else if (currentSetId !== null) {
+                                setWeightInputs(current => ({
+                                  ...current,
+                                  [currentSetId]: event.target.value,
+                                }))
+                              }
+                            }}
+                            inputMode="decimal"
+                            placeholder="Ex.: 8,5"
+                            aria-label="Peso que vou usar"
+                          />
+                          <small>kg</small>
+                        </span>
+                      </label>
+                      <label>
+                        Repetições
+                        <input
+                          value={currentReps}
+                          onChange={event => {
+                            const value = event.target.value.replace(/\D/g, '')
+                            if (preparedWorkout) {
+                              setPreparedReps(value)
+                            } else if (currentSetId !== null) {
+                              setRepInputs(current => ({
+                                ...current,
+                                [currentSetId]: value,
+                              }))
+                            }
+                          }}
+                          inputMode="numeric"
+                          placeholder="Ex.: 10"
+                          aria-label="Repetições que vou fazer"
+                        />
+                      </label>
+                    </div>
+                    <div className="guided-primary-actions">
+                      {preparedWorkout && (
+                        <button
+                          className="ghost-button"
+                          type="button"
+                          onClick={cancelPreparation}
+                        >
+                          Voltar
+                        </button>
+                      )}
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={advanceToConfirmation}
+                      >
+                        Avançar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {guidedStep === 'ready' && (
+                  <div className="guided-step-content guided-ready-content">
+                    <span className="guided-step-icon"><Dumbbell size={25} aria-hidden="true" /></span>
+                    <div>
+                      <p className="section-label">Passo 2</p>
+                      <h3>Podemos iniciar a série?</h3>
+                      <p>
+                        Você confirmou <strong>{formatKg(parseWeight(currentWeight))} kg</strong>
+                        {currentReps ? ` e ${currentReps} repetições` : ''}.
+                      </p>
+                    </div>
+                    <p className="guided-no-save-note">
+                      O tempo e o registro só começam quando você confirmar abaixo.
+                    </p>
+                    <div className="guided-primary-actions">
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() => setGuidedStep('weight')}
+                        disabled={startingWorkoutId !== null}
+                      >
+                        Alterar peso
+                      </button>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={() => void startCurrentSeries()}
+                        disabled={startingWorkoutId !== null}
+                      >
+                        <Play size={17} fill="currentColor" aria-hidden="true" />
+                        {startingWorkoutId !== null ? 'Iniciando…' : 'Sim, iniciar série'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {guidedStep === 'series' && (
+                  <div className="guided-step-content guided-series-content">
+                    <div>
+                      <p className="section-label">Passo 3</p>
+                      <h3>Série em andamento</h3>
+                    </div>
+                    <strong className="guided-series-timer" role="timer">
+                      {formatTimer(seriesElapsedSeconds)}
+                    </strong>
+                    <div className="guided-series-summary">
+                      <span><Dumbbell size={17} aria-hidden="true" /> {formatKg(parseWeight(currentWeight))} kg</span>
+                      {currentReps && <span>{currentReps} repetições</span>}
+                    </div>
+                    <div className="guided-finished-question">
+                      <strong>Já terminou esta série?</strong>
+                      <small>Nada será salvo até você confirmar.</small>
+                    </div>
+                    <button
+                      className="guided-done-button"
+                      type="button"
+                      onClick={() => void completeCurrentSet()}
+                      disabled={savingSetId !== null}
+                    >
+                      <CheckCircle2 size={19} aria-hidden="true" />
+                      {savingSetId !== null ? 'Registrando…' : 'Sim, terminei a série'}
+                    </button>
+                  </div>
+                )}
+
+                {guidedStep === 'rest' && (
+                  <div className="guided-step-content guided-rest-content">
+                    <span className="guided-step-icon is-rest">
+                      <TimerReset size={26} aria-hidden="true" />
+                    </span>
+                    <div>
+                      <p className="section-label">Passo 4</p>
+                      <h3>Hora do descanso</h3>
+                      <p>A próxima série só começa depois que você confirmar novamente.</p>
+                    </div>
+                    <strong className="guided-rest-timer" role="timer">
+                      {formatTimer(restTimer.remaining)}
+                    </strong>
+                    <div className="guided-rest-actions">
+                      <button
+                        type="button"
+                        onClick={() => setRestTimer(current => ({
+                          ...current,
+                          remaining: Math.min(current.remaining + 30, 600),
+                        }))}
+                      >
+                        <Plus size={16} aria-hidden="true" />
+                        Mais 30s
+                      </button>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={() => {
+                          setRestTimer({ remaining: 0, running: false })
+                          setGuidedStep('weight')
+                        }}
+                      >
+                        <SkipForward size={17} aria-hidden="true" />
+                        Já descansei
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="guided-step-content guided-complete-content">
+                <span className="guided-step-icon is-complete">
+                  <CheckCircle2 size={28} aria-hidden="true" />
+                </span>
+                <p className="section-label">Todas as séries feitas</p>
+                <h3>Treino concluído!</h3>
+                <p>Revise o resultado e finalize para guardar no seu histórico.</p>
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => setShowFinishConfirm(true)}
+                >
+                  Finalizar e salvar treino
+                </button>
+              </div>
+            )}
+          </article>
+
+          {currentProgress && guidedStep !== 'complete' && (
+            <details className="guided-details">
+              <summary>Ver histórico e ajustar descanso</summary>
+              <div className="guided-exercise-insights">
+                <div className="guided-exercise-metrics">
+                  <span>
+                    <History size={14} aria-hidden="true" />
+                    <small>Última sessão</small>
+                    <strong>
+                      {currentProgress.last_weight_kg === null
+                        ? 'Primeiro registro'
+                        : `${formatKg(currentProgress.last_weight_kg)} kg × ${currentProgress.last_reps_completed ?? '—'} reps`}
+                    </strong>
+                  </span>
+                  <span>
+                    <Trophy size={14} aria-hidden="true" />
+                    <small>Recorde pessoal</small>
+                    <strong>{formatKg(currentProgress.personal_record_weight_kg)} kg</strong>
+                  </span>
+                </div>
+                <div className="guided-exercise-preferences">
+                  <label>
+                    Descanso após a série
+                    <select
+                      value={currentProgress.rest_seconds}
+                      onChange={event => void updateExercisePreference(
+                        currentProgress,
+                        Number(event.target.value),
+                        Number(currentProgress.increment_kg).toFixed(2),
+                      )}
+                      disabled={preferenceIsSaving}
+                    >
+                      {currentRestOptions.map(seconds => (
+                        <option key={seconds} value={seconds}>{seconds}s</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Aumento sugerido
+                    <select
+                      value={Number(currentProgress.increment_kg).toFixed(2)}
+                      onChange={event => void updateExercisePreference(
+                        currentProgress,
+                        currentProgress.rest_seconds,
+                        event.target.value,
+                      )}
+                      disabled={preferenceIsSaving}
+                    >
+                      {currentIncrementOptions.map(increment => (
+                        <option key={increment} value={increment}>
+                          +{formatKg(increment)} kg
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {preferenceIsSaving && <small>Salvando…</small>}
+                </div>
+                <small className="guided-progression-disclaimer">
+                  Sugestão baseada nos seus registros; não substitui orientação profissional.
+                </small>
+              </div>
+            </details>
+          )}
+
+          {activeSession && (
+            <details className="guided-details">
+              <summary>Ver todas as séries do treino</summary>
+              <div className="guided-session-outline">
+                {activeSession.exercises.map(exercise => (
+                  <section key={exercise.id}>
+                    <strong>{exercise.name}</strong>
+                    <div>
+                      {exercise.sets.map(set => (
+                        <span
+                          key={set.id}
+                          className={set.completed_at ? 'is-complete' : ''}
+                        >
+                          Série {set.set_number}
+                          {set.completed_at && (
+                            <>
+                              {' • '}{formatKg(set.weight_kg)} kg
+                              <button
+                                type="button"
+                                onClick={() => void clearSet(set.id)}
+                                disabled={savingSetId === set.id}
+                                aria-label={`Desfazer série ${set.set_number} de ${exercise.name}`}
+                              >
+                                <RotateCcw size={13} aria-hidden="true" />
+                              </button>
+                            </>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {activeSession && guidedStep !== 'complete' && (
+            <div className="guided-finish-bar">
+              <div>
+                <span>{activeSession.completed_sets}/{activeSession.total_sets} séries</span>
+                <strong>{Number(activeSession.max_weight_kg).toLocaleString('pt-BR')} kg máximo</strong>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFinishConfirm(true)}
+                disabled={activeSession.completed_sets === 0}
+              >
+                <CheckCircle2 size={18} aria-hidden="true" />
+                Encerrar treino
+              </button>
+            </div>
+          )}
         </div>
       ) : !loading && (
         <>
@@ -1089,13 +1444,10 @@ export default function WorkoutsPanel({
                         <button
                           className="guided-start-button"
                           type="button"
-                          onClick={() => void startSession(workout)}
-                          disabled={startingWorkoutId !== null}
+                          onClick={() => prepareSession(workout)}
                         >
                           <Play size={17} fill="currentColor" aria-hidden="true" />
-                          {startingWorkoutId === workout.id
-                            ? 'Iniciando…'
-                            : 'Iniciar treino'}
+                          Iniciar treino
                         </button>
                       )}
                     </>

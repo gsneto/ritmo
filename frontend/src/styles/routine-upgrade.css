@@ -540,15 +540,18 @@ html[data-theme="dark"] .routine-task-hero {
 }
 
 .routine-task-form {
-  grid-template-columns:
-    minmax(0, 1.35fr)
-    minmax(140px, 0.42fr)
-    minmax(120px, 0.34fr)
-    minmax(145px, 0.4fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.routine-task-form .routine-task-name-field,
+.routine-task-form .routine-date-schedule {
+  grid-column: 1 / -1;
 }
 
 .routine-create-form label,
 .routine-inline-editor label {
+  display: grid;
+  min-width: 0;
   gap: 7px;
   color: var(--routine-ink);
   font-size: 0.8rem;
@@ -559,6 +562,9 @@ html[data-theme="dark"] .routine-task-hero {
 .routine-inline-editor input,
 .routine-create-form select,
 .routine-inline-editor select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 44px;
   border-radius: 12px;
 }
@@ -579,37 +585,95 @@ html[data-theme="dark"] .routine-task-hero {
   min-height: 44px;
 }
 
-.routine-quick-dates {
-  display: flex;
+.routine-date-schedule {
+  display: grid;
   grid-column: 1 / -1;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: -2px;
+  min-width: 0;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
-.routine-quick-dates > span {
-  margin-right: 2px;
+.routine-date-schedule legend {
+  margin-bottom: 7px;
   color: var(--routine-subtle);
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.78rem;
+  font-weight: 750;
 }
 
-.routine-quick-dates button {
-  min-height: 34px;
-  padding: 6px 10px;
+.routine-date-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.routine-date-options > label {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.routine-date-options input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.routine-date-options label > span {
+  display: grid;
+  min-height: 58px;
+  align-content: center;
+  gap: 2px;
+  padding: 8px 10px;
   border: 1px solid var(--routine-line);
-  border-radius: 9px;
-  background: var(--surface);
-  color: var(--routine-subtle);
+  border-radius: 12px;
+  background: var(--control);
+  color: var(--routine-ink);
+  text-align: center;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.routine-date-options label:hover > span {
+  border-color: color-mix(in srgb, var(--routine-accent) 38%, var(--routine-line));
+}
+
+.routine-date-options label.is-selected > span {
+  border-color: color-mix(in srgb, var(--routine-accent) 52%, var(--routine-line));
+  background: var(--routine-accent-soft);
+  color: var(--routine-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--routine-accent) 18%, transparent);
+}
+
+.routine-date-options input:focus-visible + span {
+  outline: 3px solid color-mix(in srgb, var(--routine-accent) 32%, transparent);
+  outline-offset: 2px;
+}
+
+.routine-date-options strong {
+  overflow-wrap: anywhere;
   font-size: 0.78rem;
   font-weight: 800;
 }
 
-.routine-quick-dates button.is-active {
-  border-color: var(--routine-accent);
-  background: var(--routine-accent-soft);
-  color: var(--routine-accent);
+.routine-date-options small {
+  color: var(--routine-subtle);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.routine-date-options label.is-selected small {
+  color: inherit;
+  opacity: 0.78;
+}
+
+.routine-custom-date {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--routine-accent) 18%, var(--routine-line));
+  border-radius: 12px;
+  background: var(--surface-soft);
 }
 
 .routine-create-actions {
@@ -828,6 +892,8 @@ html[data-theme="dark"] .routine-task-hero {
 
 .routine-item-actions {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
@@ -1128,7 +1194,7 @@ html[data-theme="dark"] .routine-task-hero {
     grid-column: 1 / -1;
   }
 
-  .routine-task-form .routine-quick-dates,
+  .routine-task-form .routine-date-schedule,
   .routine-task-form .routine-create-actions {
     grid-column: 1 / -1;
   }
@@ -1281,6 +1347,19 @@ html[data-theme="dark"] .routine-task-hero {
 
   .routine-create-actions button {
     width: 100%;
+  }
+
+  .routine-date-options {
+    gap: 5px;
+  }
+
+  .routine-date-options label > span {
+    min-height: 60px;
+    padding: 7px 5px;
+  }
+
+  .routine-date-options strong {
+    font-size: 0.72rem;
   }
 
   .routine-item-actions {

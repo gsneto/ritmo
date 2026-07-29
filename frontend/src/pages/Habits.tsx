@@ -306,6 +306,65 @@ export default function Habits({ userId }: HabitsProps) {
         </div>
       </section>
 
+      <section className="panel routine-panel routine-create-panel">
+        <div className="routine-section-head">
+          <div>
+            <p className="routine-kicker">Novo hábito</p>
+            <h2>O que você quer repetir?</h2>
+            <p>Você só precisa escolher um nome e um horário.</p>
+          </div>
+          <span className="routine-head-icon"><Plus size={20} aria-hidden="true" /></span>
+        </div>
+
+        <form className="routine-create-form routine-habit-form" onSubmit={handleSubmit}>
+          <label>
+            Nome do hábito
+            <input
+              type="text"
+              value={name}
+              onChange={event => setName(event.target.value)}
+              placeholder="Ex: Treino em casa"
+              maxLength={60}
+              required
+            />
+          </label>
+          <label>
+            Horário
+            <input
+              type="time"
+              value={time}
+              onChange={event => setTime(event.target.value)}
+              required
+            />
+          </label>
+          <fieldset className="routine-day-picker">
+            <legend>Dias da semana</legend>
+            <div>
+              {WEEKDAY_OPTIONS.map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={activeDays.includes(option.value) ? 'is-active' : ''}
+                  aria-pressed={activeDays.includes(option.value)}
+                  onClick={() => toggleActiveDay(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <button
+            className="primary-button routine-submit"
+            type="submit"
+            disabled={!name.trim() || busyKey !== null}
+          >
+            {busyKey === 'create'
+              ? <><RefreshCw className="routine-spin" size={18} aria-hidden="true" /> Adicionando...</>
+              : <><Plus size={18} aria-hidden="true" /> Adicionar hábito</>}
+          </button>
+        </form>
+      </section>
+
       {error && (
         <div className="routine-alert" role="alert">
           <AlertCircle size={19} aria-hidden="true" />
@@ -373,65 +432,6 @@ export default function Habits({ userId }: HabitsProps) {
         >
           Abrir treinos
         </button>
-      </section>
-
-      <section className="panel routine-panel routine-create-panel">
-        <div className="routine-section-head">
-          <div>
-            <p className="routine-kicker">Novo hábito</p>
-            <h2>O que você quer repetir?</h2>
-            <p>Você só precisa escolher um nome e um horário.</p>
-          </div>
-          <span className="routine-head-icon"><Plus size={20} aria-hidden="true" /></span>
-        </div>
-
-        <form className="routine-create-form routine-habit-form" onSubmit={handleSubmit}>
-          <label>
-            Nome do hábito
-            <input
-              type="text"
-              value={name}
-              onChange={event => setName(event.target.value)}
-              placeholder="Ex: Treino em casa"
-              maxLength={60}
-              required
-            />
-          </label>
-          <label>
-            Horário
-            <input
-              type="time"
-              value={time}
-              onChange={event => setTime(event.target.value)}
-              required
-            />
-          </label>
-          <fieldset className="routine-day-picker">
-            <legend>Dias da semana</legend>
-            <div>
-              {WEEKDAY_OPTIONS.map(option => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={activeDays.includes(option.value) ? 'is-active' : ''}
-                  aria-pressed={activeDays.includes(option.value)}
-                  onClick={() => toggleActiveDay(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-          <button
-            className="primary-button routine-submit"
-            type="submit"
-            disabled={!name.trim() || busyKey !== null}
-          >
-            {busyKey === 'create'
-              ? <><RefreshCw className="routine-spin" size={18} aria-hidden="true" /> Adicionando...</>
-              : <><Plus size={18} aria-hidden="true" /> Adicionar hábito</>}
-          </button>
-        </form>
       </section>
 
       <section className="panel routine-panel">

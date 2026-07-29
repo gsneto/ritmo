@@ -158,4 +158,16 @@ describe('Today intelligent assistant', () => {
       expect(screen.getByText('Escolha seu próximo livro')).toBeTruthy()
     })
   })
+
+  it('places the habit check-in directly below the rhythm hero', async () => {
+    render(<Today userId={1} />)
+
+    await screen.findAllByText('Beber água')
+    const checkInSection = screen.getByRole('region', {
+      name: 'Check-in de hábitos',
+    })
+
+    expect(checkInSection.previousElementSibling?.classList.contains('today-hero')).toBe(true)
+    expect(checkInSection.nextElementSibling?.classList.contains('today-assistant')).toBe(true)
+  })
 })

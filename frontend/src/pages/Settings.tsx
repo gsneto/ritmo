@@ -10,6 +10,7 @@ import {
   Download,
   FileJson,
   KeyRound,
+  MoreVertical,
   Share2,
   ShieldCheck,
   Smartphone,
@@ -37,10 +38,17 @@ export default function Settings({
   onChangeAccessCode,
 }: SettingsProps) {
   const { permission, requestPermission, isSupported } = useNotifications()
-  const { canInstall, install, isInstalled, isIos } = usePwaInstall()
+  const {
+    canInstall,
+    install,
+    isInstalled,
+    isIos,
+    isAndroid,
+  } = usePwaInstall()
   const push = usePushNotifications(user.id)
   const [isResetting, setIsResetting] = useState(false)
   const [isInstalling, setIsInstalling] = useState(false)
+  const [installMessage, setInstallMessage] = useState('')
   const [isBackupBusy, setIsBackupBusy] = useState(false)
   const [backupMessage, setBackupMessage] = useState('')
   const backupInputRef = useRef<HTMLInputElement>(null)
@@ -70,8 +78,19 @@ export default function Settings({
 
   async function handleInstall() {
     setIsInstalling(true)
+    setInstallMessage('')
     try {
-      await install()
+      const accepted = await install()
+      setInstallMessage(
+        accepted
+          ? 'Instalação iniciada. O Ritmo ficará na tela inicial.'
+          : 'Instalação não concluída. Use o menu do navegador para tentar novamente.',
+      )
+    } catch (error) {
+      console.error('Failed to install Ritmo:', error)
+      setInstallMessage(
+        'Não foi possível abrir a instalação. Use o menu do navegador.',
+      )
     } finally {
       setIsInstalling(false)
     }
@@ -203,7 +222,11 @@ export default function Settings({
                 ? 'O Ritmo já abre em tela cheia pela sua tela inicial.'
                 : isIos
                   ? 'No Safari, toque em Compartilhar e depois em “Adicionar à Tela de Início”.'
-                  : 'Instale para abrir em tela cheia e acessar mais rápido.'}
+                  : isAndroid
+                    ? canInstall
+                      ? 'Toque em Instalar para colocar o Ritmo na tela inicial e abrir em tela cheia.'
+                      : 'Abra no Chrome e use o menu para colocar o Ritmo na tela inicial.'
+                    : 'Instale para abrir em tela cheia e acessar mais rápido.'}
             </p>
           </div>
           {canInstall && !isInstalled && (
@@ -221,6 +244,17 @@ export default function Settings({
             <span className="settings-ios-hint">
               <Share2 size={16} aria-hidden="true" />
               Compartilhar → Adicionar à Tela de Início
+            </span>
+          )}
+          {isAndroid && !isInstalled && !canInstall && (
+            <span className="settings-android-hint">
+              <MoreVertical size={17} aria-hidden="true" />
+              Chrome: menu ⋮ → Instalar app ou Adicionar à tela inicial
+            </span>
+          )}
+          {installMessage && (
+            <span className="settings-install-status" role="status">
+              {installMessage}
             </span>
           )}
         </div>

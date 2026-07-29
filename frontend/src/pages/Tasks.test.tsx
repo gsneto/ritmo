@@ -129,6 +129,43 @@ describe('Tasks upgraded experience', () => {
     })
   })
 
+  it('offers today, tomorrow and a revealed custom planned date', async () => {
+    render(<Tasks userId={1} />)
+
+    await screen.findByText('Minhas tarefas')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Nova tarefa' })[0])
+
+    const form = document.querySelector<HTMLFormElement>('#new-task-form')
+    expect(form).toBeTruthy()
+    const formQueries = within(form as HTMLFormElement)
+    const dateGroup = formQueries.getByRole('group', { name: 'Data planejada' })
+    const dateQueries = within(dateGroup)
+
+    expect(dateQueries.getByRole('radio', { name: /Hoje/ })).toBeTruthy()
+    expect(dateQueries.getByRole('radio', { name: /Amanhã/ })).toBeTruthy()
+    expect(dateQueries.getByRole('radio', { name: /Outra data/ })).toBeTruthy()
+    expect(dateQueries.queryByLabelText('Escolha a data')).toBeNull()
+
+    fireEvent.click(dateQueries.getByRole('radio', { name: /Outra data/ }))
+    const customDate = dateQueries.getByLabelText('Escolha a data')
+    const selectedDate = shiftedDate(3)
+    expect(customDate.getAttribute('min')).toBe(today)
+    fireEvent.change(customDate, { target: { value: selectedDate } })
+    fireEvent.change(formQueries.getByLabelText('Nome da tarefa'), {
+      target: { value: 'Renovar documento' },
+    })
+    fireEvent.click(formQueries.getByRole('button', { name: 'Adicionar tarefa' }))
+
+    await waitFor(() => {
+      expect(apiRoutes.createTask).toHaveBeenCalledWith(1, {
+        name: 'Renovar documento',
+        date: selectedDate,
+        time: '09:00',
+        recurrence: 'none',
+      })
+    })
+  })
+
   it('concludes a task from its large touch target', async () => {
     render(<Tasks userId={1} />)
 
