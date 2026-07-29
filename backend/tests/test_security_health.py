@@ -87,6 +87,30 @@ def test_database_url_uses_pymysql_and_escapes_credentials():
     )
 
 
+@pytest.mark.parametrize(
+    ("database_url", "expected"),
+    [
+        (
+            "postgresql://user:secret@postgres.internal:5432/ritmo",
+            "postgresql+psycopg://user:secret@postgres.internal:5432/ritmo",
+        ),
+        (
+            "postgres://user:secret@postgres.internal:5432/ritmo",
+            "postgresql+psycopg://user:secret@postgres.internal:5432/ritmo",
+        ),
+    ],
+)
+def test_database_url_uses_psycopg(database_url, expected):
+    settings = Settings(
+        _env_file=None,
+        DEBUG=True,
+        DATABASE_URL=database_url,
+        CORS_ORIGINS="http://localhost:5173",
+    )
+
+    assert settings.database_url == expected
+
+
 def test_health_returns_503_when_database_query_fails(context):
     application = context.client.app
 

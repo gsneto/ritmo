@@ -106,10 +106,22 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         configured_url = self.DATABASE_URL or self.DATABASE_URL_SYNC
         if configured_url:
-            # Railway and similar providers commonly expose mysql:// URLs.
-            # Select the installed pure-Python driver explicitly.
+            # Select installed database drivers explicitly. Railway exposes
+            # PostgreSQL as postgresql:// and older providers may use postgres://.
             if configured_url.startswith("mysql://"):
                 return configured_url.replace("mysql://", "mysql+pymysql://", 1)
+            if configured_url.startswith("postgres://"):
+                return configured_url.replace(
+                    "postgres://",
+                    "postgresql+psycopg://",
+                    1,
+                )
+            if configured_url.startswith("postgresql://"):
+                return configured_url.replace(
+                    "postgresql://",
+                    "postgresql+psycopg://",
+                    1,
+                )
             return configured_url
         if self.DB_HOST and self.DB_HOST not in {"sqlite", ":memory:"}:
             username = quote_plus(self.DB_USER)
