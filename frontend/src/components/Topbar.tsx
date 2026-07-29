@@ -7,21 +7,15 @@ interface TopbarProps {
 }
 
 export default function Topbar({ user, onSettingsClick }: TopbarProps) {
+  const firstName = user.name.trim().split(/\s+/)[0] || 'você'
+
   return (
     <header className="topbar">
-      <div className="brand">
-        <span className="brand-mark brand-mark-grafismo" aria-hidden="true">
-          <img src="/grafismo-indigena-ritmo.png" alt="" />
-        </span>
-        <div>
-          <p className="eyebrow">Rotina pessoal</p>
-          <h1>Ritmo</h1>
-        </div>
+      <div className="topbar-greeting">
+        <h1>Olá, <span>{firstName}!</span></h1>
       </div>
-      <button className="profile-button" onClick={onSettingsClick} type="button" aria-label="Abrir ajustes de perfil">
-        <span className="profile-avatar" aria-hidden="true">{user.initials}</span>
-        <span className="profile-name">{user.name}</span>
-        <Settings size={17} aria-hidden="true" />
+      <button className="topbar-settings-button" onClick={onSettingsClick} type="button" aria-label="Abrir ajustes">
+        <Settings size={20} aria-hidden="true" />
       </button>
     </header>
   )

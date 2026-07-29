@@ -61,22 +61,38 @@ body {
   content: "";
 }
 
-.brand-mark.brand-mark-grafismo {
-  width: 50px;
-  height: 40px;
-  overflow: hidden;
-  border: 1px solid var(--identity-black);
-  border-radius: 10px;
-  background: var(--identity-black);
-  box-shadow: 0 5px 14px rgba(12, 8, 6, 0.2);
+.topbar-greeting {
+  min-width: 0;
 }
 
-.brand-mark-grafismo img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
+.topbar-greeting h1 {
+  overflow: hidden;
+  font-size: clamp(1.25rem, 3vw, 1.55rem);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-greeting h1 span {
+  color: var(--identity-red);
+}
+
+.topbar-settings-button {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.topbar-settings-button:hover {
+  border-color: color-mix(in srgb, var(--identity-red) 35%, var(--line));
+  color: var(--identity-red);
 }
 
 .profile-avatar {
@@ -190,9 +206,9 @@ textarea:focus-visible,
     border-radius: 13px;
   }
 
-  .brand-mark.brand-mark-grafismo {
-    width: 46px;
-    height: 36px;
+  .topbar-settings-button {
+    width: 40px;
+    height: 40px;
   }
 
   .today-hero::after {
