@@ -11,11 +11,12 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Repeat2,
   Trash2,
   X,
 } from 'lucide-react'
 import { apiRoutes } from '../services/api'
-import type { Task } from '../services/api'
+import type { Task, TaskRecurrence } from '../services/api'
 import { toLocalDateValue } from '../utils/date'
 import { useAppSearchParams } from '../router'
 import '../styles/routine-upgrade.css'
@@ -34,6 +35,17 @@ interface TaskGroup {
   tasks: Task[]
 }
 
+const RECURRENCE_OPTIONS: Array<{ value: TaskRecurrence; label: string }> = [
+  { value: 'none', label: 'Não repetir' },
+  { value: 'daily', label: 'Todo dia' },
+  { value: 'weekly', label: 'Toda semana' },
+  { value: 'monthly', label: 'Todo mês' },
+]
+
+function recurrenceLabel(recurrence: TaskRecurrence): string {
+  return RECURRENCE_OPTIONS.find(option => option.value === recurrence)?.label ?? 'Não repetir'
+}
+
 export default function Tasks({ userId }: TasksProps) {
   const [searchParams, setSearchParams] = useAppSearchParams()
   const createRequested = searchParams.get('create') === '1'
@@ -43,11 +55,13 @@ export default function Tasks({ userId }: TasksProps) {
   const [editName, setEditName] = useState('')
   const [editDate, setEditDate] = useState('')
   const [editTime, setEditTime] = useState('')
+  const [editRecurrence, setEditRecurrence] = useState<TaskRecurrence>('none')
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(createRequested)
   const [newName, setNewName] = useState('')
   const [newDate, setNewDate] = useState(() => toLocalDateValue())
   const [newTime, setNewTime] = useState('09:00')
+  const [newRecurrence, setNewRecurrence] = useState<TaskRecurrence>('none')
   const [loading, setLoading] = useState(true)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -203,10 +217,12 @@ export default function Tasks({ userId }: TasksProps) {
         name: trimmedName,
         date: newDate,
         time: newTime || '09:00',
+        recurrence: newRecurrence,
       })
       setNewName('')
       setNewDate(today)
       setNewTime('09:00')
+      setNewRecurrence('none')
       setShowCreateForm(false)
       setFilter('all')
       await loadTasks()
@@ -241,6 +257,7 @@ export default function Tasks({ userId }: TasksProps) {
     setEditName(task.name)
     setEditDate(task.date)
     setEditTime(task.time)
+    setEditRecurrence(task.recurrence ?? 'none')
   }
 
   async function saveEditing() {
@@ -255,6 +272,7 @@ export default function Tasks({ userId }: TasksProps) {
         name: trimmedName,
         date: editDate,
         time: editTime || '09:00',
+        recurrence: editRecurrence,
       })
       setEditingId(null)
       await loadTasks()
@@ -410,6 +428,17 @@ export default function Tasks({ userId }: TasksProps) {
                 required
               />
             </label>
+            <label>
+              Repetição
+              <select
+                value={newRecurrence}
+                onChange={event => setNewRecurrence(event.target.value as TaskRecurrence)}
+              >
+                {RECURRENCE_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
             <div className="routine-quick-dates" aria-label="Atalhos de data">
               <span>Agendar para</span>
               <button
@@ -561,6 +590,17 @@ export default function Tasks({ userId }: TasksProps) {
                                 onChange={event => setEditTime(event.target.value)}
                               />
                             </label>
+                            <label>
+                              Repetição
+                              <select
+                                value={editRecurrence}
+                                onChange={event => setEditRecurrence(event.target.value as TaskRecurrence)}
+                              >
+                                {RECURRENCE_OPTIONS.map(option => (
+                                  <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                              </select>
+                            </label>
                             <div className="routine-editor-actions">
                               <button
                                 className="primary-button"
@@ -609,6 +649,13 @@ export default function Tasks({ userId }: TasksProps) {
                                 <span aria-hidden="true">·</span>
                                 <Clock3 size={15} aria-hidden="true" />
                                 {task.time}
+                                {(task.recurrence ?? 'none') !== 'none' && (
+                                  <>
+                                    <span aria-hidden="true">·</span>
+                                    <Repeat2 size={15} aria-hidden="true" />
+                                    {recurrenceLabel(task.recurrence)}
+                                  </>
+                                )}
                               </small>
                             </div>
 

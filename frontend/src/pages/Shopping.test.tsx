@@ -6,15 +6,22 @@ import type {
   ShoppingItem,
   ShoppingList,
 } from '../services/api'
-import Shopping, { formatCurrency, parsePriceToCents } from './Shopping'
+import Shopping, {
+  buildShoppingCsv,
+  formatCurrency,
+  parsePriceToCents,
+} from './Shopping'
 
 
 vi.mock('../services/api', () => ({
   apiRoutes: {
     getShoppingLists: vi.fn(),
     getShoppingHistory: vi.fn(),
+    createShoppingList: vi.fn(),
     checkShoppingItem: vi.fn(),
     finishShoppingList: vi.fn(),
+    setShoppingBudget: vi.fn(),
+    getShoppingPriceHistory: vi.fn(),
   },
 }))
 
@@ -22,7 +29,9 @@ const uncheckedItem: ShoppingItem = {
   id: 11,
   shopping_list_id: 5,
   name: 'Arroz 5 kg',
+  quantity: 1,
   checked_at: null,
+  unit_price_cents: null,
   price_cents: null,
   created_at: '2026-07-29T12:00:00',
 }
@@ -32,7 +41,11 @@ const activeList: ShoppingList = {
   user_id: 1,
   name: 'Compra mensal',
   kind: 'monthly',
+  category: 'groceries',
   planned_date: '2026-08-05',
+  budget_cents: 50_000,
+  repeat_enabled: false,
+  next_list_id: null,
   completed_on: null,
   completed_at: null,
   total_cents: 0,
@@ -45,6 +58,14 @@ const emptyHistory: MonthlyExpenseSummary = {
   total_cents: 0,
   purchase_count: 0,
   average_cents: 0,
+  budget_cents: 50_000,
+  planned_lists_cents: 50_000,
+  planned_cents: 50_000,
+  balance_cents: 50_000,
+  previous_month_total_cents: 0,
+  change_cents: 0,
+  change_percent: null,
+  category_totals: [],
   lists: [],
 }
 
@@ -76,6 +97,32 @@ describe('shopping currency helpers', () => {
   it('formats cents as Brazilian reais', () => {
     expect(formatCurrency(1290)).toContain('12,90')
   })
+
+  it('exports purchased item details as an Excel-friendly CSV', () => {
+    const csv = buildShoppingCsv({
+      ...emptyHistory,
+      total_cents: 2990,
+      lists: [{
+        ...activeList,
+        completed_on: '2026-07-29',
+        completed_at: '2026-07-29T12:00:00',
+        total_cents: 2990,
+        items: [{
+          ...uncheckedItem,
+          quantity: 2,
+          checked_at: '2026-07-29T12:00:00',
+          unit_price_cents: 1495,
+          price_cents: 2990,
+        }],
+      }],
+    })
+
+    expect(csv.startsWith('\uFEFF')).toBe(true)
+    expect(csv).toContain('"Mercado"')
+    expect(csv).toContain('"Arroz 5 kg"')
+    expect(csv).toContain('"2"')
+    expect(csv).toContain('"29,90"')
+  })
 })
 
 describe('shopping assistant flow', () => {
@@ -96,6 +143,7 @@ describe('shopping assistant flow', () => {
     const checkedItem = {
       ...uncheckedItem,
       checked_at: '2026-07-29T12:05:00',
+      unit_price_cents: 2990,
       price_cents: 2990,
     }
     const completedList = {
@@ -119,6 +167,17 @@ describe('shopping assistant flow', () => {
           total_cents: 2990,
           purchase_count: 1,
           average_cents: 2990,
+          budget_cents: 50_000,
+          planned_lists_cents: 50_000,
+          planned_cents: 50_000,
+          balance_cents: 47_010,
+          previous_month_total_cents: 0,
+          change_cents: 2990,
+          change_percent: null,
+          category_totals: [{
+            category: 'groceries',
+            total_cents: 2990,
+          }],
           lists: [completedList],
         },
       } as never)
@@ -135,7 +194,8 @@ describe('shopping assistant flow', () => {
     await waitFor(() => {
       expect(apiRoutes.checkShoppingItem).toHaveBeenCalledWith(11, {
         checked: true,
-        price_cents: 2990,
+        quantity: 1,
+        unit_price_cents: 2990,
       })
     })
 
@@ -156,6 +216,7 @@ describe('shopping assistant flow', () => {
       items: [{
         ...uncheckedItem,
         checked_at: '2026-07-29T12:05:00',
+        unit_price_cents: 2990,
         price_cents: 2990,
       }],
     }
@@ -174,5 +235,87 @@ describe('shopping assistant flow', () => {
       'Não foi possível registrar este gasto.',
     )
     expect(screen.getByRole('dialog', { name: 'Registrar este gasto?' })).toBeTruthy()
+  })
+
+  it('creates a categorized recurring list with its own budget', async () => {
+    mockInitialData()
+    const recurringList: ShoppingList = {
+      ...activeList,
+      category: 'child',
+      kind: 'weekly',
+      budget_cents: 30_000,
+      repeat_enabled: true,
+    }
+    vi.mocked(apiRoutes.createShoppingList).mockResolvedValue({
+      data: recurringList,
+    } as never)
+
+    render(<Shopping userId={1} />)
+    await screen.findByRole('heading', { name: 'Compra mensal' })
+    fireEvent.click(screen.getByRole('button', { name: 'Nova compra' }))
+    fireEvent.change(screen.getByLabelText('Nome'), {
+      target: { value: 'Fraldas da filha' },
+    })
+    fireEvent.change(screen.getByLabelText('Tipo de compra'), {
+      target: { value: 'weekly' },
+    })
+    fireEvent.change(screen.getByLabelText('Categoria'), {
+      target: { value: 'child' },
+    })
+    fireEvent.change(screen.getByLabelText('Limite desta compra'), {
+      target: { value: '300,00' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Criar lista' }))
+
+    await waitFor(() => {
+      expect(apiRoutes.createShoppingList).toHaveBeenCalledWith(1, {
+        name: 'Fraldas da filha',
+        kind: 'weekly',
+        category: 'child',
+        planned_date: '2026-07-29',
+        budget_cents: 30_000,
+        repeat_enabled: true,
+      })
+    })
+  })
+
+  it('saves a monthly budget and shows price history by item name', async () => {
+    mockInitialData()
+    vi.mocked(apiRoutes.setShoppingBudget).mockResolvedValue({
+      data: { month: '2026-07', budget_cents: 150_000 },
+    } as never)
+    vi.mocked(apiRoutes.getShoppingPriceHistory).mockResolvedValue({
+      data: {
+        item_name: 'Arroz 5 kg',
+        entries: [],
+      },
+    } as never)
+
+    render(<Shopping userId={1} />)
+    await screen.findByRole('heading', { name: 'Compra mensal' })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Histórico de preço de Arroz 5 kg' }),
+    )
+    expect(await screen.findByText(
+      'Este será o primeiro preço registrado para este item.',
+    )).toBeTruthy()
+    expect(apiRoutes.getShoppingPriceHistory).toHaveBeenCalledWith(
+      1,
+      'Arroz 5 kg',
+    )
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Histórico' }))
+    const budgetInput = await screen.findByLabelText('Orçamento de Julho de 2026')
+    fireEvent.change(budgetInput, { target: { value: '1.500,00' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar orçamento' }))
+
+    await waitFor(() => {
+      expect(apiRoutes.setShoppingBudget).toHaveBeenCalledWith(
+        1,
+        '2026-07',
+        150_000,
+      )
+    })
   })
 })

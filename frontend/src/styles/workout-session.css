@@ -377,6 +377,115 @@
   color: var(--green);
 }
 
+.guided-exercise-insights {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent-soft) 34%, var(--surface-soft));
+}
+
+.guided-exercise-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.guided-exercise-metrics > span {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 7px;
+  padding: 9px;
+  border-radius: 10px;
+  background: var(--control);
+}
+
+.guided-exercise-metrics svg {
+  grid-row: 1 / 3;
+  align-self: center;
+  color: var(--accent);
+}
+
+.guided-exercise-metrics small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.guided-exercise-metrics strong {
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+
+.guided-progression-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.guided-progression-hint svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.guided-progression-hint.is-increase {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.guided-progression-hint.is-maintain {
+  background: var(--orange-soft);
+  color: var(--orange);
+}
+
+.guided-exercise-preferences {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.guided-exercise-preferences label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.guided-exercise-preferences select {
+  min-width: 0;
+  height: 38px;
+  padding: 7px 30px 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--control);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.guided-exercise-preferences > small {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.guided-progression-disclaimer {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
 .guided-set-list {
   display: grid;
   gap: 7px;
@@ -609,6 +718,107 @@
   white-space: nowrap;
 }
 
+.template-exercise-progress {
+  display: block;
+  margin-top: 3px;
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.workout-exercise-progress-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.workout-exercise-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workout-exercise-progress-grid > article {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--control);
+}
+
+.workout-progress-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workout-progress-card-head > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.workout-progress-card-head strong {
+  overflow-wrap: anywhere;
+  font-size: 0.87rem;
+}
+
+.workout-progress-card-head small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.workout-progress-card-head > span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 7px;
+  border-radius: 8px;
+  background: var(--orange-soft);
+  color: var(--orange);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.workout-evolution-chart {
+  display: flex;
+  height: 68px;
+  align-items: flex-end;
+  gap: 5px;
+  padding: 8px 7px 0;
+  border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(to top, var(--line) 1px, transparent 1px) 0 50% / 100% 50%;
+}
+
+.workout-evolution-chart > span {
+  flex: 1 1 0;
+  min-width: 5px;
+  max-width: 22px;
+  border-radius: 5px 5px 1px 1px;
+  background: linear-gradient(180deg, var(--accent), var(--green));
+}
+
+.workout-progress-next {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.workout-progress-next.is-increase {
+  color: var(--green);
+}
+
+.workout-progress-next.is-maintain {
+  color: var(--orange);
+}
+
 .workout-modal-backdrop {
   position: fixed;
   z-index: 100;
@@ -762,6 +972,18 @@
     padding: 12px;
   }
 
+  .guided-exercise-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .guided-exercise-preferences {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .guided-exercise-preferences > small {
+    grid-column: 1 / -1;
+  }
+
   .guided-set-labels {
     display: none;
   }
@@ -805,6 +1027,10 @@
 
   .workout-history-weight {
     grid-column: 2;
+  }
+
+  .workout-exercise-progress-grid {
+    grid-template-columns: 1fr;
   }
 }
 

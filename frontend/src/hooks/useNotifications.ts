@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 
-interface NotificationOptions {
+interface RitmoNotificationOptions {
   title: string
   body: string
   icon?: string
@@ -16,6 +16,33 @@ function currentPermission(): NotificationPermission {
 
 function canNotify(): boolean {
   return notificationsAvailable() && Notification.permission === 'granted'
+}
+
+async function showSystemNotification(
+  title: string,
+  options: NotificationOptions,
+) {
+  if (!canNotify()) return null
+
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.getRegistration()
+      if (registration) {
+        await registration.showNotification(title, {
+          ...options,
+          icon: options.icon || '/ritmo-icon-192.png',
+          badge: '/ritmo-icon-192.png',
+        })
+        return registration
+      }
+    } catch (error) {
+      console.warn('Service worker notification unavailable:', error)
+    }
+  }
+
+  const notification = new Notification(title, options)
+  setTimeout(() => notification.close(), 5000)
+  return notification
 }
 
 export function useNotifications() {
@@ -46,7 +73,7 @@ export function useNotifications() {
     return false
   }, [])
 
-  const sendNotification = useCallback(async (options: NotificationOptions) => {
+  const sendNotification = useCallback(async (options: RitmoNotificationOptions) => {
     if (!notificationsAvailable()) return null
 
     if (permission !== 'granted') {
@@ -54,15 +81,11 @@ export function useNotifications() {
       if (!granted) return null
     }
 
-    const notification = new Notification(options.title, {
+    return showSystemNotification(options.title, {
       body: options.body,
-      ...(options.icon ? { icon: options.icon } : {}),
+      icon: options.icon || '/ritmo-icon-192.png',
       tag: 'ritmo-notification',
     })
-
-    setTimeout(() => notification.close(), 5000)
-
-    return notification
   }, [permission, requestPermission])
 
   return {
@@ -75,9 +98,24 @@ export function useNotifications() {
 
 // Convenience functions for common notifications
 export const notify = {
+  reminder: (
+    title: string,
+    body: string,
+    url = '/today',
+    tag = 'ritmo-reminder',
+  ) => {
+    if (canNotify()) {
+      void showSystemNotification(title, {
+        body,
+        tag,
+        data: { url },
+      })
+    }
+  },
+
   checkin: (habitName: string) => {
     if (canNotify()) {
-      new Notification('Check-in realizado! ✅', {
+      void showSystemNotification('Check-in realizado! ✅', {
         body: `Você registrou o hábito: ${habitName}`,
         tag: 'ritmo-checkin',
       })
@@ -91,7 +129,7 @@ export const notify = {
         ? 'Ótimo trabalho! Faça uma pausa.'
         : 'Hora de voltar ao foco!'
 
-      new Notification(title, {
+      void showSystemNotification(title, {
         body,
         tag: 'ritmo-pomodoro',
       })
@@ -100,7 +138,7 @@ export const notify = {
 
   taskDue: (taskName: string) => {
     if (canNotify()) {
-      new Notification('Tarefa atrasada! ⚠️', {
+      void showSystemNotification('Tarefa atrasada! ⚠️', {
         body: `A tarefa "${taskName}" está vencida.`,
         tag: 'ritmo-task',
       })
@@ -109,7 +147,7 @@ export const notify = {
 
   streakMilestone: (days: number) => {
     if (canNotify()) {
-      new Notification(`Sequência de ${days} dias! 🔥`, {
+      void showSystemNotification(`Sequência de ${days} dias! 🔥`, {
         body: 'Você está mantendo seus hábitos!',
         tag: 'ritmo-streak',
       })

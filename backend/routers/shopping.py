@@ -3,16 +3,21 @@ from calendar import monthrange
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
-from models.shopping import ShoppingItem, ShoppingList
+from models.shopping import ShoppingItem, ShoppingList, ShoppingMonthlyBudget
 from models.user import User
 from schemas.shopping import (
+    CategoryExpenseSummary,
     MonthlyExpenseSummary,
+    ShoppingBudgetUpdate,
     ShoppingItemCheck,
     ShoppingItemCreate,
+    ShoppingMonthlyBudgetResponse,
+    ShoppingPriceHistory,
+    ShoppingPriceHistoryEntry,
     ShoppingItemResponse,
     ShoppingItemUpdate,
     ShoppingListCreate,
@@ -23,6 +28,23 @@ from time_utils import app_now, app_today
 
 
 router = APIRouter(prefix="/api", tags=["shopping"])
+
+
+def _add_months(value: date, months: int) -> date:
+    target_index = value.year * 12 + value.month - 1 + months
+    target_year, zero_based_month = divmod(target_index, 12)
+    target_month = zero_based_month + 1
+    target_day = min(
+        value.day,
+        monthrange(target_year, target_month)[1],
+    )
+    return date(target_year, target_month, target_day)
+
+
+def _next_planned_date(shopping_list: ShoppingList) -> date:
+    if shopping_list.kind == "weekly":
+        return date.fromordinal(shopping_list.planned_date.toordinal() + 7)
+    return _add_months(shopping_list.planned_date, 1)
 
 
 def _get_shopping_list(list_id: int, db: Session) -> ShoppingList:
@@ -108,6 +130,40 @@ def _validate_month(month: str | None) -> tuple[str, date, date]:
     return selected_month, first_day, last_day
 
 
+def _create_next_shopping_list(
+    shopping_list: ShoppingList,
+    db: Session,
+) -> ShoppingList:
+    if shopping_list.next_list_id is not None:
+        existing = db.get(ShoppingList, shopping_list.next_list_id)
+        if existing is not None:
+            return existing
+
+    next_list = ShoppingList(
+        user_id=shopping_list.user_id,
+        name=shopping_list.name,
+        kind=shopping_list.kind,
+        category=shopping_list.category,
+        planned_date=_next_planned_date(shopping_list),
+        budget_cents=shopping_list.budget_cents,
+        repeat_enabled=True,
+        created_at=app_now(),
+    )
+    db.add(next_list)
+    db.flush()
+    for source_item in shopping_list.items:
+        db.add(
+            ShoppingItem(
+                shopping_list_id=next_list.id,
+                name=source_item.name,
+                quantity=source_item.quantity,
+                created_at=app_now(),
+            )
+        )
+    shopping_list.next_list_id = next_list.id
+    return next_list
+
+
 @router.get(
     "/users/{user_id}/shopping-lists",
     response_model=list[ShoppingListResponse],
@@ -147,7 +203,10 @@ def create_shopping_list(
         user_id=user_id,
         name=data.name,
         kind=data.kind,
+        category=data.category,
         planned_date=data.planned_date,
+        budget_cents=data.budget_cents,
+        repeat_enabled=data.repeat_enabled,
         created_at=app_now(),
     )
     db.add(shopping_list)
@@ -174,8 +233,19 @@ def update_shopping_list(
         shopping_list.name = data.name
     if data.kind is not None:
         shopping_list.kind = data.kind
+    if data.category is not None:
+        shopping_list.category = data.category
     if data.planned_date is not None:
         shopping_list.planned_date = data.planned_date
+    if "budget_cents" in data.model_fields_set:
+        shopping_list.budget_cents = data.budget_cents
+    if data.repeat_enabled is not None:
+        shopping_list.repeat_enabled = data.repeat_enabled
+    if shopping_list.repeat_enabled and shopping_list.kind == "one_time":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="repeat_enabled requires a weekly or monthly list",
+        )
 
     db.commit()
     db.refresh(shopping_list)
@@ -206,6 +276,7 @@ def create_shopping_item(
     item = ShoppingItem(
         shopping_list_id=shopping_list.id,
         name=data.name,
+        quantity=data.quantity,
         created_at=app_now(),
     )
     db.add(item)
@@ -222,7 +293,12 @@ def update_shopping_item(
 ):
     item = _claim_shopping_item(item_id, db)
     _ensure_editable(item.shopping_list)
-    item.name = data.name
+    if data.name is not None:
+        item.name = data.name
+    if data.quantity is not None:
+        item.quantity = data.quantity
+        if item.checked_at is not None and item.unit_price_cents is not None:
+            item.price_cents = item.quantity * item.unit_price_cents
     db.commit()
     db.refresh(item)
     return item
@@ -241,10 +317,24 @@ def check_shopping_item(
     _ensure_editable(item.shopping_list)
 
     if data.checked:
+        if data.quantity is not None:
+            item.quantity = data.quantity
+        if data.unit_price_cents is not None:
+            item.unit_price_cents = data.unit_price_cents
+            item.price_cents = item.quantity * data.unit_price_cents
+        else:
+            # Backwards compatibility: the old client sent only the item total.
+            item.price_cents = data.price_cents
+            item.unit_price_cents = (
+                data.price_cents // item.quantity
+                if data.price_cents is not None
+                and data.price_cents % item.quantity == 0
+                else data.price_cents
+            )
         item.checked_at = app_now()
-        item.price_cents = data.price_cents
     else:
         item.checked_at = None
+        item.unit_price_cents = None
         item.price_cents = None
 
     db.commit()
@@ -268,6 +358,15 @@ def delete_shopping_item(item_id: int, db: Session = Depends(get_db)):
 def finish_shopping_list(list_id: int, db: Session = Depends(get_db)):
     shopping_list = _claim_shopping_list(list_id, db)
     if shopping_list.completed_at is not None:
+        if (
+            shopping_list.repeat_enabled
+            and shopping_list.kind in {"weekly", "monthly"}
+            and (
+                shopping_list.next_list_id is None
+                or db.get(ShoppingList, shopping_list.next_list_id) is None
+            )
+        ):
+            _create_next_shopping_list(shopping_list, db)
         db.commit()
         db.refresh(shopping_list)
         return shopping_list
@@ -293,6 +392,11 @@ def finish_shopping_list(list_id: int, db: Session = Depends(get_db)):
     )
     shopping_list.completed_on = app_today()
     shopping_list.completed_at = app_now()
+    if (
+        shopping_list.repeat_enabled
+        and shopping_list.kind in {"weekly", "monthly"}
+    ):
+        _create_next_shopping_list(shopping_list, db)
     db.commit()
     db.refresh(shopping_list)
     return shopping_list
@@ -344,11 +448,177 @@ def get_monthly_shopping_history(
     )
     total_cents = sum(item.total_cents for item in completed_lists)
     purchase_count = len(completed_lists)
+    monthly_budget = (
+        db.query(ShoppingMonthlyBudget)
+        .filter(
+            ShoppingMonthlyBudget.user_id == user_id,
+            ShoppingMonthlyBudget.month == selected_month,
+        )
+        .first()
+    )
+    planned_lists_cents = (
+        db.query(func.coalesce(func.sum(ShoppingList.budget_cents), 0))
+        .filter(
+            ShoppingList.user_id == user_id,
+            ShoppingList.planned_date >= first_day,
+            ShoppingList.planned_date <= last_day,
+        )
+        .scalar()
+        or 0
+    )
+    budget_cents = monthly_budget.budget_cents if monthly_budget else 0
+    planned_cents = budget_cents or planned_lists_cents
+
+    previous_anchor = _add_months(first_day, -1)
+    previous_first = previous_anchor.replace(day=1)
+    previous_last = previous_anchor.replace(
+        day=monthrange(previous_anchor.year, previous_anchor.month)[1],
+    )
+    previous_month_total_cents = (
+        db.query(func.coalesce(func.sum(ShoppingList.total_cents), 0))
+        .filter(
+            ShoppingList.user_id == user_id,
+            ShoppingList.completed_on >= previous_first,
+            ShoppingList.completed_on <= previous_last,
+        )
+        .scalar()
+        or 0
+    )
+    change_cents = total_cents - previous_month_total_cents
+    change_percent = (
+        round((change_cents / previous_month_total_cents) * 100, 1)
+        if previous_month_total_cents
+        else None
+    )
+
+    category_totals_map: dict[str, int] = {}
+    for shopping_list in completed_lists:
+        category_totals_map[shopping_list.category] = (
+            category_totals_map.get(shopping_list.category, 0)
+            + shopping_list.total_cents
+        )
 
     return MonthlyExpenseSummary(
         month=selected_month,
         total_cents=total_cents,
         purchase_count=purchase_count,
         average_cents=total_cents // purchase_count if purchase_count else 0,
+        budget_cents=budget_cents,
+        planned_lists_cents=planned_lists_cents,
+        planned_cents=planned_cents,
+        balance_cents=planned_cents - total_cents,
+        previous_month_total_cents=previous_month_total_cents,
+        change_cents=change_cents,
+        change_percent=change_percent,
+        category_totals=[
+            CategoryExpenseSummary(category=category, total_cents=value)
+            for category, value in sorted(
+                category_totals_map.items(),
+                key=lambda item: item[1],
+                reverse=True,
+            )
+        ],
         lists=completed_lists,
+    )
+
+
+@router.put(
+    "/users/{user_id}/shopping-budgets/{month}",
+    response_model=ShoppingMonthlyBudgetResponse,
+)
+def set_monthly_shopping_budget(
+    user_id: int,
+    month: str,
+    data: ShoppingBudgetUpdate,
+    db: Session = Depends(get_db),
+):
+    selected_month, _, _ = _validate_month(month)
+    user_exists = db.query(User.id).filter(User.id == user_id).first()
+    if user_exists is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    budget = (
+        db.query(ShoppingMonthlyBudget)
+        .filter(
+            ShoppingMonthlyBudget.user_id == user_id,
+            ShoppingMonthlyBudget.month == selected_month,
+        )
+        .first()
+    )
+    now = app_now()
+    if budget is None:
+        budget = ShoppingMonthlyBudget(
+            user_id=user_id,
+            month=selected_month,
+            budget_cents=data.budget_cents,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(budget)
+    else:
+        budget.budget_cents = data.budget_cents
+        budget.updated_at = now
+
+    db.commit()
+    return ShoppingMonthlyBudgetResponse(
+        month=selected_month,
+        budget_cents=budget.budget_cents,
+    )
+
+
+@router.get(
+    "/users/{user_id}/shopping-price-history",
+    response_model=ShoppingPriceHistory,
+)
+def get_shopping_price_history(
+    user_id: int,
+    item_name: str = Query(min_length=1, max_length=200),
+    limit: int = Query(default=12, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    normalized_name = item_name.strip()
+    if not normalized_name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="item_name cannot be blank",
+        )
+    user_exists = db.query(User.id).filter(User.id == user_id).first()
+    if user_exists is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    rows = (
+        db.query(ShoppingItem, ShoppingList)
+        .join(ShoppingList, ShoppingList.id == ShoppingItem.shopping_list_id)
+        .filter(
+            ShoppingList.user_id == user_id,
+            ShoppingList.completed_on.is_not(None),
+            ShoppingItem.checked_at.is_not(None),
+            func.lower(func.trim(ShoppingItem.name)) == normalized_name.lower(),
+        )
+        .order_by(
+            ShoppingList.completed_on.desc(),
+            ShoppingItem.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+    return ShoppingPriceHistory(
+        item_name=normalized_name,
+        entries=[
+            ShoppingPriceHistoryEntry(
+                item_id=item.id,
+                list_id=shopping_list.id,
+                list_name=shopping_list.name,
+                item_name=item.name,
+                quantity=item.quantity,
+                unit_price_cents=(
+                    item.unit_price_cents
+                    if item.unit_price_cents is not None
+                    else (item.price_cents or 0) // max(item.quantity, 1)
+                ),
+                total_cents=item.price_cents or 0,
+                purchased_on=shopping_list.completed_on,
+            )
+            for item, shopping_list in rows
+        ],
     )

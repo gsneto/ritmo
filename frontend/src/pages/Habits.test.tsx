@@ -48,6 +48,7 @@ function habit(
     user_id: 1,
     name,
     time,
+    active_days: [0, 1, 2, 3, 4, 5, 6],
     created_at: '2026-07-29T09:00:00',
     check_ins: checkIns,
   }
@@ -76,7 +77,7 @@ describe('Habits upgraded experience', () => {
     expect(screen.getAllByText('Treino em casa').length).toBeGreaterThan(0)
   })
 
-  it('creates a habit with only name and time', async () => {
+  it('creates a habit with its selected weekdays', async () => {
     render(<Habits userId={1} />)
 
     await screen.findByText('Hábitos de hoje')
@@ -86,12 +87,14 @@ describe('Habits upgraded experience', () => {
     fireEvent.change(screen.getByLabelText('Horário'), {
       target: { value: '07:15' },
     })
+    fireEvent.click(screen.getByRole('button', { name: 'Dom' }))
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar hábito' }))
 
     await waitFor(() => {
       expect(apiRoutes.createHabit).toHaveBeenCalledWith(1, {
         name: 'Alongar',
         time: '07:15',
+        active_days: [0, 1, 2, 3, 4, 5],
       })
     })
   })
@@ -106,6 +109,16 @@ describe('Habits upgraded experience', () => {
     await waitFor(() => {
       expect(apiRoutes.checkinHabit).toHaveBeenCalledWith(2, today)
     })
+  })
+
+  it('keeps workouts accessible even without a workout-named habit', async () => {
+    vi.mocked(apiRoutes.getHabits).mockResolvedValueOnce({ data: [] } as never)
+    render(<Habits userId={1} />)
+
+    await screen.findByText('Adicione seu primeiro hábito')
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir treinos' }))
+
+    expect(screen.getByRole('button', { name: 'Finalizar treino de teste' })).toBeTruthy()
   })
 
   it('keeps a clear recovery action when loading fails', async () => {

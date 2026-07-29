@@ -1,6 +1,11 @@
 from decimal import Decimal
 
-from models.workout import WorkoutSession, WorkoutSessionExercise, WorkoutSetLog
+from models.workout import (
+    WorkoutExercisePreference,
+    WorkoutSession,
+    WorkoutSessionExercise,
+    WorkoutSetLog,
+)
 
 
 def _first_trainable_workout(client, auth_headers, user_id):
@@ -226,5 +231,183 @@ def test_workout_session_validation_and_security(
     missing_user = client.get(
         "/api/users/999999/workout-history",
         headers=auth_headers,
+    )
+    assert missing_user.status_code == 404
+
+
+def test_exercise_progression_records_suggestions_and_preferences(
+    context,
+    client,
+    auth_headers,
+    user_id,
+):
+    workout = _first_trainable_workout(client, auth_headers, user_id)
+    first_exercise = workout["exercises"][0]
+
+    started = client.post(
+        f"/api/users/{user_id}/workouts/{workout['id']}/sessions",
+        headers=auth_headers,
+        json={
+            "idempotency_key": "workout-progression-first",
+            "rest_seconds": 60,
+        },
+    )
+    assert started.status_code == 200
+    first_session = started.json()
+    first_session_exercise = first_session["exercises"][0]
+    initial_progress = first_session_exercise["progress"]
+    assert initial_progress["suggestion_action"] == "start"
+    assert initial_progress["last_weight_kg"] is None
+    assert initial_progress["rest_seconds"] == 60
+    assert Decimal(initial_progress["increment_kg"]) == Decimal("1.00")
+
+    target_reps = int(first_session_exercise["planned_reps"])
+    for set_log in first_session_exercise["sets"]:
+        response = client.put(
+            f"/api/workout-session-sets/{set_log['id']}",
+            headers=auth_headers,
+            json={
+                "completed": True,
+                "weight_kg": "8.00",
+                "reps_completed": target_reps,
+            },
+        )
+        assert response.status_code == 200
+
+    finished = client.post(
+        f"/api/workout-sessions/{first_session['id']}/finish",
+        headers=auth_headers,
+    )
+    assert finished.status_code == 200
+
+    history = client.get(
+        f"/api/users/{user_id}/workout-history",
+        headers=auth_headers,
+    )
+    assert history.status_code == 200
+    progress = next(
+        item
+        for item in history.json()["exercise_progress"]
+        if item["exercise_name"] == first_exercise["name"]
+    )
+    assert progress["suggestion_action"] == "increase"
+    assert Decimal(progress["last_weight_kg"]) == Decimal("8.00")
+    assert progress["last_reps_completed"] == target_reps
+    assert progress["last_completed_sets"] == first_session_exercise["target_sets"]
+    assert Decimal(progress["personal_record_weight_kg"]) == Decimal("8.00")
+    assert Decimal(progress["suggested_weight_kg"]) == Decimal("9.00")
+    assert len(progress["last_sets"]) == first_session_exercise["target_sets"]
+    assert len(progress["evolution"]) == 1
+
+    saved_preference = client.put(
+        f"/api/users/{user_id}/workout-exercise-preference",
+        headers=auth_headers,
+        json={
+            "exercise_name": first_exercise["name"],
+            "rest_seconds": 90,
+            "increment_kg": "0.50",
+        },
+    )
+    assert saved_preference.status_code == 200
+    preference_progress = saved_preference.json()
+    assert preference_progress["rest_seconds"] == 90
+    assert Decimal(preference_progress["increment_kg"]) == Decimal("0.50")
+    assert Decimal(preference_progress["suggested_weight_kg"]) == Decimal("8.50")
+
+    second_started = client.post(
+        f"/api/users/{user_id}/workouts/{workout['id']}/sessions",
+        headers=auth_headers,
+        json={
+            "idempotency_key": "workout-progression-second",
+            "rest_seconds": 60,
+        },
+    )
+    assert second_started.status_code == 200
+    second_session = second_started.json()
+    second_exercise = second_session["exercises"][0]
+    assert second_exercise["progress"]["rest_seconds"] == 90
+    assert Decimal(
+        second_exercise["progress"]["suggested_weight_kg"]
+    ) == Decimal("8.50")
+
+    incomplete_set = second_exercise["sets"][0]
+    completed = client.put(
+        f"/api/workout-session-sets/{incomplete_set['id']}",
+        headers=auth_headers,
+        json={
+            "completed": True,
+            "weight_kg": "8.50",
+            "reps_completed": max(1, target_reps - 1),
+        },
+    )
+    assert completed.status_code == 200
+    second_finished = client.post(
+        f"/api/workout-sessions/{second_session['id']}/finish",
+        headers=auth_headers,
+    )
+    assert second_finished.status_code == 200
+
+    evolved = client.get(
+        f"/api/users/{user_id}/workout-history",
+        headers=auth_headers,
+    ).json()
+    progress = next(
+        item
+        for item in evolved["exercise_progress"]
+        if item["exercise_name"] == first_exercise["name"]
+    )
+    assert progress["suggestion_action"] == "maintain"
+    assert Decimal(progress["suggested_weight_kg"]) == Decimal("8.50")
+    assert Decimal(progress["personal_record_weight_kg"]) == Decimal("8.50")
+    assert len(progress["evolution"]) == 2
+    assert [point["session_id"] for point in progress["evolution"]] == [
+        first_session["id"],
+        second_session["id"],
+    ]
+
+    db = context.session_factory()
+    try:
+        preference = db.query(WorkoutExercisePreference).one()
+        assert preference.rest_seconds == 90
+        assert preference.increment_kg == Decimal("0.50")
+        assert db.query(WorkoutSession).filter_by(status="completed").count() == 2
+    finally:
+        db.close()
+
+
+def test_exercise_preference_validation_and_security(
+    client,
+    auth_headers,
+    user_id,
+):
+    payload = {
+        "exercise_name": "Agachamento goblet",
+        "rest_seconds": 90,
+        "increment_kg": "1.00",
+    }
+    unauthorized = client.put(
+        f"/api/users/{user_id}/workout-exercise-preference",
+        json=payload,
+    )
+    assert unauthorized.status_code == 401
+
+    invalid_rest = client.put(
+        f"/api/users/{user_id}/workout-exercise-preference",
+        headers=auth_headers,
+        json={**payload, "rest_seconds": 10},
+    )
+    assert invalid_rest.status_code == 422
+
+    invalid_increment = client.put(
+        f"/api/users/{user_id}/workout-exercise-preference",
+        headers=auth_headers,
+        json={**payload, "increment_kg": "20.25"},
+    )
+    assert invalid_increment.status_code == 422
+
+    missing_user = client.put(
+        "/api/users/999999/workout-exercise-preference",
+        headers=auth_headers,
+        json=payload,
     )
     assert missing_user.status_code == 404

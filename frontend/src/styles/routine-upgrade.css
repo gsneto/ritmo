@@ -22,6 +22,62 @@
   opacity: 0.55;
 }
 
+.routine-day-picker {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.routine-day-picker legend {
+  margin-bottom: 7px;
+  color: var(--routine-subtle);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.routine-day-picker > div {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.routine-day-picker button {
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 4px;
+  border: 1px solid var(--routine-line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--routine-subtle);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.routine-day-picker button.is-active {
+  border-color: var(--routine-accent);
+  background: var(--routine-accent-soft);
+  color: var(--routine-accent);
+}
+
+.routine-habit-form .routine-day-picker {
+  grid-column: 1 / -1;
+}
+
+.routine-inline-editor .routine-day-picker-edit {
+  grid-column: 1 / -1;
+}
+
+.routine-habit-item.is-off-day {
+  border-style: dashed;
+  opacity: 0.72;
+}
+
+.routine-habit-item.is-off-day .routine-check-control {
+  background: var(--surface-soft);
+  color: var(--routine-subtle);
+}
+
 .routine-hero {
   position: relative;
   display: grid;
@@ -363,6 +419,56 @@ html[data-theme="dark"] .routine-task-hero {
   background: var(--routine-danger);
 }
 
+.routine-workout-entry {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 17px;
+  border: 1px solid color-mix(in srgb, var(--routine-success) 28%, var(--routine-line));
+  border-radius: 16px;
+  background:
+    linear-gradient(105deg, var(--routine-success-soft), var(--surface) 70%);
+  box-shadow: 0 9px 24px color-mix(in srgb, var(--routine-success) 6%, transparent);
+}
+
+.routine-workout-entry-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--routine-success);
+  color: #fff;
+}
+
+.routine-workout-entry > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.routine-workout-entry strong {
+  overflow-wrap: anywhere;
+  font-size: 0.95rem;
+}
+
+.routine-workout-entry small {
+  color: var(--routine-subtle);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.routine-workout-entry button {
+  min-height: 43px;
+  padding: 10px 14px;
+  border-radius: 11px;
+  background: var(--routine-success);
+  color: #fff;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .routine-panel {
   gap: 17px;
   padding: 21px;
@@ -434,7 +540,11 @@ html[data-theme="dark"] .routine-task-hero {
 }
 
 .routine-task-form {
-  grid-template-columns: minmax(0, 1.5fr) minmax(145px, 0.45fr) minmax(125px, 0.35fr);
+  grid-template-columns:
+    minmax(0, 1.35fr)
+    minmax(140px, 0.42fr)
+    minmax(120px, 0.34fr)
+    minmax(145px, 0.4fr);
 }
 
 .routine-create-form label,
@@ -446,13 +556,17 @@ html[data-theme="dark"] .routine-task-hero {
 }
 
 .routine-create-form input,
-.routine-inline-editor input {
+.routine-inline-editor input,
+.routine-create-form select,
+.routine-inline-editor select {
   min-height: 44px;
   border-radius: 12px;
 }
 
 .routine-create-form input:focus,
-.routine-inline-editor input:focus {
+.routine-inline-editor input:focus,
+.routine-create-form select:focus,
+.routine-inline-editor select:focus {
   border-color: var(--routine-accent);
 }
 
@@ -795,7 +909,12 @@ html[data-theme="dark"] .routine-task-hero {
 }
 
 .routine-task-editor {
-  grid-template-columns: minmax(0, 1.3fr) minmax(145px, 0.4fr) minmax(125px, 0.35fr) auto;
+  grid-template-columns:
+    minmax(0, 1.2fr)
+    minmax(140px, 0.36fr)
+    minmax(120px, 0.32fr)
+    minmax(140px, 0.36fr)
+    auto;
 }
 
 .routine-editor-actions {
@@ -1070,6 +1189,16 @@ html[data-theme="dark"] .routine-task-hero {
   }
 
   .routine-next-action {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .routine-workout-entry {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 13px;
+  }
+
+  .routine-workout-entry button {
     grid-column: 1 / -1;
     width: 100%;
   }

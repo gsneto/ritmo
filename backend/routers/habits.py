@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models.habit import Habit, HabitCheckIn
+from models.habit import Habit, HabitCheckIn, decode_active_days
 from models.user import User
 from schemas.habit import HabitResponse, HabitCreate, HabitUpdate, CheckInRequest
 from time_utils import app_today
@@ -31,6 +31,7 @@ def serialize_habit(habit: Habit) -> dict:
         "user_id": habit.user_id,
         "name": habit.name,
         "time": format_time(habit.time),
+        "active_days": sorted(decode_active_days(habit.active_days)),
         "created_at": format_date(habit.created_at),
         "check_ins": sorted(format_date(ci.date) for ci in habit.check_ins),
     }
@@ -54,6 +55,7 @@ def create_habit(user_id: int, data: HabitCreate, db: Session = Depends(get_db))
         user_id=user_id,
         name=data.name,
         time=data.time,
+        active_days=",".join(str(day) for day in data.active_days),
         created_at=app_today(),
     )
     db.add(habit)
@@ -73,6 +75,8 @@ def update_habit(habit_id: int, data: HabitUpdate, db: Session = Depends(get_db)
         habit.name = data.name
     if data.time is not None:
         habit.time = data.time
+    if data.active_days is not None:
+        habit.active_days = ",".join(str(day) for day in data.active_days)
 
     db.commit()
     db.refresh(habit)

@@ -1,9 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from threading import Event
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
+from sqlalchemy.orm import sessionmaker
 
-from database import init_db
+from database import create_database_engine, init_db
 from models.shopping import ShoppingList
 from routers import shopping as shopping_router
 from schemas.shopping import ShoppingItemCheck
@@ -396,3 +398,291 @@ def test_shopping_routes_are_protected_and_database_init_is_idempotent(
     init_db(bind=context.engine, session_factory=context.session_factory)
     table_names = set(inspect(context.engine).get_table_names())
     assert {"shopping_lists", "shopping_items"}.issubset(table_names)
+
+
+def test_finance_budget_quantity_price_history_and_automatic_next_list(
+    client,
+    auth_headers,
+    user_id,
+):
+    invalid_repeat = client.post(
+        f"/api/users/{user_id}/shopping-lists",
+        headers=auth_headers,
+        json={
+            "name": "Avulsa inválida",
+            "kind": "one_time",
+            "category": "other",
+            "planned_date": "2026-01-31",
+            "repeat_enabled": True,
+        },
+    )
+    assert invalid_repeat.status_code == 422
+
+    created = client.post(
+        f"/api/users/{user_id}/shopping-lists",
+        headers=auth_headers,
+        json={
+            "name": "Fraldas da filha",
+            "kind": "monthly",
+            "category": "child",
+            "planned_date": "2026-01-31",
+            "budget_cents": 20_000,
+            "repeat_enabled": True,
+        },
+    )
+    assert created.status_code == 200
+    shopping_list = created.json()
+    assert shopping_list["category"] == "child"
+    assert shopping_list["budget_cents"] == 20_000
+    assert shopping_list["repeat_enabled"] is True
+
+    invalid_quantity = client.post(
+        f"/api/shopping-lists/{shopping_list['id']}/items",
+        headers=auth_headers,
+        json={"name": "Quantidade inválida", "quantity": 0},
+    )
+    assert invalid_quantity.status_code == 422
+
+    item = client.post(
+        f"/api/shopping-lists/{shopping_list['id']}/items",
+        headers=auth_headers,
+        json={"name": "Fralda tamanho M", "quantity": 3},
+    )
+    assert item.status_code == 200
+    item_id = item.json()["id"]
+    assert item.json()["quantity"] == 3
+
+    checked = client.put(
+        f"/api/shopping-items/{item_id}/check",
+        headers=auth_headers,
+        json={
+            "checked": True,
+            "quantity": 3,
+            "unit_price_cents": 4_990,
+        },
+    )
+    assert checked.status_code == 200
+    assert checked.json()["unit_price_cents"] == 4_990
+    assert checked.json()["price_cents"] == 14_970
+
+    finished = client.post(
+        f"/api/shopping-lists/{shopping_list['id']}/finish",
+        headers=auth_headers,
+    )
+    assert finished.status_code == 200
+    completed = finished.json()
+    assert completed["total_cents"] == 14_970
+    assert completed["next_list_id"] is not None
+
+    active_lists = client.get(
+        f"/api/users/{user_id}/shopping-lists",
+        headers=auth_headers,
+        params={"completed": False},
+    ).json()
+    assert len(active_lists) == 1
+    next_list = active_lists[0]
+    assert next_list["id"] == completed["next_list_id"]
+    assert next_list["planned_date"] == "2026-02-28"
+    assert next_list["category"] == "child"
+    assert next_list["budget_cents"] == 20_000
+    assert next_list["items"][0]["quantity"] == 3
+    assert next_list["items"][0]["price_cents"] is None
+
+    # Retrying finish is safe and never creates a duplicate recurrence.
+    repeated = client.post(
+        f"/api/shopping-lists/{shopping_list['id']}/finish",
+        headers=auth_headers,
+    )
+    assert repeated.status_code == 200
+    assert repeated.json()["next_list_id"] == next_list["id"]
+    assert len(client.get(
+        f"/api/users/{user_id}/shopping-lists",
+        headers=auth_headers,
+        params={"completed": False},
+    ).json()) == 1
+
+    purchased_month = completed["completed_on"][:7]
+    budget = client.put(
+        f"/api/users/{user_id}/shopping-budgets/{purchased_month}",
+        headers=auth_headers,
+        json={"budget_cents": 50_000},
+    )
+    assert budget.status_code == 200
+    assert budget.json() == {
+        "month": purchased_month,
+        "budget_cents": 50_000,
+    }
+
+    summary = client.get(
+        f"/api/users/{user_id}/shopping-history",
+        headers=auth_headers,
+        params={"month": purchased_month},
+    )
+    assert summary.status_code == 200
+    finance = summary.json()
+    assert finance["budget_cents"] == 50_000
+    assert finance["planned_cents"] == 50_000
+    assert finance["total_cents"] == 14_970
+    assert finance["balance_cents"] == 35_030
+    assert finance["previous_month_total_cents"] == 0
+    assert finance["change_cents"] == 14_970
+    assert finance["change_percent"] is None
+    assert finance["category_totals"] == [{
+        "category": "child",
+        "total_cents": 14_970,
+    }]
+
+    history = client.get(
+        f"/api/users/{user_id}/shopping-price-history",
+        headers=auth_headers,
+        params={"item_name": "  FRALDA TAMANHO M  "},
+    )
+    assert history.status_code == 200
+    assert history.json()["entries"][0] == {
+        "item_id": item_id,
+        "list_id": shopping_list["id"],
+        "list_name": "Fraldas da filha",
+        "item_name": "Fralda tamanho M",
+        "quantity": 3,
+        "unit_price_cents": 4_990,
+        "total_cents": 14_970,
+        "purchased_on": completed["completed_on"],
+    }
+
+
+def test_month_comparison_and_budget_reset(
+    client,
+    auth_headers,
+    user_id,
+    context,
+):
+    created = client.post(
+        f"/api/users/{user_id}/shopping-lists",
+        headers=auth_headers,
+        json={
+            "name": "Mercado anterior",
+            "kind": "one_time",
+            "category": "groceries",
+            "planned_date": "2026-06-10",
+        },
+    ).json()
+    item = client.post(
+        f"/api/shopping-lists/{created['id']}/items",
+        headers=auth_headers,
+        json={"name": "Arroz", "quantity": 1},
+    ).json()
+    assert client.put(
+        f"/api/shopping-items/{item['id']}/check",
+        headers=auth_headers,
+        json={"checked": True, "unit_price_cents": 10_000},
+    ).status_code == 200
+    assert client.post(
+        f"/api/shopping-lists/{created['id']}/finish",
+        headers=auth_headers,
+    ).status_code == 200
+
+    with context.session_factory() as db:
+        stored = db.get(ShoppingList, created["id"])
+        stored.completed_on = date(2026, 6, 15)
+        db.commit()
+
+    july = client.get(
+        f"/api/users/{user_id}/shopping-history",
+        headers=auth_headers,
+        params={"month": "2026-07"},
+    ).json()
+    assert july["total_cents"] == 0
+    assert july["previous_month_total_cents"] == 10_000
+    assert july["change_cents"] == -10_000
+    assert july["change_percent"] == -100.0
+
+    assert client.put(
+        f"/api/users/{user_id}/shopping-budgets/2026-07",
+        headers=auth_headers,
+        json={"budget_cents": 30_000},
+    ).status_code == 200
+    assert client.delete(
+        f"/api/users/{user_id}/data",
+        headers=auth_headers,
+    ).status_code == 200
+    reset_summary = client.get(
+        f"/api/users/{user_id}/shopping-history",
+        headers=auth_headers,
+        params={"month": "2026-07"},
+    ).json()
+    assert reset_summary["budget_cents"] == 0
+    assert reset_summary["total_cents"] == 0
+
+
+def test_legacy_shopping_schema_is_migrated_without_data_loss(tmp_path):
+    legacy_engine = create_database_engine(
+        f"sqlite:///{(tmp_path / 'legacy-shopping.db').as_posix()}",
+    )
+    with legacy_engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE users ("
+            "id INTEGER PRIMARY KEY, profile_id VARCHAR(50) NOT NULL UNIQUE, "
+            "name VARCHAR(100) NOT NULL, initials VARCHAR(3) NOT NULL, "
+            "theme VARCHAR(5), created_at DATETIME)"
+        ))
+        connection.execute(text(
+            "CREATE TABLE shopping_lists ("
+            "id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, "
+            "name VARCHAR(200) NOT NULL, kind VARCHAR(20) NOT NULL, "
+            "planned_date DATE NOT NULL, completed_on DATE, completed_at DATETIME, "
+            "total_cents INTEGER NOT NULL DEFAULT 0, "
+            "revision INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL)"
+        ))
+        connection.execute(text(
+            "CREATE TABLE shopping_items ("
+            "id INTEGER PRIMARY KEY, shopping_list_id INTEGER NOT NULL, "
+            "name VARCHAR(200) NOT NULL, checked_at DATETIME, "
+            "price_cents INTEGER, created_at DATETIME NOT NULL)"
+        ))
+        connection.execute(text(
+            "INSERT INTO users "
+            "(id, profile_id, name, initials, theme, created_at) "
+            "VALUES (1, 'legacy', 'Legado', 'LG', 'light', CURRENT_TIMESTAMP)"
+        ))
+        connection.execute(text(
+            "INSERT INTO shopping_lists "
+            "(id, user_id, name, kind, planned_date, total_cents, revision, created_at) "
+            "VALUES (1, 1, 'Compra preservada', 'monthly', '2026-07-01', "
+            "1290, 0, CURRENT_TIMESTAMP)"
+        ))
+        connection.execute(text(
+            "INSERT INTO shopping_items "
+            "(id, shopping_list_id, name, checked_at, price_cents, created_at) "
+            "VALUES (1, 1, 'Arroz', CURRENT_TIMESTAMP, 1290, CURRENT_TIMESTAMP)"
+        ))
+
+    legacy_sessions = sessionmaker(bind=legacy_engine)
+    init_db(bind=legacy_engine, session_factory=legacy_sessions)
+    init_db(bind=legacy_engine, session_factory=legacy_sessions)
+
+    list_columns = {
+        column["name"]
+        for column in inspect(legacy_engine).get_columns("shopping_lists")
+    }
+    item_columns = {
+        column["name"]
+        for column in inspect(legacy_engine).get_columns("shopping_items")
+    }
+    assert {
+        "category",
+        "budget_cents",
+        "repeat_enabled",
+        "next_list_id",
+    }.issubset(list_columns)
+    assert {"quantity", "unit_price_cents"}.issubset(item_columns)
+    with legacy_engine.connect() as connection:
+        legacy_list = connection.execute(text(
+            "SELECT name, category, repeat_enabled FROM shopping_lists WHERE id = 1"
+        )).one()
+        legacy_item = connection.execute(text(
+            "SELECT name, quantity, price_cents, unit_price_cents "
+            "FROM shopping_items WHERE id = 1"
+        )).one()
+    assert tuple(legacy_list) == ("Compra preservada", "other", 0)
+    assert tuple(legacy_item) == ("Arroz", 1, 1290, 1290)
+    legacy_engine.dispose()

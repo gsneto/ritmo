@@ -102,6 +102,8 @@ Antes de publicar:
 - configure `CORS_ORIGINS` apenas com as origens reais do preview e da produção,
   separadas por vírgula e sem caminhos;
 - mantenha `TIMEZONE=America/Sao_Paulo`, salvo decisão explícita em contrário;
+- gere um par VAPID exclusivo e configure `VAPID_PUBLIC_KEY`,
+  `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` para lembretes com a PWA fechada;
 - não salve segredos em `.env` versionado;
 - mantenha uma forma de restaurar ou exportar os dados.
 

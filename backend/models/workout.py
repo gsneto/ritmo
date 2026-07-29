@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy import (
     CheckConstraint,
     Column,
@@ -213,4 +215,50 @@ class WorkoutSetLog(Base):
     session_exercise = relationship(
         "WorkoutSessionExercise",
         back_populates="sets",
+    )
+
+
+class WorkoutExercisePreference(Base):
+    """Personal progression settings that survive weekly plan replacements.
+
+    Preferences use a normalized exercise name instead of a template exercise
+    foreign key because replacing the weekly plan intentionally deletes and
+    recreates template exercises while preserving workout history.
+    """
+
+    __tablename__ = "workout_exercise_preferences"
+    __table_args__ = (
+        CheckConstraint(
+            "rest_seconds >= 15 AND rest_seconds <= 600",
+            name="ck_workout_exercise_preferences_rest_range",
+        ),
+        CheckConstraint(
+            "increment_kg >= 0.25 AND increment_kg <= 20",
+            name="ck_workout_exercise_preferences_increment_range",
+        ),
+        UniqueConstraint(
+            "user_id",
+            "exercise_key",
+            name="uq_workout_exercise_preferences_user_key",
+        ),
+        Index(
+            "ix_workout_exercise_preferences_user",
+            "user_id",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    exercise_key = Column(String(140), nullable=False)
+    display_name = Column(String(100), nullable=False)
+    rest_seconds = Column(Integer, nullable=False, default=60, server_default="60")
+    increment_kg = Column(
+        Numeric(5, 2),
+        nullable=False,
+        default=Decimal("1.00"),
+        server_default="1.00",
     )

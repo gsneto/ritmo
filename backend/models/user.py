@@ -23,11 +23,10 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    reading_book = relationship(
+    reading_books = relationship(
         "ReadingBook",
         back_populates="user",
         cascade="all, delete-orphan",
-        uselist=False,
     )
     shopping_lists = relationship(
         "ShoppingList",

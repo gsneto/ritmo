@@ -1,3 +1,5 @@
+import calendar
+from datetime import date, timedelta
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,6 +12,24 @@ from schemas.task import TaskResponse, TaskCreate, TaskUpdate
 from time_utils import app_now, app_today
 
 router = APIRouter(prefix="/api", tags=["tasks"])
+
+
+def next_recurrence_date(
+    current: date,
+    recurrence: str,
+    interval: int,
+) -> date:
+    if recurrence == "daily":
+        return current + timedelta(days=interval)
+    if recurrence == "weekly":
+        return current + timedelta(days=7 * interval)
+    if recurrence == "monthly":
+        month_index = current.month - 1 + interval
+        year = current.year + month_index // 12
+        month = month_index % 12 + 1
+        day = min(current.day, calendar.monthrange(year, month)[1])
+        return date(year, month, day)
+    return current
 
 
 @router.get("/users/{user_id}/tasks", response_model=List[TaskResponse])
@@ -31,6 +51,8 @@ def create_task(user_id: int, data: TaskCreate, db: Session = Depends(get_db)):
         name=data.name,
         date=data.date,
         time=data.time,
+        recurrence=data.recurrence,
+        recurrence_interval=data.recurrence_interval,
         created_at=app_today(),
     )
     db.add(task)
@@ -52,6 +74,10 @@ def update_task(task_id: int, data: TaskUpdate, db: Session = Depends(get_db)):
         task.date = data.date
     if data.time is not None:
         task.time = data.time
+    if data.recurrence is not None:
+        task.recurrence = data.recurrence
+    if data.recurrence_interval is not None:
+        task.recurrence_interval = data.recurrence_interval
 
     db.commit()
     db.refresh(task)
@@ -79,8 +105,36 @@ def complete_task(task_id: int, db: Session = Depends(get_db)):
 
     if task.completed_at:
         task.completed_at = None
+        generated = db.query(Task).filter(
+            Task.recurrence_parent_id == task.id,
+            Task.completed_at.is_(None),
+        ).first()
+        if generated:
+            db.delete(generated)
     else:
         task.completed_at = app_now()
+        if task.recurrence != "none":
+            next_date = next_recurrence_date(
+                task.date,
+                task.recurrence,
+                task.recurrence_interval,
+            )
+            generated = db.query(Task).filter(
+                Task.recurrence_parent_id == task.id,
+            ).first()
+            if generated is None:
+                db.add(
+                    Task(
+                        user_id=task.user_id,
+                        name=task.name,
+                        date=next_date,
+                        time=task.time,
+                        recurrence=task.recurrence,
+                        recurrence_interval=task.recurrence_interval,
+                        recurrence_parent_id=task.id,
+                        created_at=app_today(),
+                    )
+                )
 
     db.commit()
     db.refresh(task)

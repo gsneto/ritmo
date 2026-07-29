@@ -4,53 +4,66 @@ Atualizado em 29 de julho de 2026.
 
 ## Estado confirmado
 
-- A migração FastAPI + React foi preservada no commit local `0ce1d77`, na
-  branch de segurança `safety/ritmo-fastapi-migration-20260729`.
-- O trabalho de correção continua na branch
-  `fix/ritmo-production-ready-20260729`.
-- A arquitetura ativa do código é `backend/` + `frontend/`.
-- A configuração Vercel da raiz aponta para o build de `frontend/` e inclui o
-  fallback de rotas da SPA.
-- Os workflows foram preparados para testar antes de qualquer publicação
-  manual.
-- Nenhum deploy foi executado por estas alterações.
-- A versão antiga continua online em `https://habitos-base.vercel.app`.
-- A versão antiga em produção deve permanecer intacta até a aprovação do
-  preview, dos testes da API e da validação mobile.
+- A versão estável anterior está preservada no commit local `52a98d5`.
+- A evolução completa está isolada na branch
+  `feature/ritmo-complete-assistant-20260729`.
+- A arquitetura ativa continua sendo `backend/` + `frontend/`.
+- Nenhum deploy foi executado nesta branch.
+- A versão antiga permanece online e não deve ser substituída antes do preview
+  remoto, da configuração dos segredos e da confirmação explícita.
+
+## O que esta branch acrescenta
+
+- Assistente **Hoje** com próxima ação, agenda, compra, treino e leitura.
+- Hábitos por dias da semana e tarefas diárias, semanais ou mensais.
+- Compras e finanças com categorias, orçamentos, quantidade, preço unitário,
+  recorrência, comparação mensal, histórico de preço e CSV.
+- Treino guiado com cronômetro, descanso, cargas, repetições, recordes,
+  histórico e sugestão de progressão.
+- Biblioteca com vários livros, porcentagem, sessões, diário e notas por página.
+- PWA instalável, identidade indígena no ícone, tela offline e suporte a Web
+  Push com agendador no backend.
+- Backup JSON completo e restauração atômica por perfil.
+- Migrações aditivas/preservadoras para os bancos SQLite existentes.
 
 ## Validações locais concluídas
 
-- Backend: `13 passed`, `pip check` sem dependências quebradas e `pip-audit`
-  sem vulnerabilidades conhecidas.
-- Frontend: `10 passed`, build Vite concluído e `npm audit` sem
-  vulnerabilidades conhecidas.
-- API real com SQLite isolado: 18 smoke tests aprovados, cobrindo chave de
-  acesso, CRUD, check-in idempotente, estatísticas, treinos, reset e CORS.
-- Persistência confirmada em um segundo processo lendo o arquivo SQLite.
-- Ambiente limpo de produção do backend iniciado apenas com
-  `requirements.txt`, sem dependências de teste.
-- Interface validada em `390 x 844` e `1440 x 1000`, sem rolagem horizontal.
-- Preview local do build final validado com rota direta e sem erros no console.
+- Backend: `41 passed`.
+- Frontend: `40 passed` e build Vite de produção concluído.
+- `pip-audit` e `npm audit`: nenhuma vulnerabilidade conhecida.
+- API real local: saúde e uma rota de cada recurso responderam HTTP 200,
+  incluindo backup e configuração de push.
+- Cabeçalhos `nosniff`, `DENY`, `no-referrer` e `no-store` confirmados.
+- PWA: manifest e service worker servidos pelo preview de produção; worker
+  instalado, ativado e controlando a página.
+- Interface mobile `390 x 844`: Hoje, Hábitos, Tarefas, Compras, Foco e Ajustes
+  sem rolagem horizontal e sem erro de API.
+- Backup/restauração exercitados por teste de ida e volta com hábitos, tarefas,
+  compras, treino e leitura.
+- Migração de hábitos/tarefas exercitada sobre esquema legado com preservação
+  das linhas existentes.
 
-## Portões para considerar a migração pronta
+## Portões antes de substituir a versão antiga
 
 - [x] Dependências instaladas a partir dos arquivos versionados.
 - [x] Testes automatizados do backend aprovados.
 - [x] Testes automatizados e build do frontend aprovados.
-- [x] API iniciada com banco isolado e smoke tests aprovados.
-- [ ] Segurança, CORS e persistência verificados no backend publicado.
-- [ ] Preview Vercel apontando para a URL real da API.
-- [x] Interface validada localmente em `390 x 844` e `1440 x 1000`.
-- [x] Rotas internas da SPA funcionando por acesso direto no preview local.
-- [ ] Produção promovida manualmente e verificada.
+- [x] API local, banco, backup e interface mobile validados.
+- [x] Auditoria local de dependências sem vulnerabilidades conhecidas.
+- [ ] Configurar banco persistente, chave de acesso e par VAPID no backend
+  remoto.
+- [ ] Publicar e validar o backend em ambiente controlado.
+- [ ] Criar preview do frontend apontando para a API real.
+- [ ] Testar persistência, Web Push e instalação em um iPhone físico.
+- [ ] Promover manualmente para produção após aprovação explícita.
 
 ## Publicação
 
 | Componente | Estado | Observação |
 | --- | --- | --- |
-| Versão antiga | Online e preservada | Não substituir antes do preview remoto |
-| Backend FastAPI | Não publicado por este fluxo | Exige alvo, banco persistente, segredos e smoke tests |
-| Frontend React | Não promovido por este fluxo | Primeiro publicar e aprovar um preview |
+| Versão antiga | Online e preservada | Não foi alterada por esta branch |
+| Backend FastAPI | Validado localmente | Ainda exige ambiente e segredos remotos |
+| Frontend React/PWA | Build e mobile aprovados | Ainda não promovido |
 
-Consulte [DEPLOY.md](DEPLOY.md) para executar cada portão sem confundir build
-local, preview e produção.
+Consulte [DEPLOY.md](DEPLOY.md) para executar os portões remotos sem confundir
+build local, preview e produção.

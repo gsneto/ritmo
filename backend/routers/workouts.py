@@ -1,23 +1,28 @@
 import re
+import unicodedata
+from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from database import get_db
 from models.user import User
 from models.workout import (
     Exercise,
     Workout,
+    WorkoutExercisePreference,
     WorkoutSession,
     WorkoutSessionExercise,
     WorkoutSetLog,
 )
 from schemas.workout import (
     WorkoutCreate,
+    WorkoutExercisePreferenceUpdate,
+    WorkoutExerciseProgressResponse,
     WorkoutHistoryResponse,
     WorkoutResponse,
     WorkoutSessionResponse,
@@ -30,6 +35,8 @@ from time_utils import app_now
 
 router = APIRouter(prefix="/api", tags=["workouts"])
 ZERO_WEIGHT = Decimal("0.00")
+DEFAULT_INCREMENT_KG = Decimal("1.00")
+DEFAULT_REST_SECONDS = 60
 
 
 def serialize_workout(workout: Workout) -> dict:
@@ -133,6 +140,272 @@ def _target_sets(value: str | None) -> int:
     return min(max(int(match.group()), 1), 20)
 
 
+def _planned_reps_target(value: str | None) -> int | None:
+    """Read a minimum repetition target from legacy free-text values."""
+    if not value:
+        return None
+    match = re.search(r"\d+", value)
+    if match is None:
+        return None
+    return min(max(int(match.group()), 1), 1000)
+
+
+def _exercise_key(name: str) -> str:
+    """Normalize names so progress survives accent/case-only plan edits."""
+    decomposed = unicodedata.normalize("NFKD", name.casefold())
+    without_accents = "".join(
+        character
+        for character in decomposed
+        if not unicodedata.combining(character)
+    )
+    return re.sub(r"\s+", " ", without_accents).strip()
+
+
+def _decimal(value) -> Decimal:
+    return Decimal(value or ZERO_WEIGHT).quantize(Decimal("0.01"))
+
+
+def _build_exercise_progress(
+    db: Session,
+    user_id: int,
+    exercise_names: list[str] | None = None,
+) -> dict[str, dict]:
+    """Build last performance, records and conservative next-session hints."""
+    requested_names = {
+        _exercise_key(name): name.strip()
+        for name in (exercise_names or [])
+        if name.strip()
+    }
+    preferences = {
+        preference.exercise_key: preference
+        for preference in (
+            db.query(WorkoutExercisePreference)
+            .filter(WorkoutExercisePreference.user_id == user_id)
+            .all()
+        )
+    }
+
+    history_exercises = (
+        db.query(WorkoutSessionExercise)
+        .join(WorkoutSession)
+        .options(
+            joinedload(WorkoutSessionExercise.session),
+            selectinload(WorkoutSessionExercise.sets),
+        )
+        .filter(
+            WorkoutSession.user_id == user_id,
+            WorkoutSession.status == "completed",
+        )
+        .order_by(
+            WorkoutSession.completed_at.desc(),
+            WorkoutSession.id.desc(),
+            WorkoutSessionExercise.sort_order,
+        )
+        .all()
+    )
+    grouped: dict[str, list[WorkoutSessionExercise]] = defaultdict(list)
+    for exercise in history_exercises:
+        key = _exercise_key(exercise.name)
+        if requested_names and key not in requested_names:
+            continue
+        if any(set_log.completed_at is not None for set_log in exercise.sets):
+            grouped[key].append(exercise)
+
+    keys = set(grouped)
+    if requested_names:
+        keys.update(requested_names)
+    else:
+        keys.update(preferences)
+
+    progress_by_key: dict[str, dict] = {}
+    for key in keys:
+        history = grouped.get(key, [])
+        preference = preferences.get(key)
+        display_name = (
+            requested_names.get(key)
+            or (preference.display_name if preference is not None else None)
+            or (history[0].name if history else key)
+        )
+        rest_seconds = (
+            preference.rest_seconds
+            if preference is not None
+            else DEFAULT_REST_SECONDS
+        )
+        increment_kg = (
+            _decimal(preference.increment_kg)
+            if preference is not None
+            else DEFAULT_INCREMENT_KG
+        )
+
+        points: list[dict] = []
+        record_weight: Decimal | None = None
+        record_reps: int | None = None
+        record_volume = ZERO_WEIGHT
+        for exercise in history:
+            completed_logs = [
+                set_log
+                for set_log in exercise.sets
+                if set_log.completed_at is not None
+            ]
+            if not completed_logs or exercise.session.completed_at is None:
+                continue
+            weights = [_decimal(set_log.weight_kg) for set_log in completed_logs]
+            reps = [
+                set_log.reps_completed
+                for set_log in completed_logs
+                if set_log.reps_completed is not None
+            ]
+            total_volume = sum(
+                (
+                    _decimal(set_log.weight_kg)
+                    * Decimal(set_log.reps_completed or 0)
+                )
+                for set_log in completed_logs
+            ).quantize(Decimal("0.01"))
+            point_max_weight = max(weights)
+            point_max_reps = max(reps, default=None)
+            record_weight = (
+                point_max_weight
+                if record_weight is None
+                else max(record_weight, point_max_weight)
+            )
+            if point_max_reps is not None:
+                record_reps = (
+                    point_max_reps
+                    if record_reps is None
+                    else max(record_reps, point_max_reps)
+                )
+            record_volume = max(record_volume, total_volume)
+            points.append(
+                {
+                    "session_id": exercise.session_id,
+                    "completed_at": exercise.session.completed_at,
+                    "max_weight_kg": point_max_weight,
+                    "total_reps": sum(reps),
+                    "completed_sets": len(completed_logs),
+                    "target_sets": exercise.target_sets,
+                    "total_volume_kg": total_volume,
+                }
+            )
+
+        last_exercise = history[0] if history else None
+        last_logs = (
+            [
+                set_log
+                for set_log in last_exercise.sets
+                if set_log.completed_at is not None
+            ]
+            if last_exercise is not None
+            else []
+        )
+        last_logs.sort(key=lambda set_log: set_log.set_number)
+        last_reference_log = (
+            max(
+                last_logs,
+                key=lambda set_log: (
+                    _decimal(set_log.weight_kg),
+                    set_log.set_number,
+                ),
+            )
+            if last_logs
+            else None
+        )
+        last_weight = (
+            _decimal(last_reference_log.weight_kg)
+            if last_reference_log is not None
+            else None
+        )
+        last_reps = (
+            last_reference_log.reps_completed
+            if last_reference_log is not None
+            else None
+        )
+        last_target_sets = (
+            last_exercise.target_sets
+            if last_exercise is not None
+            else None
+        )
+        planned_target = (
+            _planned_reps_target(last_exercise.planned_reps)
+            if last_exercise is not None
+            else None
+        )
+        completed_target = bool(
+            last_exercise is not None
+            and len(last_logs) == last_exercise.target_sets
+            and planned_target is not None
+            and all(
+                set_log.reps_completed is not None
+                and set_log.reps_completed >= planned_target
+                for set_log in last_logs
+            )
+        )
+
+        if last_weight is None:
+            suggested_weight = None
+            suggestion_action = "start"
+            suggestion_text = (
+                "Sem histórico ainda. Comece com uma carga confortável e "
+                "registre suas séries."
+            )
+        elif completed_target:
+            suggested_weight = min(
+                last_weight + increment_kg,
+                Decimal("500.00"),
+            ).quantize(Decimal("0.01"))
+            if suggested_weight > last_weight:
+                suggestion_action = "increase"
+                suggestion_text = (
+                    "Meta anterior completa. Se a execução ficou controlada, "
+                    f"teste {suggested_weight} kg na próxima sessão."
+                )
+            else:
+                suggestion_action = "maintain"
+                suggestion_text = (
+                    f"Mantenha {last_weight} kg e priorize uma execução "
+                    "controlada."
+                )
+        else:
+            suggested_weight = last_weight
+            suggestion_action = "maintain"
+            suggestion_text = (
+                f"Mantenha {last_weight} kg e tente completar todas as séries "
+                "e repetições planejadas."
+            )
+
+        progress_by_key[key] = {
+            "exercise_name": display_name,
+            "last_session_at": (
+                last_exercise.session.completed_at
+                if last_exercise is not None
+                else None
+            ),
+            "last_weight_kg": last_weight,
+            "last_reps_completed": last_reps,
+            "last_completed_sets": len(last_logs),
+            "last_target_sets": last_target_sets,
+            "last_sets": [
+                {
+                    "set_number": set_log.set_number,
+                    "weight_kg": _decimal(set_log.weight_kg),
+                    "reps_completed": set_log.reps_completed,
+                }
+                for set_log in last_logs
+            ],
+            "personal_record_weight_kg": record_weight,
+            "personal_record_reps": record_reps,
+            "personal_record_volume_kg": record_volume,
+            "suggested_weight_kg": suggested_weight,
+            "suggestion_action": suggestion_action,
+            "suggestion_text": suggestion_text,
+            "rest_seconds": rest_seconds,
+            "increment_kg": increment_kg,
+            "evolution": list(reversed(points[:8])),
+        }
+
+    return progress_by_key
+
+
 def _aware_duration_seconds(started_at: datetime, ended_at: datetime) -> int:
     # SQLite can return a naive value even for DateTime(timezone=True).
     if started_at.tzinfo is None and ended_at.tzinfo is not None:
@@ -142,7 +415,10 @@ def _aware_duration_seconds(started_at: datetime, ended_at: datetime) -> int:
     return max(0, int((ended_at - started_at).total_seconds()))
 
 
-def serialize_session(session: WorkoutSession) -> dict:
+def serialize_session(
+    session: WorkoutSession,
+    exercise_progress: dict[str, dict] | None = None,
+) -> dict:
     completed_logs = [
         set_log
         for exercise in session.exercises
@@ -183,6 +459,11 @@ def serialize_session(session: WorkoutSession) -> dict:
                 "target_sets": exercise.target_sets,
                 "planned_reps": exercise.planned_reps,
                 "sort_order": exercise.sort_order,
+                "progress": (
+                    exercise_progress.get(_exercise_key(exercise.name))
+                    if exercise_progress is not None
+                    else None
+                ),
                 "sets": [
                     {
                         "id": set_log.id,
@@ -197,6 +478,18 @@ def serialize_session(session: WorkoutSession) -> dict:
             for exercise in session.exercises
         ],
     }
+
+
+def _serialize_session_with_progress(
+    session: WorkoutSession,
+    db: Session,
+) -> dict:
+    progress = _build_exercise_progress(
+        db,
+        session.user_id,
+        [exercise.name for exercise in session.exercises],
+    )
+    return serialize_session(session, progress)
 
 
 @router.get("/users/{user_id}/workouts", response_model=list[WorkoutResponse])
@@ -278,7 +571,7 @@ def start_workout_session(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Idempotency key already belongs to another workout",
             )
-        return serialize_session(repeated)
+        return _serialize_session_with_progress(repeated, db)
 
     workout = (
         db.query(Workout)
@@ -346,10 +639,10 @@ def start_workout_session(
             .first()
         )
         if repeated is not None:
-            return serialize_session(repeated)
+            return _serialize_session_with_progress(repeated, db)
         raise
     db.refresh(session)
-    return serialize_session(_get_session(session.id, db))
+    return _serialize_session_with_progress(_get_session(session.id, db), db)
 
 
 @router.get(
@@ -367,7 +660,11 @@ def get_active_workout_session(user_id: int, db: Session = Depends(get_db)):
         .order_by(WorkoutSession.started_at.desc(), WorkoutSession.id.desc())
         .first()
     )
-    return serialize_session(session) if session is not None else None
+    return (
+        _serialize_session_with_progress(session, db)
+        if session is not None
+        else None
+    )
 
 
 @router.get(
@@ -375,7 +672,7 @@ def get_active_workout_session(user_id: int, db: Session = Depends(get_db)):
     response_model=WorkoutSessionResponse,
 )
 def get_workout_session(session_id: int, db: Session = Depends(get_db)):
-    return serialize_session(_get_session(session_id, db))
+    return _serialize_session_with_progress(_get_session(session_id, db), db)
 
 
 @router.put(
@@ -408,7 +705,7 @@ def set_workout_set_state(
         set_log.reps_completed = None
 
     db.commit()
-    return serialize_session(_get_session(session.id, db))
+    return _serialize_session_with_progress(_get_session(session.id, db), db)
 
 
 @router.post(
@@ -419,7 +716,7 @@ def finish_workout_session(session_id: int, db: Session = Depends(get_db)):
     session = _claim_session(session_id, db)
     if session.status == "completed":
         db.commit()
-        return serialize_session(session)
+        return _serialize_session_with_progress(session, db)
 
     completed_sets = sum(
         set_log.completed_at is not None
@@ -440,7 +737,7 @@ def finish_workout_session(session_id: int, db: Session = Depends(get_db)):
         completed_at,
     )
     db.commit()
-    return serialize_session(_get_session(session.id, db))
+    return _serialize_session_with_progress(_get_session(session.id, db), db)
 
 
 @router.get(
@@ -468,6 +765,10 @@ def get_workout_history(
         .all()
     )
     serialized = [serialize_session(session) for session in sessions]
+    exercise_progress = sorted(
+        _build_exercise_progress(db, user_id).values(),
+        key=lambda item: item["exercise_name"].casefold(),
+    )
     return {
         "total_sessions": len(serialized),
         "total_minutes": sum(
@@ -481,4 +782,54 @@ def get_workout_history(
             start=ZERO_WEIGHT,
         ),
         "sessions": serialized,
+        "exercise_progress": exercise_progress,
     }
+
+
+@router.put(
+    "/users/{user_id}/workout-exercise-preference",
+    response_model=WorkoutExerciseProgressResponse,
+)
+def update_workout_exercise_preference(
+    user_id: int,
+    data: WorkoutExercisePreferenceUpdate,
+    db: Session = Depends(get_db),
+):
+    """Save rest and progression increments without changing workout history."""
+    user_exists = db.query(User.id).filter(User.id == user_id).first()
+    if user_exists is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    exercise_key = _exercise_key(data.exercise_name)
+    preference = (
+        db.query(WorkoutExercisePreference)
+        .filter(
+            WorkoutExercisePreference.user_id == user_id,
+            WorkoutExercisePreference.exercise_key == exercise_key,
+        )
+        .first()
+    )
+    if preference is None:
+        preference = WorkoutExercisePreference(
+            user_id=user_id,
+            exercise_key=exercise_key,
+            display_name=data.exercise_name,
+        )
+        db.add(preference)
+
+    preference.display_name = data.exercise_name
+    preference.rest_seconds = data.rest_seconds
+    preference.increment_kg = data.increment_kg.quantize(Decimal("0.01"))
+    db.commit()
+
+    progress = _build_exercise_progress(
+        db,
+        user_id,
+        [data.exercise_name],
+    ).get(exercise_key)
+    if progress is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Exercise preference could not be loaded",
+        )
+    return progress

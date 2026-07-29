@@ -3,7 +3,9 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from database import get_db
+from models.shopping import ShoppingMonthlyBudget
 from models.user import User
+from models.workout import WorkoutExercisePreference
 from schemas.user import UserResponse, UserUpdate, ThemeUpdate
 from seed import create_default_workouts
 
@@ -75,10 +77,16 @@ def reset_user_data(user_id: int, db: Session = Depends(get_db)):
             db.delete(workout_session)
         for workout in list(user.workouts):
             db.delete(workout)
-        if user.reading_book is not None:
-            db.delete(user.reading_book)
+        for reading_book in list(user.reading_books):
+            db.delete(reading_book)
         for shopping_list in list(user.shopping_lists):
             db.delete(shopping_list)
+        db.query(ShoppingMonthlyBudget).filter(
+            ShoppingMonthlyBudget.user_id == user.id,
+        ).delete(synchronize_session=False)
+        db.query(WorkoutExercisePreference).filter(
+            WorkoutExercisePreference.user_id == user.id,
+        ).delete(synchronize_session=False)
         db.flush()
 
         # Reset means a clean usable app, including the seven default workouts.

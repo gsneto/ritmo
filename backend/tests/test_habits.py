@@ -36,15 +36,24 @@ def test_habit_crud_and_idempotent_checkin(client, auth_headers, user_id):
     habit = created.json()
     assert habit["name"] == "Caminhar"
     assert habit["time"] == "06:00"
+    assert habit["active_days"] == [0, 1, 2, 3, 4, 5, 6]
     habit_id = habit["id"]
 
     updated = client.put(
         f"/api/habits/{habit_id}",
         headers=auth_headers,
-        json={"time": "07:15"},
+        json={"time": "07:15", "active_days": [0, 2, 4]},
     )
     assert updated.status_code == 200
     assert updated.json()["time"] == "07:15"
+    assert updated.json()["active_days"] == [0, 2, 4]
+
+    invalid_days = client.put(
+        f"/api/habits/{habit_id}",
+        headers=auth_headers,
+        json={"active_days": []},
+    )
+    assert invalid_days.status_code == 422
 
     today = datetime.now(ZoneInfo("America/Sao_Paulo")).date().isoformat()
     first = client.post(

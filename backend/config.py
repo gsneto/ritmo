@@ -45,6 +45,18 @@ class Settings(BaseSettings):
         default=None,
         validation_alias="APP_ACCESS_TOKEN",
     )
+    VAPID_PUBLIC_KEY: str | None = Field(
+        default=None,
+        validation_alias="VAPID_PUBLIC_KEY",
+    )
+    VAPID_PRIVATE_KEY: SecretStr | None = Field(
+        default=None,
+        validation_alias="VAPID_PRIVATE_KEY",
+    )
+    VAPID_SUBJECT: str = Field(
+        default="mailto:admin@ritmo.local",
+        validation_alias="VAPID_SUBJECT",
+    )
     CORS_ORIGINS: str = Field(
         default=LOCAL_CORS_ORIGINS,
         validation_alias="CORS_ORIGINS",
@@ -70,6 +82,16 @@ class Settings(BaseSettings):
     def validate_runtime_settings(self):
         if not self.DEBUG and self.APP_ACCESS_TOKEN is None:
             raise ValueError("APP_ACCESS_TOKEN is required when DEBUG=false")
+        has_public_vapid = bool(self.VAPID_PUBLIC_KEY and self.VAPID_PUBLIC_KEY.strip())
+        has_private_vapid = self.VAPID_PRIVATE_KEY is not None and bool(
+            self.VAPID_PRIVATE_KEY.get_secret_value().strip()
+        )
+        if has_public_vapid != has_private_vapid:
+            raise ValueError(
+                "VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be configured together"
+            )
+        if has_public_vapid and not self.VAPID_SUBJECT.startswith(("mailto:", "https://")):
+            raise ValueError("VAPID_SUBJECT must start with mailto: or https://")
 
         try:
             ZoneInfo(self.TIMEZONE)
@@ -104,6 +126,21 @@ class Settings(BaseSettings):
         if self.APP_ACCESS_TOKEN is None:
             return None
         return self.APP_ACCESS_TOKEN.get_secret_value()
+
+    @property
+    def push_enabled(self) -> bool:
+        return bool(
+            self.VAPID_PUBLIC_KEY
+            and self.VAPID_PRIVATE_KEY
+            and self.VAPID_PUBLIC_KEY.strip()
+            and self.VAPID_PRIVATE_KEY.get_secret_value().strip()
+        )
+
+    @property
+    def vapid_private_key(self) -> str | None:
+        if self.VAPID_PRIVATE_KEY is None:
+            return None
+        return self.VAPID_PRIVATE_KEY.get_secret_value().strip() or None
 
     @property
     def cors_origins(self) -> list[str]:

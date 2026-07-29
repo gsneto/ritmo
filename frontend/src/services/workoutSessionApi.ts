@@ -38,6 +38,41 @@ export interface WorkoutSessionSet {
   completed_at: string | null
 }
 
+export interface WorkoutExerciseSetSnapshot {
+  set_number: number
+  weight_kg: string | number
+  reps_completed: number | null
+}
+
+export interface WorkoutExerciseEvolutionPoint {
+  session_id: number
+  completed_at: string
+  max_weight_kg: string | number
+  total_reps: number
+  completed_sets: number
+  target_sets: number
+  total_volume_kg: string | number
+}
+
+export interface WorkoutExerciseProgress {
+  exercise_name: string
+  last_session_at: string | null
+  last_weight_kg: string | number | null
+  last_reps_completed: number | null
+  last_completed_sets: number
+  last_target_sets: number | null
+  last_sets: WorkoutExerciseSetSnapshot[]
+  personal_record_weight_kg: string | number | null
+  personal_record_reps: number | null
+  personal_record_volume_kg: string | number
+  suggested_weight_kg: string | number | null
+  suggestion_action: 'start' | 'increase' | 'maintain'
+  suggestion_text: string
+  rest_seconds: number
+  increment_kg: string | number
+  evolution: WorkoutExerciseEvolutionPoint[]
+}
+
 export interface WorkoutSessionExercise {
   id: number
   exercise_id: number | null
@@ -46,6 +81,7 @@ export interface WorkoutSessionExercise {
   planned_reps: string | null
   sort_order: number
   sets: WorkoutSessionSet[]
+  progress: WorkoutExerciseProgress | null
 }
 
 export interface WorkoutSession {
@@ -72,6 +108,7 @@ export interface WorkoutHistory {
   completed_sets: number
   total_volume_kg: string | number
   sessions: WorkoutSession[]
+  exercise_progress: WorkoutExerciseProgress[]
 }
 
 export interface WorkoutSetState {
@@ -145,6 +182,23 @@ export const workoutSessionApi = {
     const response = await api.get<WorkoutHistory>(
       `/users/${userId}/workout-history`,
       { params: { limit } },
+    )
+    return response.data
+  },
+
+  updateExercisePreference: async (
+    userId: number,
+    exerciseName: string,
+    restSeconds: number,
+    incrementKg: string,
+  ): Promise<WorkoutExerciseProgress> => {
+    const response = await api.put<WorkoutExerciseProgress>(
+      `/users/${userId}/workout-exercise-preference`,
+      {
+        exercise_name: exerciseName,
+        rest_seconds: restSeconds,
+        increment_kg: incrementKg,
+      },
     )
     return response.data
   },

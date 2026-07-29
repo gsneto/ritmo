@@ -42,6 +42,9 @@ function task(
     date,
     time: '23:59',
     completed_at: completedAt,
+    recurrence: 'none',
+    recurrence_interval: 1,
+    recurrence_parent_id: null,
     created_at: '2026-07-29T09:00:00',
   }
 }
@@ -96,7 +99,7 @@ describe('Tasks upgraded experience', () => {
     expect(groupQueries.queryByText('Consulta')).toBeNull()
   })
 
-  it('creates a task with the selected date and time', async () => {
+  it('creates a recurring task with the selected date and time', async () => {
     render(<Tasks userId={1} />)
 
     await screen.findByText('Minhas tarefas')
@@ -111,6 +114,9 @@ describe('Tasks upgraded experience', () => {
     fireEvent.change(formQueries.getByLabelText('Horário'), {
       target: { value: '16:20' },
     })
+    fireEvent.change(formQueries.getByLabelText('Repetição'), {
+      target: { value: 'weekly' },
+    })
     fireEvent.click(formQueries.getByRole('button', { name: 'Adicionar tarefa' }))
 
     await waitFor(() => {
@@ -118,6 +124,7 @@ describe('Tasks upgraded experience', () => {
         name: 'Levar roupa à lavanderia',
         date: today,
         time: '16:20',
+        recurrence: 'weekly',
       })
     })
   })
@@ -151,6 +158,7 @@ describe('Tasks upgraded experience', () => {
         name: 'Organizar documentos',
         date: today,
         time: '18:10',
+        recurrence: 'none',
       })
     })
   })

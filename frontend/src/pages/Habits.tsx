@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   AlertCircle,
+  CalendarDays,
   Check,
   CheckCircle2,
   Clock3,
@@ -24,22 +25,50 @@ interface HabitsProps {
   userId: number
 }
 
+const WEEKDAY_OPTIONS = [
+  { value: 0, label: 'Seg' },
+  { value: 1, label: 'Ter' },
+  { value: 2, label: 'Qua' },
+  { value: 3, label: 'Qui' },
+  { value: 4, label: 'Sex' },
+  { value: 5, label: 'Sáb' },
+  { value: 6, label: 'Dom' },
+]
+const EVERY_DAY = WEEKDAY_OPTIONS.map(day => day.value)
+
+function configuredDays(habit: Habit): number[] {
+  return habit.active_days?.length ? habit.active_days : EVERY_DAY
+}
+
+function daysSummary(days: number[]): string {
+  if (days.length === 7) return 'Todos os dias'
+  if (days.join(',') === '0,1,2,3,4') return 'Dias úteis'
+  return WEEKDAY_OPTIONS
+    .filter(option => days.includes(option.value))
+    .map(option => option.label)
+    .join(', ')
+}
+
 export default function Habits({ userId }: HabitsProps) {
-  const { navigate } = useAppRouter()
+  const { navigate, search } = useAppRouter()
   const [habits, setHabits] = useState<Habit[]>([])
   const [name, setName] = useState('')
   const [time, setTime] = useState('09:00')
+  const [activeDays, setActiveDays] = useState<number[]>(EVERY_DAY)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editName, setEditName] = useState('')
   const [editTime, setEditTime] = useState('')
+  const [editActiveDays, setEditActiveDays] = useState<number[]>(EVERY_DAY)
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
   const [showWorkouts, setShowWorkouts] = useState(false)
   const [workoutHabitId, setWorkoutHabitId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const workoutsRef = useRef<HTMLDivElement>(null)
 
   const today = toLocalDateValue()
+  const todayWeekday = (new Date().getDay() + 6) % 7
 
   const loadHabits = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true)
@@ -59,16 +88,46 @@ export default function Habits({ userId }: HabitsProps) {
     void loadHabits(true)
   }, [loadHabits])
 
+  useEffect(() => {
+    if (new URLSearchParams(search || '').get('workout') === '1') {
+      setWorkoutHabitId(null)
+      setShowWorkouts(true)
+    }
+  }, [search])
+
+  useEffect(() => {
+    if (showWorkouts) {
+      workoutsRef.current?.scrollIntoView?.({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }
+  }, [showWorkouts])
+
   const orderedHabits = useMemo(
     () => [...habits].sort((a, b) => a.time.localeCompare(b.time)),
     [habits],
   )
-  const completedCount = habits.filter(habit => habit.check_ins.includes(today)).length
-  const remainingCount = habits.length - completedCount
-  const progress = habits.length === 0
+  const scheduledHabits = habits.filter(habit => configuredDays(habit).includes(todayWeekday))
+  const completedCount = scheduledHabits.filter(habit => habit.check_ins.includes(today)).length
+  const remainingCount = scheduledHabits.length - completedCount
+  const progress = scheduledHabits.length === 0
     ? 0
-    : Math.round((completedCount / habits.length) * 100)
-  const nextHabit = orderedHabits.find(habit => !habit.check_ins.includes(today))
+    : Math.round((completedCount / scheduledHabits.length) * 100)
+  const nextHabit = orderedHabits.find(
+    habit => configuredDays(habit).includes(todayWeekday) && !habit.check_ins.includes(today),
+  )
+
+  function toggleActiveDay(day: number, editing = false) {
+    const current = editing ? editActiveDays : activeDays
+    const update = editing ? setEditActiveDays : setActiveDays
+    if (current.includes(day)) {
+      if (current.length === 1) return
+      update(current.filter(value => value !== day))
+      return
+    }
+    update([...current, day].sort((a, b) => a - b))
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -81,9 +140,11 @@ export default function Habits({ userId }: HabitsProps) {
       await apiRoutes.createHabit(userId, {
         name: trimmedName,
         time: time || '09:00',
+        active_days: activeDays,
       })
       setName('')
       setTime('09:00')
+      setActiveDays(EVERY_DAY)
       await loadHabits()
     } catch (createError) {
       console.error('Failed to create habit:', createError)
@@ -137,6 +198,7 @@ export default function Habits({ userId }: HabitsProps) {
     setEditingId(habit.id)
     setEditName(habit.name)
     setEditTime(habit.time)
+    setEditActiveDays(configuredDays(habit))
   }
 
   async function saveEditing() {
@@ -150,6 +212,7 @@ export default function Habits({ userId }: HabitsProps) {
       await apiRoutes.updateHabit(id, {
         name: trimmedName,
         time: editTime || '09:00',
+        active_days: editActiveDays,
       })
       setEditingId(null)
       await loadHabits()
@@ -173,9 +236,17 @@ export default function Habits({ userId }: HabitsProps) {
     navigate(`/focus?habit=${habitId}`)
   }
 
-  function openWorkouts(habitId: number) {
+  function openWorkouts(habitId: number | null) {
     setWorkoutHabitId(habitId)
     setShowWorkouts(true)
+  }
+
+  function closeWorkouts() {
+    setShowWorkouts(false)
+    setWorkoutHabitId(null)
+    if (new URLSearchParams(search || '').get('workout') === '1') {
+      navigate('/habits', { replace: true })
+    }
   }
 
   async function handleWorkoutFinished() {
@@ -209,7 +280,7 @@ export default function Habits({ userId }: HabitsProps) {
           <div className="routine-progress-heading">
             <div>
               <span>Progresso de hoje</span>
-              <strong>{completedCount} de {habits.length}</strong>
+              <strong>{completedCount} de {scheduledHabits.length}</strong>
             </div>
             <b>{progress}%</b>
           </div>
@@ -269,7 +340,9 @@ export default function Habits({ userId }: HabitsProps) {
               ? `${nextHabit.time} · toque em “Marcar feito” quando concluir`
               : habits.length === 0
                 ? 'Comece com algo simples que você quer repetir diariamente.'
-                : 'Você completou todos os hábitos planejados.'}
+                : scheduledHabits.length === 0
+                  ? 'Hoje é um dia livre na sua rotina.'
+                  : 'Você completou todos os hábitos planejados.'}
           </small>
         </div>
         {nextHabit && (
@@ -283,6 +356,23 @@ export default function Habits({ userId }: HabitsProps) {
             Marcar feito
           </button>
         )}
+      </section>
+
+      <section className="routine-workout-entry" aria-label="Treinos em casa">
+        <span className="routine-workout-entry-icon" aria-hidden="true">
+          <Dumbbell size={24} />
+        </span>
+        <div>
+          <p className="routine-kicker">Treino com halteres</p>
+          <strong>Inicie, registre cargas e acompanhe sua evolução</strong>
+          <small>Descanso cronometrado, séries, repetições e recordes em um só lugar.</small>
+        </div>
+        <button
+          type="button"
+          onClick={() => openWorkouts(null)}
+        >
+          Abrir treinos
+        </button>
       </section>
 
       <section className="panel routine-panel routine-create-panel">
@@ -316,6 +406,22 @@ export default function Habits({ userId }: HabitsProps) {
               required
             />
           </label>
+          <fieldset className="routine-day-picker">
+            <legend>Dias da semana</legend>
+            <div>
+              {WEEKDAY_OPTIONS.map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={activeDays.includes(option.value) ? 'is-active' : ''}
+                  aria-pressed={activeDays.includes(option.value)}
+                  onClick={() => toggleActiveDay(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
           <button
             className="primary-button routine-submit"
             type="submit"
@@ -336,6 +442,8 @@ export default function Habits({ userId }: HabitsProps) {
             <p>
               {habits.length === 0
                 ? 'Comece com um hábito simples.'
+                : scheduledHabits.length === 0
+                  ? 'Nenhum hábito está planejado para hoje.'
                 : remainingCount === 1
                   ? '1 hábito ainda aguarda você hoje.'
                   : `${remainingCount} hábitos ainda aguardam você hoje.`}
@@ -361,13 +469,14 @@ export default function Habits({ userId }: HabitsProps) {
           <div className="routine-list">
             {orderedHabits.map((habit, index) => {
               const isDone = habit.check_ins.includes(today)
+              const isScheduledToday = configuredDays(habit).includes(todayWeekday)
               const isBusy = busyKey?.endsWith(`-${habit.id}`) ?? false
               const isDeleting = pendingDeleteId === habit.id
 
               return (
                 <article
                   key={habit.id}
-                  className={`routine-item routine-habit-item ${isDone ? 'is-done' : ''}`}
+                  className={`routine-item routine-habit-item ${isDone ? 'is-done' : ''} ${isScheduledToday ? '' : 'is-off-day'}`}
                 >
                   {editingId === habit.id ? (
                     <div className="routine-inline-editor">
@@ -390,6 +499,22 @@ export default function Habits({ userId }: HabitsProps) {
                           onChange={event => setEditTime(event.target.value)}
                         />
                       </label>
+                      <fieldset className="routine-day-picker routine-day-picker-edit">
+                        <legend>Dias</legend>
+                        <div>
+                          {WEEKDAY_OPTIONS.map(option => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className={editActiveDays.includes(option.value) ? 'is-active' : ''}
+                              aria-pressed={editActiveDays.includes(option.value)}
+                              onClick={() => toggleActiveDay(option.value, true)}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </fieldset>
                       <div className="routine-editor-actions">
                         <button
                           className="primary-button"
@@ -415,14 +540,18 @@ export default function Habits({ userId }: HabitsProps) {
                         className={`routine-check-control ${isDone ? 'is-done' : ''}`}
                         type="button"
                         onClick={() => void toggleCheckIn(habit)}
-                        disabled={busyKey !== null}
-                        aria-label={`${isDone ? 'Desmarcar' : 'Marcar'} ${habit.name} hoje`}
+                        disabled={busyKey !== null || !isScheduledToday}
+                        aria-label={isScheduledToday
+                          ? `${isDone ? 'Desmarcar' : 'Marcar'} ${habit.name} hoje`
+                          : `${habit.name} não está planejado para hoje`}
                       >
                         {isBusy && busyKey?.startsWith('toggle')
                           ? <RefreshCw className="routine-spin" size={19} aria-hidden="true" />
                           : isDone
                             ? <Check size={20} aria-hidden="true" />
-                            : <span>{index + 1}</span>}
+                            : isScheduledToday
+                              ? <span>{index + 1}</span>
+                              : <CalendarDays size={18} aria-hidden="true" />}
                       </button>
 
                       <div className="routine-item-main">
@@ -430,7 +559,11 @@ export default function Habits({ userId }: HabitsProps) {
                           <strong>{habit.name}</strong>
                           {isDone && <span className="routine-status done">Feito hoje</span>}
                         </div>
-                        <small><Clock3 size={15} aria-hidden="true" /> {habit.time}</small>
+                        <small>
+                          <Clock3 size={15} aria-hidden="true" /> {habit.time}
+                          <span aria-hidden="true">·</span>
+                          <CalendarDays size={15} aria-hidden="true" /> {daysSummary(configuredDays(habit))}
+                        </small>
                       </div>
 
                       <div className="routine-item-actions">
@@ -512,15 +645,14 @@ export default function Habits({ userId }: HabitsProps) {
         )}
       </section>
 
-      <WorkoutsPanel
-        userId={userId}
-        isOpen={showWorkouts}
-        onClose={() => {
-          setShowWorkouts(false)
-          setWorkoutHabitId(null)
-        }}
-        onSessionFinished={handleWorkoutFinished}
-      />
+      <div ref={workoutsRef}>
+        <WorkoutsPanel
+          userId={userId}
+          isOpen={showWorkouts}
+          onClose={closeWorkouts}
+          onSessionFinished={handleWorkoutFinished}
+        />
+      </div>
     </div>
   )
 }

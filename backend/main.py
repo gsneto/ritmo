@@ -1,6 +1,7 @@
+import asyncio
 import logging
 from collections.abc import Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +10,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from config import Settings, get_settings
 from database import SessionLocal, get_db, init_db
-from routers import habits, reading, shopping, stats, tasks, users, workouts
+from push_scheduler import run_push_scheduler
+from routers import backup, habits, push, reading, shopping, stats, tasks, users, workouts
 from security import require_api_key
 from seed import seed_default_data
 from time_utils import app_today
@@ -39,13 +41,25 @@ def create_app(
             raise
         finally:
             db.close()
-        yield
+        push_task: asyncio.Task | None = None
+        if settings.push_enabled:
+            push_task = asyncio.create_task(
+                run_push_scheduler(make_session, settings),
+                name="ritmo-push-reminders",
+            )
+        try:
+            yield
+        finally:
+            if push_task is not None:
+                push_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await push_task
 
     docs_enabled = settings.DEBUG
     application = FastAPI(
         title=settings.APP_NAME,
         description="API FastAPI do Ritmo",
-        version="1.3.0",
+        version="2.0.0",
         lifespan=lifespan,
         docs_url="/docs" if docs_enabled else None,
         redoc_url="/redoc" if docs_enabled else None,
@@ -78,14 +92,16 @@ def create_app(
     application.include_router(stats.router, dependencies=protected)
     application.include_router(shopping.router, dependencies=protected)
     application.include_router(reading.router, dependencies=protected)
+    application.include_router(backup.router, dependencies=protected)
+    application.include_router(push.router, dependencies=protected)
 
     @application.get("/")
     def root():
-        return {"message": settings.APP_NAME, "version": "1.3.0"}
+        return {"message": settings.APP_NAME, "version": "2.0.0"}
 
     @application.get("/api", dependencies=protected)
     def api_root():
-        return {"message": settings.APP_NAME, "version": "1.3.0"}
+        return {"message": settings.APP_NAME, "version": "2.0.0"}
 
     @application.get("/health")
     def health(db: Session = Depends(get_db)):

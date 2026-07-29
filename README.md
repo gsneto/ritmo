@@ -1,6 +1,19 @@
 # Ritmo
 
-Aplicativo pessoal de hábitos, tarefas, foco, treinos e progresso.
+Aplicativo pessoal de hábitos, tarefas, compras, finanças, foco, leitura,
+treinos e progresso.
+
+## Recursos atuais
+
+- assistente **Hoje** que cruza horários, pendências, compras, treino e leitura;
+- hábitos por dias da semana e tarefas recorrentes;
+- listas de compras com check, quantidade, preço unitário, orçamento,
+  recorrência, histórico mensal, comparação e CSV;
+- treino em casa com cronômetro, descanso, carga, repetições, recordes e
+  sugestão de progressão;
+- biblioteca com vários livros, página atual, porcentagem, sessões e notas;
+- PWA instalável no iPhone e Android, tela offline e Web Push opcional;
+- backup JSON completo e restauração atômica por perfil.
 
 A arquitetura ativa é:
 
@@ -40,6 +53,11 @@ A API estará disponível localmente em `http://localhost:8000`. Rotas úteis:
 
 Em produção, `RITMO_DEBUG=false` exige `APP_ACCESS_TOKEN`. O frontend envia essa chave
 no cabeçalho `X-Ritmo-Key`; ela não deve ser versionada.
+
+Para lembretes que chegam mesmo com a PWA fechada, configure no backend
+`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT`. A chave privada
+permanece somente no servidor. Sem essas variáveis, os alertas locais de
+check-in e cronômetro continuam disponíveis, mas o Web Push fica desativado.
 
 ### Frontend
 

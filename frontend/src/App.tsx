@@ -18,6 +18,7 @@ import Topbar from './components/Topbar'
 import Navigation from './components/Navigation'
 import AccessCodeGate from './components/AccessCodeGate'
 import { useAppRouter } from './router'
+import { useDailyReminders } from './hooks/useDailyReminders'
 
 type AppStatus = 'loading' | 'ready' | 'error' | 'access'
 const VALID_PATHS = new Set([
@@ -38,6 +39,7 @@ export default function App() {
   const [status, setStatus] = useState<AppStatus>('loading')
   const [errorMessage, setErrorMessage] = useState('')
   const [accessMessage, setAccessMessage] = useState('')
+  useDailyReminders(activeUser?.id ?? null)
 
   const loadUsers = useCallback(async (isAccessRetry = false) => {
     setStatus('loading')
@@ -144,6 +146,7 @@ export default function App() {
 
   function handleDataReset() {
     setRefreshKey(k => k + 1)
+    void loadUsers()
   }
 
   if (status === 'access') {

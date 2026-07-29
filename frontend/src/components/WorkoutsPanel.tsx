@@ -13,10 +13,13 @@ import {
   RotateCcw,
   SkipForward,
   TimerReset,
+  TrendingUp,
+  Trophy,
   X,
 } from 'lucide-react'
 import {
   workoutSessionApi,
+  type WorkoutExerciseProgress,
   type WorkoutHistory,
   type WorkoutInput,
   type WorkoutSession,
@@ -56,6 +59,7 @@ const EMPTY_HISTORY: WorkoutHistory = {
   completed_sets: 0,
   total_volume_kg: '0.00',
   sessions: [],
+  exercise_progress: [],
 }
 
 export const HOME_DUMBBELL_PLAN: WorkoutInput[] = [
@@ -158,7 +162,24 @@ function createIdempotencyKey(userId: number, workoutId: number): string {
   return `workout-${userId}-${workoutId}-${randomPart}`
 }
 
-function sessionInputDefaults(session: WorkoutSession): {
+function exerciseKey(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('pt-BR')
+}
+
+function formatKg(value: string | number | null): string {
+  if (value === null) return '—'
+  return Number(value).toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })
+}
+
+export function sessionInputDefaults(session: WorkoutSession): {
   weights: Record<number, string>
   reps: Record<number, string>
 } {
@@ -167,14 +188,31 @@ function sessionInputDefaults(session: WorkoutSession): {
   for (const exercise of session.exercises) {
     let lastWeight = ''
     for (const set of exercise.sets) {
+      const previousSet = exercise.progress?.last_sets.find(
+        previous => previous.set_number === set.set_number,
+      )
       if (set.weight_kg !== null) {
         lastWeight = String(Number(set.weight_kg))
       }
       weights[set.id] = set.weight_kg === null
-        ? lastWeight
+        ? (
+            previousSet
+              ? String(Number(previousSet.weight_kg))
+              : lastWeight || (
+                  exercise.progress?.last_weight_kg === null
+                    || exercise.progress?.last_weight_kg === undefined
+                    ? ''
+                    : String(Number(exercise.progress.last_weight_kg))
+                )
+          )
         : String(Number(set.weight_kg))
       reps[set.id] = set.reps_completed === null
-        ? plannedReps(exercise.planned_reps)
+        ? (
+            previousSet?.reps_completed === null
+              || previousSet?.reps_completed === undefined
+              ? plannedReps(exercise.planned_reps)
+              : String(previousSet.reps_completed)
+          )
         : String(set.reps_completed)
     }
   }
@@ -209,6 +247,7 @@ export default function WorkoutsPanel({
   const [repInputs, setRepInputs] = useState<Record<number, string>>({})
   const [startingWorkoutId, setStartingWorkoutId] = useState<number | null>(null)
   const [savingSetId, setSavingSetId] = useState<number | null>(null)
+  const [savingPreferenceKey, setSavingPreferenceKey] = useState<string | null>(null)
   const [isFinishing, setIsFinishing] = useState(false)
   const [isApplyingPlan, setIsApplyingPlan] = useState(false)
   const [showFinishConfirm, setShowFinishConfirm] = useState(false)
@@ -281,11 +320,66 @@ export default function WorkoutsPanel({
       ])
       setWorkouts(templates)
       adoptSession(session)
-      setHistoryData(history)
+      setHistoryData({
+        ...history,
+        exercise_progress: history.exercise_progress ?? [],
+      })
     } catch {
       setError('Não foi possível carregar seus treinos agora.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  function adoptExerciseProgress(progress: WorkoutExerciseProgress) {
+    const key = exerciseKey(progress.exercise_name)
+    setActiveSession(current => {
+      if (!current) return current
+      return {
+        ...current,
+        exercises: current.exercises.map(exercise => (
+          exerciseKey(exercise.name) === key
+            ? { ...exercise, progress }
+            : exercise
+        )),
+      }
+    })
+    setHistoryData(current => {
+      const existing = current.exercise_progress ?? []
+      const next = existing.some(item => exerciseKey(item.exercise_name) === key)
+        ? existing.map(item => (
+            exerciseKey(item.exercise_name) === key ? progress : item
+          ))
+        : [...existing, progress]
+      return {
+        ...current,
+        exercise_progress: next.sort((left, right) => (
+          left.exercise_name.localeCompare(right.exercise_name, 'pt-BR')
+        )),
+      }
+    })
+  }
+
+  async function updateExercisePreference(
+    progress: WorkoutExerciseProgress,
+    restSeconds: number,
+    incrementKg: string,
+  ) {
+    const key = exerciseKey(progress.exercise_name)
+    setSavingPreferenceKey(key)
+    setError('')
+    try {
+      const saved = await workoutSessionApi.updateExercisePreference(
+        userId,
+        progress.exercise_name,
+        restSeconds,
+        incrementKg,
+      )
+      adoptExerciseProgress(saved)
+    } catch {
+      setError('Não foi possível salvar o descanso e a progressão deste exercício.')
+    } finally {
+      setSavingPreferenceKey(null)
     }
   }
 
@@ -424,6 +518,9 @@ export default function WorkoutsPanel({
 
   async function completeSet(setId: number) {
     if (!activeSession) return
+    const activeExercise = activeSession.exercises.find(exercise => (
+      exercise.sets.some(set => set.id === setId)
+    ))
     const weight = parseWeight(weightInputs[setId] ?? '')
     if (weight === null) {
       setError('Informe um peso válido, como 8 ou 8,5 kg.')
@@ -447,7 +544,8 @@ export default function WorkoutsPanel({
       adoptSession(session)
       if (session.completed_sets < session.total_sets) {
         setRestTimer({
-          remaining: session.rest_seconds,
+          remaining: activeExercise?.progress?.rest_seconds
+            ?? session.rest_seconds,
           running: true,
         })
       }
@@ -486,7 +584,10 @@ export default function WorkoutsPanel({
       const followUpErrors: string[] = []
       try {
         const history = await workoutSessionApi.getHistory(userId)
-        setHistoryData(history)
+        setHistoryData({
+          ...history,
+          exercise_progress: history.exercise_progress ?? [],
+        })
       } catch {
         followUpErrors.push('o histórico será atualizado ao abrir novamente')
       }
@@ -508,6 +609,10 @@ export default function WorkoutsPanel({
   if (!isOpen) return null
 
   const todayDay = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][new Date().getDay()]
+  const exerciseProgress = historyData.exercise_progress ?? []
+  const progressByExercise = new Map(
+    exerciseProgress.map(progress => [exerciseKey(progress.exercise_name), progress]),
+  )
 
   return (
     <section className="panel workout-panel guided-workout-panel">
@@ -614,6 +719,24 @@ export default function WorkoutsPanel({
           <div className="guided-exercise-list">
             {activeSession.exercises.map((exercise, exerciseIndex) => {
               const exerciseDone = exercise.sets.every(set => set.completed_at)
+              const progress = exercise.progress
+              const preferenceIsSaving = progress
+                ? savingPreferenceKey === exerciseKey(progress.exercise_name)
+                : false
+              const restOptions = Array.from(new Set([
+                45,
+                60,
+                75,
+                90,
+                120,
+                progress?.rest_seconds ?? 60,
+              ])).sort((left, right) => left - right)
+              const incrementOptions = Array.from(new Set([
+                '0.50',
+                '1.00',
+                '2.00',
+                progress ? Number(progress.increment_kg).toFixed(2) : '1.00',
+              ])).sort((left, right) => Number(left) - Number(right))
               return (
                 <article
                   key={exercise.id}
@@ -628,8 +751,82 @@ export default function WorkoutsPanel({
                         {exercise.planned_reps ? ` • ${exercise.planned_reps} reps` : ''}
                       </p>
                     </div>
-                    {exerciseDone && <CheckCircle2 size={20} aria-label="Exercício concluído" />}
-                  </div>
+                     {exerciseDone && <CheckCircle2 size={20} aria-label="Exercício concluído" />}
+                   </div>
+                  {progress && (
+                    <div className="guided-exercise-insights">
+                      <div className="guided-exercise-metrics">
+                        <span>
+                          <History size={14} aria-hidden="true" />
+                          <small>Última sessão</small>
+                          <strong>
+                            {progress.last_weight_kg === null
+                              ? 'Primeiro registro'
+                              : (
+                                  `${formatKg(progress.last_weight_kg)} kg × `
+                                  + `${progress.last_reps_completed ?? '—'} reps · `
+                                  + `${progress.last_completed_sets}/${progress.last_target_sets ?? '—'} séries`
+                                )}
+                          </strong>
+                        </span>
+                        <span>
+                          <Trophy size={14} aria-hidden="true" />
+                          <small>Recorde pessoal</small>
+                          <strong>
+                            {progress.personal_record_weight_kg === null
+                              ? 'Ainda sem recorde'
+                              : `${formatKg(progress.personal_record_weight_kg)} kg`}
+                          </strong>
+                        </span>
+                      </div>
+                      <p
+                        className={`guided-progression-hint is-${progress.suggestion_action}`}
+                      >
+                        <TrendingUp size={16} aria-hidden="true" />
+                        <span>{progress.suggestion_text}</span>
+                      </p>
+                      <div className="guided-exercise-preferences">
+                        <label>
+                          Descanso após a série
+                          <select
+                            value={progress.rest_seconds}
+                            onChange={event => void updateExercisePreference(
+                              progress,
+                              Number(event.target.value),
+                              Number(progress.increment_kg).toFixed(2),
+                            )}
+                            disabled={preferenceIsSaving}
+                          >
+                            {restOptions.map(seconds => (
+                              <option key={seconds} value={seconds}>{seconds}s</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Aumento sugerido
+                          <select
+                            value={Number(progress.increment_kg).toFixed(2)}
+                            onChange={event => void updateExercisePreference(
+                              progress,
+                              progress.rest_seconds,
+                              event.target.value,
+                            )}
+                            disabled={preferenceIsSaving}
+                          >
+                            {incrementOptions.map(increment => (
+                              <option key={increment} value={increment}>
+                                +{formatKg(increment)} kg
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {preferenceIsSaving && <small>Salvando…</small>}
+                      </div>
+                      <small className="guided-progression-disclaimer">
+                        Sugestão automática baseada apenas nos seus registros; não substitui orientação profissional.
+                      </small>
+                    </div>
+                  )}
                   <div className="guided-set-list">
                     <div className="guided-set-labels" aria-hidden="true">
                       <span>Série</span>
@@ -860,12 +1057,29 @@ export default function WorkoutsPanel({
                       <h3>{workout.title}</h3>
                       <div className="exercise-summary">
                         {workout.exercises.length > 0 ? (
-                          workout.exercises.map(exercise => (
-                            <p key={exercise.id}>
-                              <strong>{exercise.name}</strong>
-                              <small>{exercise.sets} × {exercise.reps}</small>
-                            </p>
-                          ))
+                          workout.exercises.map(exercise => {
+                            const progress = progressByExercise.get(
+                              exerciseKey(exercise.name),
+                            )
+                            return (
+                              <p key={exercise.id}>
+                                <strong>{exercise.name}</strong>
+                                <small>{exercise.sets} × {exercise.reps}</small>
+                                {progress?.last_weight_kg !== null
+                                  && progress?.last_weight_kg !== undefined
+                                  && (
+                                    <span className="template-exercise-progress">
+                                      Última {formatKg(progress.last_weight_kg)} kg
+                                      {progress.last_reps_completed !== null
+                                        ? ` × ${progress.last_reps_completed} reps`
+                                        : ''}
+                                      {' · '}
+                                      PR {formatKg(progress.personal_record_weight_kg)} kg
+                                    </span>
+                                  )}
+                              </p>
+                            )
+                          })
                         ) : (
                           <p className="tiny-note">Recuperação, sem treino guiado</p>
                         )}
@@ -935,6 +1149,67 @@ export default function WorkoutsPanel({
                 </span>
               </article>
             ))}
+          </div>
+        </section>
+      )}
+
+      {!loading && exerciseProgress.length > 0 && !activeSession && (
+        <section className="workout-exercise-progress-section">
+          <div className="workout-history-head">
+            <div>
+              <p className="section-label">Evolução por exercício</p>
+              <h3>Cargas, recordes e próximo passo</h3>
+            </div>
+            <TrendingUp size={20} aria-hidden="true" />
+          </div>
+          <div className="workout-exercise-progress-grid">
+            {exerciseProgress.map(progress => {
+              const maxWeight = Math.max(
+                1,
+                ...progress.evolution.map(point => Number(point.max_weight_kg)),
+              )
+              return (
+                <article key={exerciseKey(progress.exercise_name)}>
+                  <div className="workout-progress-card-head">
+                    <div>
+                      <strong>{progress.exercise_name}</strong>
+                      <small>
+                        Última {formatKg(progress.last_weight_kg)} kg
+                        {' · '}
+                        PR {formatKg(progress.personal_record_weight_kg)} kg
+                      </small>
+                    </div>
+                    <span title="Recorde pessoal">
+                      <Trophy size={15} aria-hidden="true" />
+                      {formatKg(progress.personal_record_weight_kg)}
+                    </span>
+                  </div>
+                  {progress.evolution.length > 0 && (
+                    <div
+                      className="workout-evolution-chart"
+                      role="img"
+                      aria-label={`Evolução de carga de ${progress.exercise_name}`}
+                    >
+                      {progress.evolution.map(point => (
+                        <span
+                          key={point.session_id}
+                          title={`${historyDate(point.completed_at)}: ${formatKg(point.max_weight_kg)} kg`}
+                          style={{
+                            height: `${Math.max(
+                              12,
+                              (Number(point.max_weight_kg) / maxWeight) * 100,
+                            )}%`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <p className={`workout-progress-next is-${progress.suggestion_action}`}>
+                    {progress.suggestion_text}
+                  </p>
+                </article>
+              )
+            })}
           </div>
         </section>
       )}

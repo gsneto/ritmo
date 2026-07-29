@@ -1,0 +1,549 @@
+.shopping-finance-snapshot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.shopping-balance-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.shopping-balance-row > span {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.shopping-balance-row strong {
+  color: #fff;
+  font-size: 1.02rem;
+}
+
+.shopping-balance-row .is-negative strong {
+  color: #ffb4b4;
+}
+
+.shopping-success {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--green) 28%, var(--line));
+  border-radius: 13px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.shopping-success button {
+  margin-left: auto;
+  color: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.shopping-create-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.shopping-money-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--control);
+}
+
+.shopping-money-field > span {
+  padding-left: 12px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.shopping-money-field input {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding-left: 7px;
+  font-weight: 800;
+}
+
+.shopping-repeat-toggle {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+  border-radius: 13px;
+  background: var(--accent-soft);
+  cursor: pointer;
+}
+
+.shopping-repeat-toggle > input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.shopping-repeat-toggle > span {
+  display: grid;
+  gap: 3px;
+}
+
+.shopping-repeat-toggle strong {
+  color: var(--text);
+  font-size: 0.84rem;
+}
+
+.shopping-repeat-toggle small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 550;
+  line-height: 1.4;
+}
+
+.shopping-plan-select small + small {
+  color: var(--accent);
+  font-weight: 750;
+}
+
+.shopping-session-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.shopping-category-chip,
+.shopping-repeat-chip {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.shopping-category-chip {
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+.shopping-repeat-chip {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.shopping-list-budget {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.shopping-list-budget > div {
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.shopping-list-budget span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.shopping-list-budget strong {
+  overflow-wrap: anywhere;
+  font-size: 0.94rem;
+}
+
+.shopping-list-budget .is-negative {
+  border-color: color-mix(in srgb, var(--red) 30%, var(--line));
+  background: var(--red-soft);
+}
+
+.shopping-list-budget .is-negative strong {
+  color: var(--red);
+}
+
+.shopping-add-item {
+  grid-template-columns: minmax(0, 1fr) 104px auto;
+}
+
+.shopping-quantity-field input {
+  text-align: center;
+  font-weight: 800;
+}
+
+.shopping-price-form {
+  grid-template-columns: 90px minmax(150px, 1fr) auto auto;
+}
+
+.shopping-price-quantity input {
+  text-align: center;
+  font-weight: 800;
+}
+
+.shopping-price-history {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--accent) 23%, var(--line));
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+section.shopping-price-history {
+  display: grid;
+  color: var(--text);
+}
+
+.shopping-price-history header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.shopping-price-history header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.shopping-price-history header span {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.shopping-price-history header button {
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.shopping-price-history > p {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.shopping-price-history > div {
+  display: grid;
+  gap: 6px;
+}
+
+.shopping-price-history article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+}
+
+.shopping-price-history article span {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.shopping-price-history article strong {
+  white-space: nowrap;
+  color: var(--accent);
+  font-size: 0.78rem;
+}
+
+.shopping-confirm-repeat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 11px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 0.77rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.shopping-history-controls {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.shopping-history-controls .ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 43px;
+}
+
+.shopping-budget-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+}
+
+.shopping-budget-panel > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.shopping-budget-panel > div > div {
+  display: grid;
+  gap: 3px;
+}
+
+.shopping-budget-panel h3 {
+  font-size: 1rem;
+}
+
+.shopping-budget-panel p:last-child {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.shopping-budget-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.shopping-budget-panel form {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.shopping-budget-panel form > button {
+  display: inline-flex;
+  min-height: 43px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.shopping-history-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.shopping-history-summary article:first-child {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.shopping-history-summary article:first-child span {
+  color: var(--muted);
+}
+
+.shopping-history-summary article.is-positive strong,
+.shopping-history-summary article.is-positive small {
+  color: var(--green);
+}
+
+.shopping-history-summary article.is-negative strong,
+.shopping-history-summary article.is-negative small {
+  color: var(--red);
+}
+
+.shopping-history-summary small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.shopping-category-summary {
+  display: grid;
+  gap: 13px;
+}
+
+.shopping-category-summary > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.shopping-category-summary > div:last-child {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.shopping-category-summary article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-soft);
+}
+
+.shopping-category-summary article span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.shopping-category-summary article strong {
+  font-size: 0.84rem;
+}
+
+.shopping-receipt > div > span {
+  display: grid;
+  gap: 2px;
+}
+
+.shopping-receipt > div small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+@media (max-width: 900px) {
+  .shopping-history-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .shopping-budget-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .shopping-budget-panel form {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .shopping-create-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .shopping-add-item {
+    grid-template-columns: minmax(0, 1fr) 92px;
+  }
+
+  .shopping-add-item > button {
+    grid-column: 1 / -1;
+  }
+
+  .shopping-price-form {
+    grid-template-columns: 82px minmax(0, 1fr);
+  }
+
+  .shopping-price-form > button {
+    width: 100%;
+  }
+
+  .shopping-price-form > small {
+    grid-column: 1 / -1;
+  }
+
+  .shopping-history-head {
+    align-items: stretch;
+  }
+
+  .shopping-history-controls {
+    justify-content: stretch;
+  }
+
+  .shopping-history-controls label {
+    flex: 1;
+  }
+
+  .shopping-history-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .shopping-history-summary article:first-child {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .shopping-balance-row,
+  .shopping-list-budget {
+    grid-template-columns: 1fr;
+  }
+
+  .shopping-balance-row > span {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .shopping-create-form {
+    grid-template-columns: 1fr;
+  }
+
+  .shopping-repeat-toggle {
+    grid-column: auto;
+  }
+
+  .shopping-history-controls {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .shopping-history-controls .ghost-button {
+    width: 100%;
+  }
+
+  .shopping-budget-panel > div {
+    align-items: flex-start;
+  }
+
+  .shopping-budget-panel form {
+    grid-template-columns: 1fr;
+  }
+
+  .shopping-budget-panel form > button {
+    width: 100%;
+  }
+
+  .shopping-price-history article {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .shopping-price-history article strong {
+    white-space: normal;
+  }
+}

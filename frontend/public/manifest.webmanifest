@@ -1,0 +1,55 @@
+{
+  "id": "/",
+  "name": "Ritmo — Assistente pessoal",
+  "short_name": "Ritmo",
+  "description": "Hábitos, tarefas, compras, treinos, foco e leitura em um só lugar.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/today",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#090807",
+  "theme_color": "#c92520",
+  "categories": ["productivity", "lifestyle", "finance", "health"],
+  "icons": [
+    {
+      "src": "/ritmo-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/ritmo-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/ritmo-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Meu dia",
+      "short_name": "Hoje",
+      "url": "/today",
+      "icons": [{ "src": "/ritmo-icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Nova tarefa",
+      "short_name": "Tarefa",
+      "url": "/tasks?create=1",
+      "icons": [{ "src": "/ritmo-icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Compras",
+      "short_name": "Compras",
+      "url": "/shopping",
+      "icons": [{ "src": "/ritmo-icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

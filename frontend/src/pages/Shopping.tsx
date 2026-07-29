@@ -5,24 +5,34 @@ import {
   Check,
   ChevronDown,
   CircleDollarSign,
+  Download,
+  History,
   ListPlus,
   Pencil,
   Plus,
   ReceiptText,
+  Repeat2,
   RotateCcw,
+  Save,
   ShoppingBasket,
   Sparkles,
+  Tags,
   Trash2,
+  TrendingDown,
+  TrendingUp,
   WalletCards,
 } from 'lucide-react'
 import { apiRoutes } from '../services/api'
 import type {
   MonthlyExpenseSummary,
+  ShoppingCategory,
   ShoppingItem,
   ShoppingKind,
   ShoppingList,
+  ShoppingPriceHistory,
 } from '../services/api'
 import { toLocalDateValue } from '../utils/date'
+import '../styles/finance-upgrade.css'
 
 
 interface ShoppingProps {
@@ -36,6 +46,20 @@ const KIND_LABELS: Record<ShoppingKind, string> = {
   weekly: 'Semanal',
   one_time: 'Avulsa',
 }
+
+const CATEGORY_LABELS: Record<ShoppingCategory, string> = {
+  groceries: 'Mercado',
+  child: 'Filha e fraldas',
+  home: 'Casa',
+  personal: 'Pessoal',
+  health: 'Saúde',
+  transport: 'Transporte',
+  other: 'Outro',
+}
+
+const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS) as Array<
+  [ShoppingCategory, string]
+>
 
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -93,6 +117,74 @@ function checkedItemCount(shoppingList: ShoppingList): number {
   return shoppingList.items.filter(item => item.checked_at).length
 }
 
+function normalizeShoppingItem(item: ShoppingItem): ShoppingItem {
+  const quantity = item.quantity || 1
+  return {
+    ...item,
+    quantity,
+    unit_price_cents:
+      item.unit_price_cents
+      ?? (item.price_cents === null ? null : Math.round(item.price_cents / quantity)),
+  }
+}
+
+function normalizeShoppingList(shoppingList: ShoppingList): ShoppingList {
+  return {
+    ...shoppingList,
+    category: shoppingList.category || 'other',
+    budget_cents: shoppingList.budget_cents ?? null,
+    repeat_enabled: shoppingList.repeat_enabled ?? false,
+    next_list_id: shoppingList.next_list_id ?? null,
+    items: (shoppingList.items || []).map(normalizeShoppingItem),
+  }
+}
+
+function normalizeMonthlySummary(
+  summary: MonthlyExpenseSummary,
+): MonthlyExpenseSummary {
+  const plannedLists = summary.planned_lists_cents || 0
+  const budget = summary.budget_cents || 0
+  const planned = summary.planned_cents ?? (budget || plannedLists)
+  return {
+    ...summary,
+    budget_cents: budget,
+    planned_lists_cents: plannedLists,
+    planned_cents: planned,
+    balance_cents: summary.balance_cents ?? (planned - summary.total_cents),
+    previous_month_total_cents: summary.previous_month_total_cents || 0,
+    change_cents: summary.change_cents ?? summary.total_cents,
+    change_percent: summary.change_percent ?? null,
+    category_totals: summary.category_totals || [],
+    lists: (summary.lists || []).map(normalizeShoppingList),
+  }
+}
+
+function csvCell(value: string | number): string {
+  const text = String(value)
+  const safeText = /^[=+\-@]/.test(text) ? `'${text}` : text
+  return `"${safeText.replace(/"/g, '""')}"`
+}
+
+export function buildShoppingCsv(summary: MonthlyExpenseSummary): string {
+  const rows = [
+    ['Data', 'Compra', 'Categoria', 'Item', 'Quantidade', 'Preço unitário', 'Total'],
+  ]
+  for (const shoppingList of summary.lists) {
+    for (const item of shoppingList.items.filter(entry => entry.checked_at)) {
+      rows.push([
+        shoppingList.completed_on || shoppingList.planned_date,
+        shoppingList.name,
+        CATEGORY_LABELS[shoppingList.category],
+        item.name,
+        String(item.quantity),
+        ((item.unit_price_cents || 0) / 100).toFixed(2).replace('.', ','),
+        ((item.price_cents || 0) / 100).toFixed(2).replace('.', ','),
+      ].map(String))
+    }
+  }
+  return `\uFEFF${rows.map(row => row.map(csvCell).join(';')).join('\r\n')}`
+}
+
 export default function Shopping({ userId }: ShoppingProps) {
   const currentMonth = toLocalDateValue().slice(0, 7)
   const [view, setView] = useState<ShoppingView>('active')
@@ -106,10 +198,21 @@ export default function Shopping({ userId }: ShoppingProps) {
   const [newListName, setNewListName] = useState('')
   const [newListDate, setNewListDate] = useState(toLocalDateValue())
   const [newListKind, setNewListKind] = useState<ShoppingKind>('monthly')
+  const [newListCategory, setNewListCategory] =
+    useState<ShoppingCategory>('groceries')
+  const [newListBudget, setNewListBudget] = useState('')
+  const [newListRepeat, setNewListRepeat] = useState(true)
   const [newItemName, setNewItemName] = useState('')
+  const [newItemQuantity, setNewItemQuantity] = useState('1')
   const [priceItemId, setPriceItemId] = useState<number | null>(null)
   const [priceDraft, setPriceDraft] = useState('')
+  const [priceQuantityDraft, setPriceQuantityDraft] = useState('1')
   const [priceError, setPriceError] = useState('')
+  const [budgetDraft, setBudgetDraft] = useState('')
+  const [budgetSaving, setBudgetSaving] = useState(false)
+  const [priceHistory, setPriceHistory] = useState<ShoppingPriceHistory | null>(null)
+  const [priceHistoryLoading, setPriceHistoryLoading] = useState(false)
+  const [recurrenceNotice, setRecurrenceNotice] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [busyItemId, setBusyItemId] = useState<number | null>(null)
@@ -142,7 +245,13 @@ export default function Shopping({ userId }: ShoppingProps) {
     setShowCreateForm(false)
     setPriceItemId(null)
     setPriceDraft('')
+    setPriceQuantityDraft('1')
     setPriceError('')
+    setBudgetDraft('')
+    setBudgetSaving(false)
+    setPriceHistory(null)
+    setPriceHistoryLoading(false)
+    setRecurrenceNotice('')
     setSaving(false)
     setBusyItemId(null)
     setFinalizing(false)
@@ -208,13 +317,20 @@ export default function Shopping({ userId }: ShoppingProps) {
         apiRoutes.getShoppingHistory(userId, currentMonth),
       ])
       if (requestId !== initialRequestIdRef.current) return
-      setLists(activeResponse.data)
-      setHistory(historyResponse.data)
-      setCurrentMonthSummary(historyResponse.data)
+      const normalizedLists = activeResponse.data.map(normalizeShoppingList)
+      const normalizedHistory = normalizeMonthlySummary(historyResponse.data)
+      setLists(normalizedLists)
+      setHistory(normalizedHistory)
+      setCurrentMonthSummary(normalizedHistory)
+      setBudgetDraft(
+        normalizedHistory.budget_cents > 0
+          ? (normalizedHistory.budget_cents / 100).toFixed(2).replace('.', ',')
+          : '',
+      )
       setSelectedListId(current =>
-        activeResponse.data.some(item => item.id === current)
+        normalizedLists.some(item => item.id === current)
           ? current
-          : activeResponse.data[0]?.id || null,
+          : normalizedLists[0]?.id || null,
       )
     } catch (loadError) {
       if (requestId !== initialRequestIdRef.current) return
@@ -229,13 +345,14 @@ export default function Shopping({ userId }: ShoppingProps) {
 
   async function loadActiveLists(preferredId?: number) {
     const response = await apiRoutes.getShoppingLists(userId, false)
-    setLists(response.data)
+    const normalizedLists = response.data.map(normalizeShoppingList)
+    setLists(normalizedLists)
     setSelectedListId(current => {
-      if (preferredId && response.data.some(item => item.id === preferredId)) {
+      if (preferredId && normalizedLists.some(item => item.id === preferredId)) {
         return preferredId
       }
-      if (response.data.some(item => item.id === current)) return current
-      return response.data[0]?.id || null
+      if (normalizedLists.some(item => item.id === current)) return current
+      return normalizedLists[0]?.id || null
     })
   }
 
@@ -246,9 +363,15 @@ export default function Shopping({ userId }: ShoppingProps) {
     try {
       const response = await apiRoutes.getShoppingHistory(userId, month)
       if (requestId !== historyRequestIdRef.current) return
-      setHistory(response.data)
+      const normalizedHistory = normalizeMonthlySummary(response.data)
+      setHistory(normalizedHistory)
+      setBudgetDraft(
+        normalizedHistory.budget_cents > 0
+          ? (normalizedHistory.budget_cents / 100).toFixed(2).replace('.', ',')
+          : '',
+      )
       if (month === currentMonth) {
-        setCurrentMonthSummary(response.data)
+        setCurrentMonthSummary(normalizedHistory)
       }
     } catch (historyError) {
       if (requestId !== historyRequestIdRef.current) return
@@ -262,12 +385,13 @@ export default function Shopping({ userId }: ShoppingProps) {
   }
 
   function updateItemInState(updatedItem: ShoppingItem) {
+    const normalizedItem = normalizeShoppingItem(updatedItem)
     setLists(current => current.map(shoppingList => (
-      shoppingList.id === updatedItem.shopping_list_id
+      shoppingList.id === normalizedItem.shopping_list_id
         ? {
             ...shoppingList,
             items: shoppingList.items.map(item =>
-              item.id === updatedItem.id ? updatedItem : item
+              item.id === normalizedItem.id ? normalizedItem : item
             ),
           }
         : shoppingList
@@ -283,6 +407,13 @@ export default function Shopping({ userId }: ShoppingProps) {
       typeof submittedDate === 'string' && submittedDate
         ? submittedDate
         : newListDate
+    const budgetCents = newListBudget.trim()
+      ? parsePriceToCents(newListBudget)
+      : null
+    if (newListBudget.trim() && budgetCents === null) {
+      setError('Digite um orçamento válido para esta compra.')
+      return
+    }
 
     setSaving(true)
     setError('')
@@ -290,13 +421,18 @@ export default function Shopping({ userId }: ShoppingProps) {
       const response = await apiRoutes.createShoppingList(userId, {
         name: newListName.trim(),
         kind: newListKind,
+        category: newListCategory,
         planned_date: plannedDate,
+        budget_cents: budgetCents,
+        repeat_enabled: newListKind !== 'one_time' && newListRepeat,
       })
-      setLists(current => [...current, response.data].sort(
+      const createdList = normalizeShoppingList(response.data)
+      setLists(current => [...current, createdList].sort(
         (a, b) => a.planned_date.localeCompare(b.planned_date),
       ))
-      setSelectedListId(response.data.id)
+      setSelectedListId(createdList.id)
       setNewListName('')
+      setNewListBudget('')
       setShowCreateForm(false)
     } catch (createError) {
       console.error('Failed to create shopping list:', createError)
@@ -325,6 +461,11 @@ export default function Shopping({ userId }: ShoppingProps) {
     event.preventDefault()
     if (!selectedList || !newItemName.trim()) return
     if (saving || itemOperationRef.current !== null || finalizing) return
+    const quantity = Number(newItemQuantity)
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999) {
+      setError('A quantidade deve ser um número entre 1 e 999.')
+      return
+    }
 
     setSaving(true)
     setError('')
@@ -332,13 +473,21 @@ export default function Shopping({ userId }: ShoppingProps) {
       const response = await apiRoutes.addShoppingItem(
         selectedList.id,
         newItemName.trim(),
+        quantity,
       )
       setLists(current => current.map(shoppingList => (
         shoppingList.id === selectedList.id
-          ? { ...shoppingList, items: [...shoppingList.items, response.data] }
+          ? {
+              ...shoppingList,
+              items: [
+                ...shoppingList.items,
+                normalizeShoppingItem(response.data),
+              ],
+            }
           : shoppingList
       )))
       setNewItemName('')
+      setNewItemQuantity('1')
     } catch (itemError) {
       console.error('Failed to create shopping item:', itemError)
       setError('Não foi possível adicionar este item.')
@@ -351,10 +500,11 @@ export default function Shopping({ userId }: ShoppingProps) {
     if (itemOperationRef.current !== null || saving || finalizing) return
     setPriceItemId(item.id)
     setPriceDraft(
-      item.price_cents === null
+      item.unit_price_cents === null
         ? ''
-        : (item.price_cents / 100).toFixed(2).replace('.', ','),
+        : (item.unit_price_cents / 100).toFixed(2).replace('.', ','),
     )
+    setPriceQuantityDraft(String(item.quantity))
     setPriceError('')
   }
 
@@ -366,6 +516,11 @@ export default function Shopping({ userId }: ShoppingProps) {
       setPriceError('Digite um preço válido, por exemplo 12,90.')
       return
     }
+    const quantity = Number(priceQuantityDraft)
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999) {
+      setPriceError('A quantidade deve ficar entre 1 e 999.')
+      return
+    }
 
     itemOperationRef.current = item.id
     setBusyItemId(item.id)
@@ -373,12 +528,14 @@ export default function Shopping({ userId }: ShoppingProps) {
     try {
       const response = await apiRoutes.checkShoppingItem(item.id, {
         checked: true,
-        price_cents: priceCents,
+        quantity,
+        unit_price_cents: priceCents,
       })
       updateItemInState(response.data)
       if (priceItemId === item.id) {
         setPriceItemId(null)
         setPriceDraft('')
+        setPriceQuantityDraft('1')
       }
     } catch (priceSaveError) {
       console.error('Failed to save item price:', priceSaveError)
@@ -438,6 +595,55 @@ export default function Shopping({ userId }: ShoppingProps) {
     }
   }
 
+  async function saveMonthlyBudget(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const cents = parsePriceToCents(budgetDraft)
+    if (cents === null) {
+      setError('Digite um orçamento mensal válido.')
+      return
+    }
+    setBudgetSaving(true)
+    setError('')
+    try {
+      await apiRoutes.setShoppingBudget(userId, selectedMonth, cents)
+      await loadHistory(selectedMonth)
+    } catch (budgetError) {
+      console.error('Failed to save shopping budget:', budgetError)
+      setError('Não foi possível salvar o orçamento deste mês.')
+    } finally {
+      setBudgetSaving(false)
+    }
+  }
+
+  async function showPriceHistory(item: ShoppingItem) {
+    if (priceHistoryLoading) return
+    setPriceHistoryLoading(true)
+    setError('')
+    try {
+      const response = await apiRoutes.getShoppingPriceHistory(userId, item.name)
+      setPriceHistory(response.data)
+    } catch (historyError) {
+      console.error('Failed to load item price history:', historyError)
+      setError('Não foi possível consultar o histórico de preço deste item.')
+    } finally {
+      setPriceHistoryLoading(false)
+    }
+  }
+
+  function exportMonthlyCsv(summary: MonthlyExpenseSummary) {
+    const blob = new Blob([buildShoppingCsv(summary)], {
+      type: 'text/csv;charset=utf-8',
+    })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `gastos-${summary.month}.csv`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+  }
+
   function requestFinish() {
     if (!selectedList) return
     if (saving || busyItemId !== null || priceItemId !== null) {
@@ -461,11 +667,20 @@ export default function Shopping({ userId }: ShoppingProps) {
     try {
       const response = await apiRoutes.finishShoppingList(selectedList.id)
       const completedMonth = (response.data.completed_on || toLocalDateValue()).slice(0, 7)
-      setLists(current => current.filter(item => item.id !== selectedList.id))
-      setSelectedListId(current => {
-        if (current !== selectedList.id) return current
-        return lists.find(item => item.id !== selectedList.id)?.id || null
-      })
+      if (response.data.next_list_id) {
+        setRecurrenceNotice(
+          `A próxima lista ${KIND_LABELS[response.data.kind].toLowerCase()} já foi criada.`,
+        )
+      }
+      if (response.data.next_list_id) {
+        await loadActiveLists(response.data.next_list_id)
+      } else {
+        setLists(current => current.filter(item => item.id !== selectedList.id))
+        setSelectedListId(current => {
+          if (current !== selectedList.id) return current
+          return lists.find(item => item.id !== selectedList.id)?.id || null
+        })
+      }
       setSelectedMonth(completedMonth)
       setHistory(null)
       setHistoryLoading(true)
@@ -503,8 +718,11 @@ export default function Shopping({ userId }: ShoppingProps) {
     history?.month === selectedMonth ? history : null
   const monthTotal = currentMonthSummary?.total_cents || 0
   const monthPurchaseCount = currentMonthSummary?.purchase_count || 0
+  const monthPlanned = currentMonthSummary?.planned_cents || 0
+  const monthBalance = currentMonthSummary?.balance_cents || 0
   const hasPendingMutation =
     saving
+    || budgetSaving
     || busyItemId !== null
     || finalizing
     || reopeningListId !== null
@@ -543,18 +761,30 @@ export default function Shopping({ userId }: ShoppingProps) {
             Nova compra
           </button>
         </div>
-        <article className="shopping-month-total">
-          <span className="shopping-month-icon" aria-hidden="true">
-            <WalletCards size={23} />
-          </span>
-          <div>
-            <small>Gastos em {formatMonth(currentMonth)}</small>
-            <strong>{formatCurrency(monthTotal)}</strong>
+        <div className="shopping-finance-snapshot">
+          <article className="shopping-month-total">
+            <span className="shopping-month-icon" aria-hidden="true">
+              <WalletCards size={23} />
+            </span>
+            <div>
+              <small>Gasto em {formatMonth(currentMonth)}</small>
+              <strong>{formatCurrency(monthTotal)}</strong>
+              <span>
+                {monthPurchaseCount} {monthPurchaseCount === 1 ? 'compra finalizada' : 'compras finalizadas'}
+              </span>
+            </div>
+          </article>
+          <div className="shopping-balance-row">
             <span>
-              {monthPurchaseCount} {monthPurchaseCount === 1 ? 'compra finalizada' : 'compras finalizadas'}
+              Planejado
+              <strong>{formatCurrency(monthPlanned)}</strong>
+            </span>
+            <span className={monthBalance < 0 ? 'is-negative' : ''}>
+              Saldo
+              <strong>{formatCurrency(monthBalance)}</strong>
             </span>
           </div>
-        </article>
+        </div>
       </section>
 
       <div className="shopping-view-switch" role="tablist" aria-label="Seções de compras">
@@ -590,6 +820,14 @@ export default function Shopping({ userId }: ShoppingProps) {
         </div>
       )}
 
+      {recurrenceNotice && (
+        <div className="shopping-success" role="status">
+          <Repeat2 size={17} aria-hidden="true" />
+          {recurrenceNotice}
+          <button type="button" onClick={() => setRecurrenceNotice('')}>Fechar</button>
+        </div>
+      )}
+
       {confirmingFinish && selectedList && (
         <div className="shopping-confirm-backdrop" role="presentation">
           <section
@@ -616,6 +854,13 @@ export default function Shopping({ userId }: ShoppingProps) {
               <span>Total que entrará no histórico</span>
               <strong>{formatCurrency(listRunningTotal(selectedList))}</strong>
             </div>
+            {selectedList.repeat_enabled && (
+              <p className="shopping-confirm-repeat">
+                <Repeat2 size={16} aria-hidden="true" />
+                A próxima lista {KIND_LABELS[selectedList.kind].toLowerCase()} será
+                criada sem preços e sem itens marcados.
+              </p>
+            )}
             {finishError && (
               <p className="shopping-confirm-error" role="alert">
                 {finishError}
@@ -684,7 +929,11 @@ export default function Shopping({ userId }: ShoppingProps) {
                   Tipo de compra
                   <select
                     value={newListKind}
-                    onChange={event => setNewListKind(event.target.value as ShoppingKind)}
+                    onChange={event => {
+                      const kind = event.target.value as ShoppingKind
+                      setNewListKind(kind)
+                      if (kind === 'one_time') setNewListRepeat(false)
+                    }}
                     disabled={saving}
                   >
                     <option value="monthly">Mensal</option>
@@ -692,6 +941,51 @@ export default function Shopping({ userId }: ShoppingProps) {
                     <option value="one_time">Avulsa</option>
                   </select>
                 </label>
+                <label>
+                  Categoria
+                  <select
+                    value={newListCategory}
+                    onChange={event =>
+                      setNewListCategory(event.target.value as ShoppingCategory)
+                    }
+                    disabled={saving}
+                  >
+                    {CATEGORY_OPTIONS.map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Limite desta compra
+                  <span className="shopping-money-field">
+                    <span>R$</span>
+                    <input
+                      value={newListBudget}
+                      onChange={event => setNewListBudget(event.target.value)}
+                      inputMode="decimal"
+                      placeholder="Opcional"
+                      aria-label="Limite desta compra"
+                      disabled={saving}
+                    />
+                  </span>
+                </label>
+                {newListKind !== 'one_time' && (
+                  <label className="shopping-repeat-toggle">
+                    <input
+                      type="checkbox"
+                      checked={newListRepeat}
+                      onChange={event => setNewListRepeat(event.target.checked)}
+                      disabled={saving}
+                    />
+                    <span>
+                      <strong>Criar a próxima automaticamente</strong>
+                      <small>
+                        Ao finalizar, itens e quantidades serão preparados na
+                        próxima semana ou mês.
+                      </small>
+                    </span>
+                  </label>
+                )}
                 <div className="shopping-form-actions">
                   <button className="primary-button" type="submit" disabled={saving}>
                     {saving ? 'Criando...' : 'Criar lista'}
@@ -761,8 +1055,14 @@ export default function Shopping({ userId }: ShoppingProps) {
                           </span>
                           <strong>{shoppingList.name}</strong>
                           <small>
-                            {KIND_LABELS[shoppingList.kind]} · {checked} de {shoppingList.items.length} itens
+                            {CATEGORY_LABELS[shoppingList.category]} · {checked} de {shoppingList.items.length} itens
                           </small>
+                          {shoppingList.budget_cents !== null && (
+                            <small>
+                              Limite {formatCurrency(shoppingList.budget_cents)}
+                              {shoppingList.repeat_enabled ? ' · automática' : ''}
+                            </small>
+                          )}
                         </button>
                         <button
                           className="shopping-plan-delete"
@@ -785,7 +1085,19 @@ export default function Shopping({ userId }: ShoppingProps) {
                 <>
                   <header className="shopping-session-head">
                     <div>
-                      <span className="shopping-kind-chip">{KIND_LABELS[selectedList.kind]}</span>
+                      <div className="shopping-session-chips">
+                        <span className="shopping-kind-chip">{KIND_LABELS[selectedList.kind]}</span>
+                        <span className="shopping-category-chip">
+                          <Tags size={13} aria-hidden="true" />
+                          {CATEGORY_LABELS[selectedList.category]}
+                        </span>
+                        {selectedList.repeat_enabled && (
+                          <span className="shopping-repeat-chip">
+                            <Repeat2 size={13} aria-hidden="true" />
+                            Repete automaticamente
+                          </span>
+                        )}
+                      </div>
                       <h2>{selectedList.name}</h2>
                       <p>
                         <CalendarDays size={15} aria-hidden="true" />
@@ -798,6 +1110,32 @@ export default function Shopping({ userId }: ShoppingProps) {
                     </div>
                   </header>
 
+                  {selectedList.budget_cents !== null && (
+                    <div className="shopping-list-budget">
+                      <div>
+                        <span>Gasto da lista</span>
+                        <strong>{formatCurrency(listRunningTotal(selectedList))}</strong>
+                      </div>
+                      <div>
+                        <span>Limite</span>
+                        <strong>{formatCurrency(selectedList.budget_cents)}</strong>
+                      </div>
+                      <div className={
+                        listRunningTotal(selectedList) > selectedList.budget_cents
+                          ? 'is-negative'
+                          : ''
+                      }>
+                        <span>Disponível</span>
+                        <strong>
+                          {formatCurrency(
+                            selectedList.budget_cents
+                            - listRunningTotal(selectedList),
+                          )}
+                        </strong>
+                      </div>
+                    </div>
+                  )}
+
                   <form className="shopping-add-item" onSubmit={addItem}>
                     <label>
                       <span>Adicionar à lista</span>
@@ -806,6 +1144,20 @@ export default function Shopping({ userId }: ShoppingProps) {
                         onChange={event => setNewItemName(event.target.value)}
                         placeholder="Ex: Arroz, leite, pacote de fraldas"
                         maxLength={200}
+                        required
+                        disabled={hasPendingMutation}
+                      />
+                    </label>
+                    <label className="shopping-quantity-field">
+                      <span>Quantidade</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="999"
+                        step="1"
+                        value={newItemQuantity}
+                        onChange={event => setNewItemQuantity(event.target.value)}
+                        aria-label="Quantidade do novo item"
                         required
                         disabled={hasPendingMutation}
                       />
@@ -842,9 +1194,16 @@ export default function Shopping({ userId }: ShoppingProps) {
                             <div className="shopping-item-copy">
                               <strong>{item.name}</strong>
                               {checked ? (
-                                <span>{formatCurrency(item.price_cents || 0)}</span>
+                                <span>
+                                  {item.quantity} × {formatCurrency(item.unit_price_cents || 0)}
+                                  {' = '}
+                                  {formatCurrency(item.price_cents || 0)}
+                                </span>
                               ) : (
-                                <span>Ainda não pego</span>
+                                <span>
+                                  {item.quantity} {item.quantity === 1 ? 'unidade' : 'unidades'}
+                                  {' · ainda não pego'}
+                                </span>
                               )}
                             </div>
 
@@ -883,6 +1242,15 @@ export default function Shopping({ userId }: ShoppingProps) {
                                   </button>
                                 )}
                                 <button
+                                  className="shopping-mini-action"
+                                  type="button"
+                                  onClick={() => void showPriceHistory(item)}
+                                  aria-label={`Histórico de preço de ${item.name}`}
+                                  disabled={priceHistoryLoading}
+                                >
+                                  <History size={15} aria-hidden="true" />
+                                </button>
+                                <button
                                   className="shopping-mini-action danger-button"
                                   type="button"
                                   onClick={() => void deleteItem(item)}
@@ -899,8 +1267,24 @@ export default function Shopping({ userId }: ShoppingProps) {
                                 className="shopping-price-form"
                                 onSubmit={event => void saveItemPrice(event, item)}
                               >
+                                <label className="shopping-price-quantity">
+                                  <span>Quantidade</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="999"
+                                    step="1"
+                                    value={priceQuantityDraft}
+                                    onChange={event =>
+                                      setPriceQuantityDraft(event.target.value)
+                                    }
+                                    aria-label={`Quantidade de ${item.name}`}
+                                    required
+                                    disabled={busyItemId === item.id}
+                                  />
+                                </label>
                                 <label>
-                                  <span>Preço pago</span>
+                                  <span>Preço por unidade</span>
                                   <div className="shopping-price-input">
                                     <span>R$</span>
                                     <input
@@ -941,6 +1325,48 @@ export default function Shopping({ userId }: ShoppingProps) {
                       })
                     )}
                   </div>
+
+                  {priceHistoryLoading && (
+                    <div className="shopping-price-history" role="status">
+                      <History size={18} aria-hidden="true" />
+                      Consultando preços anteriores...
+                    </div>
+                  )}
+                  {priceHistory && !priceHistoryLoading && (
+                    <section className="shopping-price-history">
+                      <header>
+                        <div>
+                          <span>Histórico de preço</span>
+                          <strong>{priceHistory.item_name}</strong>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPriceHistory(null)}
+                          aria-label="Fechar histórico de preço"
+                        >
+                          Fechar
+                        </button>
+                      </header>
+                      {priceHistory.entries.length === 0 ? (
+                        <p>Este será o primeiro preço registrado para este item.</p>
+                      ) : (
+                        <div>
+                          {priceHistory.entries.map(entry => (
+                            <article key={`${entry.item_id}-${entry.purchased_on}`}>
+                              <span>
+                                {formatDate(entry.purchased_on)}
+                                {' · '}
+                                {entry.list_name}
+                              </span>
+                              <strong>
+                                {formatCurrency(entry.unit_price_cents)} por unidade
+                              </strong>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )}
 
                   <div className="shopping-total-bar">
                     <div>
@@ -983,42 +1409,142 @@ export default function Shopping({ userId }: ShoppingProps) {
               <h2>Histórico mensal</h2>
               <p>Somente compras finalizadas entram neste total.</p>
             </div>
-            <label>
-              Mês
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={event => setSelectedMonth(event.target.value)}
-              />
-            </label>
+            <div className="shopping-history-controls">
+              <label>
+                Mês
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={event => setSelectedMonth(event.target.value)}
+                />
+              </label>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => visibleHistory && exportMonthlyCsv(visibleHistory)}
+                disabled={!visibleHistory || visibleHistory.lists.length === 0}
+              >
+                <Download size={16} aria-hidden="true" />
+                Exportar CSV
+              </button>
+            </div>
           </div>
+
+          <section className="panel shopping-budget-panel">
+            <div>
+              <span className="shopping-budget-icon" aria-hidden="true">
+                <WalletCards size={20} />
+              </span>
+              <div>
+                <p className="section-label">Orçamento mensal</p>
+                <h3>Quanto você pode gastar em {formatMonth(selectedMonth)}?</h3>
+                <p>Este valor vira seu planejado e calcula o saldo disponível.</p>
+              </div>
+            </div>
+            <form onSubmit={saveMonthlyBudget}>
+              <label>
+                Limite do mês
+                <span className="shopping-money-field">
+                  <span>R$</span>
+                  <input
+                    value={budgetDraft}
+                    onChange={event => setBudgetDraft(event.target.value)}
+                    inputMode="decimal"
+                    placeholder="Ex: 1.500,00"
+                    aria-label={`Orçamento de ${formatMonth(selectedMonth)}`}
+                    required
+                    disabled={budgetSaving || historyLoading}
+                  />
+                </span>
+              </label>
+              <button
+                className="primary-button"
+                type="submit"
+                disabled={budgetSaving || historyLoading}
+              >
+                <Save size={16} aria-hidden="true" />
+                {budgetSaving ? 'Salvando...' : 'Salvar orçamento'}
+              </button>
+            </form>
+          </section>
 
           <div className="shopping-history-summary">
             <article>
-              <span>Total do mês</span>
+              <span>Planejado</span>
+              <strong>
+                {historyLoading || !visibleHistory
+                  ? '—'
+                  : formatCurrency(visibleHistory.planned_cents)}
+              </strong>
+            </article>
+            <article>
+              <span>Gasto</span>
               <strong>
                 {historyLoading || !visibleHistory
                   ? '—'
                   : formatCurrency(visibleHistory.total_cents)}
               </strong>
             </article>
-            <article>
-              <span>Compras</span>
+            <article className={
+              visibleHistory && visibleHistory.balance_cents < 0
+                ? 'is-negative'
+                : 'is-positive'
+            }>
+              <span>Saldo do mês</span>
               <strong>
                 {historyLoading || !visibleHistory
                   ? '—'
-                  : visibleHistory.purchase_count}
+                  : formatCurrency(visibleHistory.balance_cents)}
               </strong>
             </article>
             <article>
-              <span>Média por compra</span>
+              <span>Mês anterior</span>
               <strong>
                 {historyLoading || !visibleHistory
                   ? '—'
-                  : formatCurrency(visibleHistory.average_cents)}
+                  : formatCurrency(visibleHistory.previous_month_total_cents)}
               </strong>
+            </article>
+            <article className={
+              visibleHistory && visibleHistory.change_cents > 0
+                ? 'is-negative'
+                : 'is-positive'
+            }>
+              <span>Comparação</span>
+              <strong>
+                {historyLoading || !visibleHistory
+                  ? '—'
+                  : visibleHistory.change_percent === null
+                    ? 'Sem base'
+                    : `${Math.abs(visibleHistory.change_percent).toLocaleString('pt-BR')}%`}
+              </strong>
+              {visibleHistory && visibleHistory.change_percent !== null && (
+                <small>
+                  {visibleHistory.change_cents > 0
+                    ? <TrendingUp size={14} aria-hidden="true" />
+                    : <TrendingDown size={14} aria-hidden="true" />}
+                  {visibleHistory.change_cents > 0 ? 'a mais' : 'a menos'}
+                </small>
+              )}
             </article>
           </div>
+
+          {visibleHistory && visibleHistory.category_totals.length > 0 && (
+            <section className="panel shopping-category-summary">
+              <div>
+                <p className="section-label">Por categoria</p>
+                <h3>Onde o dinheiro foi usado</h3>
+              </div>
+              <div>
+                {visibleHistory.category_totals.map(category => (
+                  <article key={category.category}>
+                    <span>{CATEGORY_LABELS[category.category]}</span>
+                    <strong>{formatCurrency(category.total_cents)}</strong>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
 
           <div className="shopping-history-list">
             {historyLoading || !visibleHistory ? (
@@ -1045,7 +1571,7 @@ export default function Shopping({ userId }: ShoppingProps) {
                       <small>
                         {formatDate(shoppingList.completed_on || shoppingList.planned_date)}
                         {' · '}
-                        {KIND_LABELS[shoppingList.kind]}
+                        {CATEGORY_LABELS[shoppingList.category]}
                       </small>
                     </span>
                     <strong>{formatCurrency(shoppingList.total_cents)}</strong>
@@ -1054,7 +1580,14 @@ export default function Shopping({ userId }: ShoppingProps) {
                   <div className="shopping-receipt">
                     {shoppingList.items.map(item => (
                       <div key={item.id} className={item.checked_at ? '' : 'skipped'}>
-                        <span>{item.name}</span>
+                        <span>
+                          {item.name}
+                          {item.checked_at && (
+                            <small>
+                              {item.quantity} × {formatCurrency(item.unit_price_cents || 0)}
+                            </small>
+                          )}
+                        </span>
                         <strong>
                           {item.checked_at
                             ? formatCurrency(item.price_cents || 0)

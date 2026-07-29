@@ -19,6 +19,15 @@ WeightKg = Annotated[
     Decimal,
     Field(ge=Decimal("0"), le=Decimal("500"), max_digits=5, decimal_places=2),
 ]
+IncrementKg = Annotated[
+    Decimal,
+    Field(
+        ge=Decimal("0.25"),
+        le=Decimal("20"),
+        max_digits=4,
+        decimal_places=2,
+    ),
+]
 
 
 class ExerciseCreate(ApiSchema):
@@ -79,6 +88,47 @@ class WorkoutSetResponse(ApiSchema):
     completed_at: datetime | None = None
 
 
+class WorkoutExerciseSetSnapshotResponse(ApiSchema):
+    set_number: int
+    weight_kg: Decimal
+    reps_completed: int | None = None
+
+
+class WorkoutExerciseEvolutionPointResponse(ApiSchema):
+    session_id: int
+    completed_at: datetime
+    max_weight_kg: Decimal
+    total_reps: int
+    completed_sets: int
+    target_sets: int
+    total_volume_kg: Decimal
+
+
+class WorkoutExerciseProgressResponse(ApiSchema):
+    exercise_name: str
+    last_session_at: datetime | None = None
+    last_weight_kg: Decimal | None = None
+    last_reps_completed: int | None = None
+    last_completed_sets: int
+    last_target_sets: int | None = None
+    last_sets: list[WorkoutExerciseSetSnapshotResponse] = Field(default_factory=list)
+    personal_record_weight_kg: Decimal | None = None
+    personal_record_reps: int | None = None
+    personal_record_volume_kg: Decimal
+    suggested_weight_kg: Decimal | None = None
+    suggestion_action: Literal["start", "increase", "maintain"]
+    suggestion_text: str
+    rest_seconds: int = Field(ge=15, le=600)
+    increment_kg: Decimal
+    evolution: list[WorkoutExerciseEvolutionPointResponse] = Field(default_factory=list)
+
+
+class WorkoutExercisePreferenceUpdate(ApiSchema):
+    exercise_name: Name100
+    rest_seconds: int = Field(default=60, ge=15, le=600)
+    increment_kg: IncrementKg = Decimal("1.00")
+
+
 class WorkoutSessionExerciseResponse(ApiSchema):
     id: int
     exercise_id: int | None = None
@@ -87,6 +137,7 @@ class WorkoutSessionExerciseResponse(ApiSchema):
     planned_reps: str | None = None
     sort_order: int
     sets: list[WorkoutSetResponse] = Field(default_factory=list)
+    progress: WorkoutExerciseProgressResponse | None = None
 
 
 class WorkoutSessionResponse(ApiSchema):
@@ -113,6 +164,9 @@ class WorkoutHistoryResponse(ApiSchema):
     completed_sets: int
     total_volume_kg: Decimal
     sessions: list[WorkoutSessionResponse] = Field(default_factory=list)
+    exercise_progress: list[WorkoutExerciseProgressResponse] = Field(
+        default_factory=list
+    )
 
 
 class WorkoutSetCompletionState(ApiSchema):

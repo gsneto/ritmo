@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models.habit import Habit, HabitCheckIn
+from models.habit import Habit, HabitCheckIn, habit_is_scheduled
 from models.user import User
 from time_utils import app_today
 
@@ -38,7 +38,10 @@ def get_today_stats(user_id: int, db: Session = Depends(get_db)):
     habits = db.query(Habit).filter(Habit.user_id == user_id).all()
 
     # Filter habits active today
-    active_habits = [h for h in habits if h.created_at <= today]
+    active_habits = [
+        h for h in habits
+        if h.created_at <= today and habit_is_scheduled(h, today)
+    ]
     done_count = 0
 
     for habit in active_habits:
@@ -100,7 +103,10 @@ def get_monthly_stats(user_id: int, db: Session = Depends(get_db)):
 
         current_day = first_day
         while current_day <= last_day:
-            day_habits = [h for h in habits if h.created_at <= current_day]
+            day_habits = [
+                h for h in habits
+                if h.created_at <= current_day and habit_is_scheduled(h, current_day)
+            ]
             available += len(day_habits)
 
             for h in day_habits:
@@ -135,9 +141,10 @@ def get_streak(user_id: int, db: Session = Depends(get_db)):
             Habit.user_id == user_id,
             Habit.created_at <= check_date
         ).all()
+        habits = [habit for habit in habits if habit_is_scheduled(habit, check_date)]
 
         if not habits:
-            break
+            continue
 
         all_done = all(
             db.query(HabitCheckIn).filter(
@@ -168,6 +175,7 @@ def get_week_stats(user_id: int, db: Session = Depends(get_db)):
             Habit.user_id == user_id,
             Habit.created_at <= check_date
         ).all()
+        habits = [habit for habit in habits if habit_is_scheduled(habit, check_date)]
 
         done = 0
         for h in habits:
