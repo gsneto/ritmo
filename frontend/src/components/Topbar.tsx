@@ -1,4 +1,4 @@
-import { Activity, Settings } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import type { User } from '../services/api'
 
 interface TopbarProps {
@@ -10,8 +10,8 @@ export default function Topbar({ user, onSettingsClick }: TopbarProps) {
   return (
     <header className="topbar">
       <div className="brand">
-        <span className="brand-mark" aria-hidden="true">
-          <Activity size={21} strokeWidth={2.4} />
+        <span className="brand-mark brand-mark-grafismo" aria-hidden="true">
+          <img src="/grafismo-indigena-ritmo.png" alt="" />
         </span>
         <div>
           <p className="eyebrow">Rotina pessoal</p>

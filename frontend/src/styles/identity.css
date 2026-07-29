@@ -1,0 +1,208 @@
+:root {
+  --identity-black: #090807;
+  --identity-red: #c92520;
+  --identity-white: #fffdf8;
+  --bg: #f2efe9;
+  --surface: #fffdf9;
+  --surface-soft: #f8f4ee;
+  --control: #fffefa;
+  --nav: rgba(255, 253, 249, 0.9);
+  --text: #211e1b;
+  --muted: #736b63;
+  --line: #ddd5ca;
+  --accent: #c42b25;
+  --accent-strong: #9e211d;
+  --accent-soft: #fae7e3;
+  --red: #bc2c27;
+  --red-soft: #fbe9e6;
+  --shadow: 0 16px 44px rgba(45, 34, 28, 0.08);
+}
+
+html[data-theme="dark"] {
+  --identity-black: #050504;
+  --identity-red: #e3483f;
+  --identity-white: #fffaf1;
+  --bg: #151311;
+  --surface: #211e1b;
+  --surface-soft: #2a2622;
+  --control: #211e1b;
+  --nav: rgba(33, 30, 27, 0.93);
+  --text: #fffaf2;
+  --muted: #c1b6ab;
+  --line: #443d37;
+  --accent: #ef6258;
+  --accent-strong: #ff7a70;
+  --accent-soft: #4a2925;
+  --red: #ff8178;
+  --red-soft: #4c2927;
+  --shadow: 0 14px 38px rgba(0, 0, 0, 0.3);
+}
+
+body {
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--identity-red) 7%, transparent), transparent 28rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 44%, var(--bg)), var(--bg) 22rem);
+}
+
+.topbar {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--identity-black) 18%, var(--line));
+  border-top: 4px solid var(--identity-black);
+}
+
+.topbar::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  background: var(--identity-red);
+  content: "";
+}
+
+.brand-mark.brand-mark-grafismo {
+  width: 50px;
+  height: 40px;
+  overflow: hidden;
+  border: 1px solid var(--identity-black);
+  border-radius: 10px;
+  background: var(--identity-black);
+  box-shadow: 0 5px 14px rgba(12, 8, 6, 0.2);
+}
+
+.brand-mark-grafismo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.profile-avatar {
+  background: var(--identity-red);
+}
+
+.identity-band {
+  position: relative;
+  height: 82px;
+  margin: 10px 0 12px;
+  overflow: hidden;
+  border: 1px solid var(--identity-black);
+  border-radius: 16px;
+  background: var(--identity-black);
+  box-shadow: 0 12px 30px rgba(20, 13, 10, 0.14);
+}
+
+.identity-band img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.identity-band::after {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28);
+  content: "";
+  pointer-events: none;
+}
+
+.identity-band + .view-nav {
+  margin-top: 0;
+}
+
+.view-nav a.active {
+  box-shadow: inset 0 -2px 0 var(--identity-red);
+}
+
+.today-hero {
+  background:
+    radial-gradient(circle at 76% 18%, rgba(201, 37, 32, 0.3), transparent 29%),
+    linear-gradient(135deg, #080706 0%, #17100e 57%, #4e1512 100%);
+  box-shadow: 0 24px 64px rgba(77, 23, 19, 0.26);
+}
+
+.today-hero::before {
+  background: rgba(201, 37, 32, 0.2);
+}
+
+.today-hero::after {
+  z-index: -1;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 44%;
+  height: auto;
+  border-radius: 0;
+  background: url("/grafismo-indigena-ritmo.png") center / cover no-repeat;
+  opacity: 0.2;
+}
+
+.quick-action-primary {
+  color: var(--identity-red);
+  box-shadow: 0 9px 24px rgba(92, 24, 19, 0.22);
+}
+
+.progress-ring-center {
+  background: linear-gradient(145deg, #d64238, #9e211d);
+}
+
+.routine-task-hero {
+  --routine-accent: #b52f29;
+  --routine-accent-soft: color-mix(in srgb, #b52f29 12%, var(--surface));
+}
+
+html[data-theme="dark"] .routine-task-hero {
+  --routine-accent: #f06a60;
+  --routine-accent-soft: color-mix(in srgb, #b52f29 23%, var(--surface));
+}
+
+.routine-hero {
+  border-top: 4px solid var(--routine-accent);
+}
+
+.shopping-hero {
+  border-top: 4px solid var(--identity-red);
+}
+
+.focus-hero,
+.reading-panel {
+  border-top: 4px solid var(--identity-red);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.view-nav a:focus-visible {
+  outline-color: color-mix(in srgb, var(--identity-red) 38%, transparent);
+}
+
+@media (max-width: 760px) {
+  .identity-band {
+    height: 58px;
+    margin: 8px 0 12px;
+    border-radius: 13px;
+  }
+
+  .brand-mark.brand-mark-grafismo {
+    width: 46px;
+    height: 36px;
+  }
+
+  .today-hero::after {
+    width: 64%;
+    opacity: 0.14;
+  }
+}
+
+@media (max-width: 390px) {
+  .identity-band {
+    height: 52px;
+  }
+}

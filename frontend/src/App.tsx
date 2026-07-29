@@ -177,6 +177,9 @@ export default function App() {
   return (
     <div className="app-shell">
       <Topbar user={activeUser} onSettingsClick={handleSettingsClick} />
+      <div className="identity-band" aria-hidden="true">
+        <img src="/grafismo-indigena-ritmo.png" alt="" />
+      </div>
       <Navigation />
       <main key={refreshKey}>
         {activePath === '/today' && <Today userId={activeUser.id} />}
