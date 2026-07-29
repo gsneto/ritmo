@@ -2,15 +2,19 @@
 
 Atualizado em 29 de julho de 2026.
 
-## Estado confirmado
+## Produção confirmada
 
-- A versão estável anterior está preservada no commit local `52a98d5`.
-- A evolução completa está isolada na branch
+- Frontend público: [https://habitos-base.vercel.app](https://habitos-base.vercel.app)
+- API: [health check público](https://supportive-warmth-production-dd70.up.railway.app/health)
+- Frontend publicado na Vercel com estado `Ready`, deployment
+  `dpl_Au6mrpnStvhKN5aAdTzxd3FHVuzE`.
+- Backend FastAPI publicado no Railway com PostgreSQL persistente.
+- `RITMO_DEBUG=false`, chave de acesso forte, CORS limitado ao domínio público
+  e Web Push habilitado com um par VAPID exclusivo.
+- Código da aplicação publicado a partir de `cf209eb` na branch
   `feature/ritmo-complete-assistant-20260729`.
-- A arquitetura ativa continua sendo `backend/` + `frontend/`.
-- Nenhum deploy foi executado nesta branch.
-- A versão antiga permanece online e não deve ser substituída antes do preview
-  remoto, da configuração dos segredos e da confirmação explícita.
+- A versão anterior permanece recuperável no histórico Git, no commit
+  `6cd2766`.
 
 ## O que esta branch acrescenta
 
@@ -30,18 +34,23 @@ Atualizado em 29 de julho de 2026.
 - Backup JSON completo e restauração atômica por perfil.
 - Migrações aditivas/preservadoras para os bancos SQLite existentes.
 
-## Validações locais concluídas
+## Validações concluídas
 
-- Backend: `41 passed`.
+- Backend: `43 passed`.
 - Frontend: `44 passed` e build Vite de produção concluído.
 - `pip-audit` e `npm audit`: nenhuma vulnerabilidade conhecida.
-- API real local: saúde e uma rota de cada recurso responderam HTTP 200,
-  incluindo backup e configuração de push.
+- API de produção: `/health` respondeu HTTP 200; uma requisição sem chave foi
+  recusada com 401 e uma requisição autorizada retornou os dois perfis.
+- Hábitos, tarefas, treinos, compras, leitura, estatísticas e backup responderam
+  na API remota. Uma gravação temporária no PostgreSQL foi confirmada e removida.
+- A configuração de push remota respondeu habilitada com chave pública VAPID.
+- CORS aceita `https://habitos-base.vercel.app` e recusa a origem local usada no
+  preview.
 - Cabeçalhos `nosniff`, `DENY`, `no-referrer` e `no-store` confirmados.
-- PWA: manifest e service worker servidos pelo preview de produção; worker
-  instalado, ativado e controlando a página.
-- Interface mobile `390 x 844`: Hoje, Hábitos, Tarefas, Compras, Foco e Ajustes
-  sem rolagem horizontal e sem erro de API.
+- PWA pública: manifest, service worker, tela offline, ícones e grafismo
+  responderam HTTP 200; o manifest usa modo `standalone` e início em `/today`.
+- Interface pública em viewport de iPhone `390 x 844`: Hoje, Hábitos, Tarefas,
+  Compras e Foco sem rolagem horizontal e conectados à API real.
 - Formulário de compras mobile: nenhum campo recebe foco ao abrir, inputs
   calculados em `16px`, barra inferior oculta durante o foco e seletor de data
   condicional aprovado.
@@ -52,27 +61,28 @@ Atualizado em 29 de julho de 2026.
 - Migração de hábitos/tarefas exercitada sobre esquema legado com preservação
   das linhas existentes.
 
-## Portões antes de substituir a versão antiga
+## Portões da publicação
 
 - [x] Dependências instaladas a partir dos arquivos versionados.
 - [x] Testes automatizados do backend aprovados.
 - [x] Testes automatizados e build do frontend aprovados.
 - [x] API local, banco, backup e interface mobile validados.
 - [x] Auditoria local de dependências sem vulnerabilidades conhecidas.
-- [ ] Configurar banco persistente, chave de acesso e par VAPID no backend
+- [x] Configurar banco persistente, chave de acesso e par VAPID no backend
   remoto.
-- [ ] Publicar e validar o backend em ambiente controlado.
-- [ ] Criar preview do frontend apontando para a API real.
-- [ ] Testar persistência, Web Push e instalação em um iPhone físico.
-- [ ] Promover manualmente para produção após aprovação explícita.
+- [x] Publicar e validar o backend em ambiente controlado.
+- [x] Criar e validar o pacote do frontend apontando para a API real.
+- [x] Promover manualmente para produção após aprovação explícita.
+- [ ] Confirmar instalação na tela inicial e entrega de uma notificação em um
+  iPhone físico. Esse passo depende do aparelho e da permissão do iOS.
 
 ## Publicação
 
 | Componente | Estado | Observação |
 | --- | --- | --- |
-| Versão antiga | Online e preservada | Não foi alterada por esta branch |
-| Backend FastAPI | Validado localmente | Ainda exige ambiente e segredos remotos |
-| Frontend React/PWA | Build e mobile aprovados | Ainda não promovido |
+| Versão anterior | Preservada | Recuperável pelo histórico Git/Vercel |
+| Backend FastAPI | Online | Railway + PostgreSQL, saúde 200 |
+| Frontend React/PWA | Online | Vercel `Ready`, mobile e PWA aprovados |
 
-Consulte [DEPLOY.md](DEPLOY.md) para executar os portões remotos sem confundir
-build local, preview e produção.
+Consulte [DEPLOY.md](DEPLOY.md) para repetir os portões sem confundir build
+local, preview e produção.

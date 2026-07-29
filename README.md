@@ -10,8 +10,14 @@
 
 <p align="center">
   <strong>React + TypeScript</strong> · <strong>FastAPI</strong> ·
-  <strong>SQLite/SQLAlchemy</strong> · <strong>PWA mobile-first</strong>
+  <strong>PostgreSQL + SQLAlchemy</strong> · <strong>PWA mobile-first</strong>
 </p>
+
+## Aplicação publicada
+
+- App: [https://habitos-base.vercel.app](https://habitos-base.vercel.app)
+- Saúde da API: [https://supportive-warmth-production-dd70.up.railway.app/health](https://supportive-warmth-production-dd70.up.railway.app/health)
+- Estado técnico validado: [STATUS.md](STATUS.md)
 
 ## O que o Ritmo faz
 
@@ -44,7 +50,7 @@ frontend/  React + TypeScript + Vite
     ▼
 backend/   FastAPI + SQLAlchemy
     │
-    └── SQLite local ou banco persistente em produção
+    └── SQLite local ou PostgreSQL gerenciado em produção
 ```
 
 - `frontend/`: interface responsiva e instalável;
@@ -144,3 +150,7 @@ automaticamente a versão antiga. O fluxo correto é:
 
 Assim, a versão antiga permanece disponível enquanto o novo Ritmo é
 comprovado em um ambiente separado.
+
+A publicação de 29 de julho de 2026 seguiu esse fluxo: API e PostgreSQL foram
+validados primeiro, o frontend foi conferido separadamente em viewport mobile
+e somente então o pacote aprovado foi promovido para o endereço público.

@@ -3,6 +3,21 @@
 Este documento descreve a arquitetura FastAPI + React. As instruções antigas de
 Netlify, MySQL e URLs presumidas não se aplicam a esta migração.
 
+## Produção atual
+
+Em 29 de julho de 2026, o fluxo abaixo foi concluído com:
+
+- frontend: `https://habitos-base.vercel.app`;
+- backend: `https://supportive-warmth-production-dd70.up.railway.app`;
+- banco: PostgreSQL gerenciado no Railway;
+- frontend Vercel: deployment `dpl_Au6mrpnStvhKN5aAdTzxd3FHVuzE`, estado
+  `Ready`;
+- aplicação: commit `cf209eb`.
+
+Os segredos permanecem somente nos provedores. O teste em viewport mobile foi
+aprovado; instalação e notificação em um iPhone físico ainda precisam ser
+confirmadas no próprio aparelho.
+
 ## Política de promoção
 
 1. Preservar a versão antiga em produção.
