@@ -7,7 +7,7 @@ from models.user import User
 from models.task import Task
 from schemas.task import TaskResponse, TaskCreate, TaskUpdate
 
-router = APIRouter(tags=["tasks"])
+router = APIRouter(prefix="/api", tags=["tasks"])
 
 
 def parse_time(time_str: str) -> dt_time:
@@ -32,14 +32,14 @@ def format_time(t: dt_time) -> dt_time:
     return t
 
 
-@router.get("/api/users/{user_id}/tasks", response_model=List[TaskResponse])
+@router.get("/users/{user_id}/tasks", response_model=List[TaskResponse])
 def list_tasks(user_id: int, db: Session = Depends(get_db)):
     """List all tasks for a user."""
     tasks = db.query(Task).filter(Task.user_id == user_id).order_by(Task.date, Task.time).all()
     return tasks
 
 
-@router.post("/api/users/{user_id}/tasks", response_model=TaskResponse)
+@router.post("/users/{user_id}/tasks", response_model=TaskResponse)
 def create_task(user_id: int, data: TaskCreate, db: Session = Depends(get_db)):
     """Create a new task."""
     user = db.query(User).filter(User.id == user_id).first()
@@ -59,7 +59,7 @@ def create_task(user_id: int, data: TaskCreate, db: Session = Depends(get_db)):
     return task
 
 
-@router.put("/api/tasks/{task_id}", response_model=TaskResponse)
+@router.put("/tasks/{task_id}", response_model=TaskResponse)
 def update_task(task_id: int, data: TaskUpdate, db: Session = Depends(get_db)):
     """Update a task."""
     task = db.query(Task).filter(Task.id == task_id).first()
@@ -78,7 +78,7 @@ def update_task(task_id: int, data: TaskUpdate, db: Session = Depends(get_db)):
     return task
 
 
-@router.delete("/api/tasks/{task_id}")
+@router.delete("/tasks/{task_id}")
 def delete_task(task_id: int, db: Session = Depends(get_db)):
     """Delete a task."""
     task = db.query(Task).filter(Task.id == task_id).first()
@@ -90,7 +90,7 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     return {"message": "Task deleted"}
 
 
-@router.post("/api/tasks/{task_id}/complete", response_model=TaskResponse)
+@router.post("/tasks/{task_id}/complete", response_model=TaskResponse)
 def complete_task(task_id: int, db: Session = Depends(get_db)):
     """Toggle task completion."""
     task = db.query(Task).filter(Task.id == task_id).first()

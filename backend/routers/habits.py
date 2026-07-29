@@ -7,7 +7,7 @@ from models.user import User
 from models.habit import Habit, HabitCheckIn
 from schemas.habit import HabitResponse, HabitCreate, HabitUpdate, CheckInRequest
 
-router = APIRouter(tags=["habits"])
+router = APIRouter(prefix="/api", tags=["habits"])
 
 
 def parse_time(time_str: str) -> dt_time:
@@ -44,14 +44,14 @@ def serialize_habit(habit: Habit) -> dict:
     }
 
 
-@router.get("/api/users/{user_id}/habits", response_model=List[HabitResponse])
+@router.get("/users/{user_id}/habits", response_model=List[HabitResponse])
 def list_habits(user_id: int, db: Session = Depends(get_db)):
     """List all habits for a user."""
     habits = db.query(Habit).filter(Habit.user_id == user_id).all()
     return [serialize_habit(h) for h in habits]
 
 
-@router.post("/api/users/{user_id}/habits", response_model=HabitResponse)
+@router.post("/users/{user_id}/habits", response_model=HabitResponse)
 def create_habit(user_id: int, data: HabitCreate, db: Session = Depends(get_db)):
     """Create a new habit."""
     user = db.query(User).filter(User.id == user_id).first()
@@ -70,7 +70,7 @@ def create_habit(user_id: int, data: HabitCreate, db: Session = Depends(get_db))
     return serialize_habit(habit)
 
 
-@router.put("/api/habits/{habit_id}", response_model=HabitResponse)
+@router.put("/habits/{habit_id}", response_model=HabitResponse)
 def update_habit(habit_id: int, data: HabitUpdate, db: Session = Depends(get_db)):
     """Update a habit."""
     habit = db.query(Habit).filter(Habit.id == habit_id).first()
@@ -87,7 +87,7 @@ def update_habit(habit_id: int, data: HabitUpdate, db: Session = Depends(get_db)
     return serialize_habit(habit)
 
 
-@router.delete("/api/habits/{habit_id}")
+@router.delete("/habits/{habit_id}")
 def delete_habit(habit_id: int, db: Session = Depends(get_db)):
     """Delete a habit."""
     habit = db.query(Habit).filter(Habit.id == habit_id).first()
@@ -99,7 +99,7 @@ def delete_habit(habit_id: int, db: Session = Depends(get_db)):
     return {"message": "Habit deleted"}
 
 
-@router.post("/api/habits/{habit_id}/checkin", response_model=HabitResponse)
+@router.post("/habits/{habit_id}/checkin", response_model=HabitResponse)
 def checkin_habit(habit_id: int, data: CheckInRequest, db: Session = Depends(get_db)):
     """Add a check-in to a habit."""
     habit = db.query(Habit).filter(Habit.id == habit_id).first()
@@ -124,7 +124,7 @@ def checkin_habit(habit_id: int, data: CheckInRequest, db: Session = Depends(get
     return serialize_habit(habit)
 
 
-@router.delete("/api/habits/{habit_id}/checkin/{date_str}")
+@router.delete("/habits/{habit_id}/checkin/{date_str}")
 def remove_checkin(habit_id: int, date_str: str, db: Session = Depends(get_db)):
     """Remove a check-in from a habit."""
     habit = db.query(Habit).filter(Habit.id == habit_id).first()

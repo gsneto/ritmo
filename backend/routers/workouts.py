@@ -6,7 +6,7 @@ from models.user import User
 from models.workout import Workout, Exercise
 from schemas.workout import WorkoutResponse, WorkoutCreate, WorkoutsUpdateRequest
 
-router = APIRouter(tags=["workouts"])
+router = APIRouter(prefix="/api", tags=["workouts"])
 
 
 def serialize_workout(workout: Workout) -> dict:
@@ -29,7 +29,7 @@ def serialize_workout(workout: Workout) -> dict:
     }
 
 
-@router.get("/api/users/{user_id}/workouts", response_model=List[WorkoutResponse])
+@router.get("/users/{user_id}/workouts", response_model=List[WorkoutResponse])
 def list_workouts(user_id: int, db: Session = Depends(get_db)):
     """List all workouts for a user."""
     workouts = db.query(Workout).filter(Workout.user_id == user_id).order_by(
@@ -38,7 +38,7 @@ def list_workouts(user_id: int, db: Session = Depends(get_db)):
     return [serialize_workout(w) for w in workouts]
 
 
-@router.put("/api/users/{user_id}/workouts", response_model=List[WorkoutResponse])
+@router.put("/users/{user_id}/workouts", response_model=List[WorkoutResponse])
 def update_workouts(user_id: int, data: WorkoutsUpdateRequest, db: Session = Depends(get_db)):
     """Update all workouts for a user (replace all)."""
     user = db.query(User).filter(User.id == user_id).first()

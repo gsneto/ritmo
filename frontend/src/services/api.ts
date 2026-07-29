@@ -1,7 +1,7 @@
 import axios from 'axios'
 
-// Use relative URL in dev, absolute URL in production
-const BASE_URL = import.meta.env.VITE_API_URL || '/api'
+// Default to local FastAPI in dev; override in production with VITE_API_URL.
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 const api = axios.create({
   baseURL: BASE_URL,

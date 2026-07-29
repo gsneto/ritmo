@@ -7,7 +7,7 @@ from database import get_db
 from models.user import User
 from models.habit import Habit, HabitCheckIn
 
-router = APIRouter(tags=["stats"])
+router = APIRouter(prefix="/api", tags=["stats"])
 
 
 def get_date_str(d: date) -> str:
@@ -18,7 +18,7 @@ def get_today_str() -> str:
     return get_date_str(date.today())
 
 
-@router.get("/api/users/{user_id}/stats/today")
+@router.get("/users/{user_id}/stats/today")
 def get_today_stats(user_id: int, db: Session = Depends(get_db)):
     """Get today's statistics for a user."""
     today = date.today()
@@ -57,7 +57,7 @@ def get_today_stats(user_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/api/users/{user_id}/stats/monthly")
+@router.get("/users/{user_id}/stats/monthly")
 def get_monthly_stats(user_id: int, db: Session = Depends(get_db)):
     """Get monthly statistics for the last 6 months."""
     current = date.today()
@@ -108,7 +108,7 @@ def get_monthly_stats(user_id: int, db: Session = Depends(get_db)):
     return {"months": months}
 
 
-@router.get("/api/users/{user_id}/stats/streak")
+@router.get("/users/{user_id}/stats/streak")
 def get_streak(user_id: int, db: Session = Depends(get_db)):
     """Calculate current streak."""
     streak = 0
@@ -140,7 +140,7 @@ def get_streak(user_id: int, db: Session = Depends(get_db)):
     return {"streak": streak}
 
 
-@router.get("/api/users/{user_id}/stats/week")
+@router.get("/users/{user_id}/stats/week")
 def get_week_stats(user_id: int, db: Session = Depends(get_db)):
     """Get last 7 days statistics."""
     today = date.today()
