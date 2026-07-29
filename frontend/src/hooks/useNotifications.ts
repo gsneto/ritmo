@@ -6,15 +6,29 @@ interface NotificationOptions {
   icon?: string
 }
 
+function notificationsAvailable(): boolean {
+  return typeof window !== 'undefined' && 'Notification' in window
+}
+
+function currentPermission(): NotificationPermission {
+  return notificationsAvailable() ? Notification.permission : 'default'
+}
+
+function canNotify(): boolean {
+  return notificationsAvailable() && Notification.permission === 'granted'
+}
+
 export function useNotifications() {
-  const [permission, setPermission] = useState<NotificationPermission>('default')
+  const [permission, setPermission] = useState<NotificationPermission>(currentPermission)
 
   useEffect(() => {
-    setPermission(Notification.permission)
+    if (notificationsAvailable()) {
+      setPermission(Notification.permission)
+    }
   }, [])
 
   const requestPermission = useCallback(async () => {
-    if (!('Notification' in window)) {
+    if (!notificationsAvailable()) {
       console.warn('Notifications not supported')
       return false
     }
@@ -33,41 +47,36 @@ export function useNotifications() {
   }, [])
 
   const sendNotification = useCallback(async (options: NotificationOptions) => {
+    if (!notificationsAvailable()) return null
+
     if (permission !== 'granted') {
       const granted = await requestPermission()
       if (!granted) return null
     }
 
-    if ('Notification' in window) {
-      const notification = new Notification(options.title, {
-        body: options.body,
-        icon: options.icon || '/vite.svg',
-        badge: '/vite.svg',
-        tag: 'ritmo-notification',
-        renotify: true,
-      })
+    const notification = new Notification(options.title, {
+      body: options.body,
+      ...(options.icon ? { icon: options.icon } : {}),
+      tag: 'ritmo-notification',
+    })
 
-      // Auto close after 5 seconds
-      setTimeout(() => notification.close(), 5000)
+    setTimeout(() => notification.close(), 5000)
 
-      return notification
-    }
-
-    return null
+    return notification
   }, [permission, requestPermission])
 
   return {
     permission,
     requestPermission,
     sendNotification,
-    isSupported: 'Notification' in window,
+    isSupported: notificationsAvailable(),
   }
 }
 
 // Convenience functions for common notifications
 export const notify = {
   checkin: (habitName: string) => {
-    if ('Notification' in window && Notification.permission === 'granted') {
+    if (canNotify()) {
       new Notification('Check-in realizado! ✅', {
         body: `Você registrou o hábito: ${habitName}`,
         tag: 'ritmo-checkin',
@@ -76,7 +85,7 @@ export const notify = {
   },
 
   pomodoroComplete: (phase: 'focus' | 'break') => {
-    if ('Notification' in window && Notification.permission === 'granted') {
+    if (canNotify()) {
       const title = phase === 'focus' ? 'Tempo de foco concluído! 🎯' : 'Pausa terminada! ☕'
       const body = phase === 'focus'
         ? 'Ótimo trabalho! Faça uma pausa.'
@@ -90,7 +99,7 @@ export const notify = {
   },
 
   taskDue: (taskName: string) => {
-    if ('Notification' in window && Notification.permission === 'granted') {
+    if (canNotify()) {
       new Notification('Tarefa atrasada! ⚠️', {
         body: `A tarefa "${taskName}" está vencida.`,
         tag: 'ritmo-task',
@@ -99,7 +108,7 @@ export const notify = {
   },
 
   streakMilestone: (days: number) => {
-    if ('Notification' in window && Notification.permission === 'granted') {
+    if (canNotify()) {
       new Notification(`Sequência de ${days} dias! 🔥`, {
         body: 'Você está mantendo seus hábitos!',
         tag: 'ritmo-streak',

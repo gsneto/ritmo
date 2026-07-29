@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { apiRoutes, Workout } from '../services/api'
+import { apiRoutes } from '../services/api'
+import type { Workout } from '../services/api'
 import { Pencil, X, Plus } from 'lucide-react'
 
 interface WorkoutsPanelProps {
@@ -154,6 +155,7 @@ export default function WorkoutsPanel({ userId, isOpen, onClose }: WorkoutsPanel
                         value={ex.name}
                         onChange={(e) => updateExercise(exIndex, 'name', e.target.value)}
                         maxLength={50}
+                        aria-label={`Exercício ${exIndex + 1}`}
                       />
                       <input
                         type="text"
@@ -161,6 +163,7 @@ export default function WorkoutsPanel({ userId, isOpen, onClose }: WorkoutsPanel
                         value={ex.sets}
                         onChange={(e) => updateExercise(exIndex, 'sets', e.target.value)}
                         maxLength={4}
+                        aria-label={`Séries do exercício ${exIndex + 1}`}
                       />
                       <input
                         type="text"
@@ -168,13 +171,15 @@ export default function WorkoutsPanel({ userId, isOpen, onClose }: WorkoutsPanel
                         value={ex.reps}
                         onChange={(e) => updateExercise(exIndex, 'reps', e.target.value)}
                         maxLength={8}
+                        aria-label={`Repetições do exercício ${exIndex + 1}`}
                       />
                       <button
                         type="button"
                         className="icon-button small-icon danger-button"
                         onClick={() => removeExercise(exIndex)}
+                        aria-label={`Remover exercício ${exIndex + 1}`}
                       >
-                        <X size={16} />
+                        <X size={16} aria-hidden="true" />
                       </button>
                     </div>
                   ))}
@@ -206,8 +211,9 @@ export default function WorkoutsPanel({ userId, isOpen, onClose }: WorkoutsPanel
                     type="button"
                     onClick={() => startEditing(index)}
                     title={`Editar ${workout.day}`}
+                    aria-label={`Editar treino de ${workout.day}`}
                   >
-                    <Pencil size={16} />
+                    <Pencil size={16} aria-hidden="true" />
                   </button>
                 </div>
                 <h3>{workout.title}</h3>

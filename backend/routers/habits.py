@@ -1,25 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from datetime import date
 from typing import List
-from datetime import date, datetime, time as dt_time
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
 from database import get_db
-from models.user import User
 from models.habit import Habit, HabitCheckIn
+from models.user import User
 from schemas.habit import HabitResponse, HabitCreate, HabitUpdate, CheckInRequest
+from time_utils import app_today
 
 router = APIRouter(prefix="/api", tags=["habits"])
-
-
-def parse_time(time_str: str) -> dt_time:
-    """Parse HH:MM string to time object."""
-    parts = time_str.split(":")
-    return dt_time(int(parts[0]), int(parts[1]))
-
-
-def parse_date(date_str: str) -> date:
-    """Parse YYYY-MM-DD string to date object."""
-    parts = date_str.split("-")
-    return date(int(parts[0]), int(parts[1]), int(parts[2]))
 
 
 def format_date(d: date) -> str:
@@ -27,9 +19,9 @@ def format_date(d: date) -> str:
     return d.isoformat()
 
 
-def format_time(t: dt_time) -> str:
+def format_time(t) -> str:
     """Format time to HH:MM string."""
-    return f"{t.hour:02d}:{t.minute:02d}"
+    return t.strftime("%H:%M")
 
 
 def serialize_habit(habit: Habit) -> dict:
@@ -40,7 +32,7 @@ def serialize_habit(habit: Habit) -> dict:
         "name": habit.name,
         "time": format_time(habit.time),
         "created_at": format_date(habit.created_at),
-        "check_ins": [format_date(ci.date) for ci in habit.check_ins]
+        "check_ins": sorted(format_date(ci.date) for ci in habit.check_ins),
     }
 
 
@@ -61,8 +53,8 @@ def create_habit(user_id: int, data: HabitCreate, db: Session = Depends(get_db))
     habit = Habit(
         user_id=user_id,
         name=data.name,
-        time=parse_time(data.time),
-        created_at=date.today()
+        time=data.time,
+        created_at=app_today(),
     )
     db.add(habit)
     db.commit()
@@ -80,7 +72,7 @@ def update_habit(habit_id: int, data: HabitUpdate, db: Session = Depends(get_db)
     if data.name is not None:
         habit.name = data.name
     if data.time is not None:
-        habit.time = parse_time(data.time)
+        habit.time = data.time
 
     db.commit()
     db.refresh(habit)
@@ -106,7 +98,7 @@ def checkin_habit(habit_id: int, data: CheckInRequest, db: Session = Depends(get
     if not habit:
         raise HTTPException(status_code=404, detail="Habit not found")
 
-    check_date = parse_date(data.date)
+    check_date = data.date
 
     # Check if already checked in
     existing = db.query(HabitCheckIn).filter(
@@ -119,19 +111,23 @@ def checkin_habit(habit_id: int, data: CheckInRequest, db: Session = Depends(get
 
     checkin = HabitCheckIn(habit_id=habit_id, date=check_date)
     db.add(checkin)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent/retried request is idempotent thanks to the DB constraint.
+        db.rollback()
+        habit = db.query(Habit).filter(Habit.id == habit_id).first()
     db.refresh(habit)
     return serialize_habit(habit)
 
 
-@router.delete("/habits/{habit_id}/checkin/{date_str}")
-def remove_checkin(habit_id: int, date_str: str, db: Session = Depends(get_db)):
+@router.delete("/habits/{habit_id}/checkin/{check_date}")
+def remove_checkin(habit_id: int, check_date: date, db: Session = Depends(get_db)):
     """Remove a check-in from a habit."""
     habit = db.query(Habit).filter(Habit.id == habit_id).first()
     if not habit:
         raise HTTPException(status_code=404, detail="Habit not found")
 
-    check_date = parse_date(date_str)
     checkin = db.query(HabitCheckIn).filter(
         HabitCheckIn.habit_id == habit_id,
         HabitCheckIn.date == check_date

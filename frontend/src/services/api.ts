@@ -1,7 +1,14 @@
 import axios from 'axios'
 
-// Default to local FastAPI in dev; override in production with VITE_API_URL.
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+export const ACCESS_KEY_STORAGE_KEY = 'ritmo-access-key'
+export const UNAUTHORIZED_EVENT = 'ritmo:unauthorized'
+
+// In development, Vite proxies /api to FastAPI. Production must provide the
+// complete API prefix, for example https://api.example.com/api.
+const configuredBaseUrl = import.meta.env.VITE_API_URL?.trim()
+const BASE_URL = configuredBaseUrl
+  ? configuredBaseUrl.replace(/\/+$/, '')
+  : '/api'
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -9,6 +16,14 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+export interface User {
+  id: number
+  profile_id: string
+  name: string
+  initials: string
+  theme: 'light' | 'dark'
+}
 
 export interface Habit {
   id: number
@@ -76,12 +91,65 @@ export interface StreakStats {
   streak: number
 }
 
+export interface WorkoutInput {
+  day: string
+  title: string
+  note: string
+  exercises: Array<{
+    name: string
+    sets: string
+    reps: string
+  }>
+}
+
+export function getAccessKey(): string {
+  if (typeof window === 'undefined') return ''
+  return window.localStorage.getItem(ACCESS_KEY_STORAGE_KEY)?.trim() || ''
+}
+
+export function setAccessKey(value: string): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(ACCESS_KEY_STORAGE_KEY, value.trim())
+}
+
+export function clearAccessKey(): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.removeItem(ACCESS_KEY_STORAGE_KEY)
+}
+
+export function isUnauthorizedError(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 401
+}
+
+api.interceptors.request.use((config) => {
+  const accessKey = getAccessKey()
+  if (accessKey) {
+    config.headers.set('X-Ritmo-Key', accessKey)
+  }
+  return config
+})
+
+api.interceptors.response.use(
+  response => response,
+  (error: unknown) => {
+    if (
+      isUnauthorizedError(error)
+      && typeof window !== 'undefined'
+    ) {
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+    }
+    return Promise.reject(error)
+  },
+)
+
 export const apiRoutes = {
   // Users
-  getUsers: () => api.get('/users'),
-  getUser: (id: number) => api.get(`/users/${id}`),
-  updateUser: (id: number, data: any) => api.put(`/users/${id}`, data),
-  updateTheme: (id: number, theme: string) => api.put(`/users/${id}/theme`, { theme }),
+  getUsers: () => api.get<User[]>('/users'),
+  getUser: (id: number) => api.get<User>(`/users/${id}`),
+  updateUser: (id: number, data: Partial<Pick<User, 'name' | 'initials' | 'theme'>>) =>
+    api.put<User>(`/users/${id}`, data),
+  updateTheme: (id: number, theme: User['theme']) =>
+    api.put<User>(`/users/${id}/theme`, { theme }),
   resetUserData: (id: number) => api.delete(`/users/${id}/data`),
 
   // Habits
@@ -107,7 +175,7 @@ export const apiRoutes = {
 
   // Workouts
   getWorkouts: (userId: number) => api.get<Workout[]>(`/users/${userId}/workouts`),
-  updateWorkouts: (userId: number, workouts: any[]) =>
+  updateWorkouts: (userId: number, workouts: WorkoutInput[]) =>
     api.put<Workout[]>(`/users/${userId}/workouts`, { workouts }),
 
   // Stats

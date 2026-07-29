@@ -1,38 +1,28 @@
-from pydantic import BaseModel
 from datetime import date
-from typing import Optional
+
+from pydantic import Field
+
+from schemas.common import ApiSchema, HourMinute, IsoDate, Name200
 
 
-class HabitCheckInResponse(BaseModel):
-    date: date
-
-    class Config:
-        from_attributes = True
+class HabitCreate(ApiSchema):
+    name: Name200
+    time: HourMinute
 
 
-class HabitBase(BaseModel):
-    name: str
-    time: str  # HH:MM format
+class HabitUpdate(ApiSchema):
+    name: Name200 | None = None
+    time: HourMinute | None = None
 
 
-class HabitCreate(HabitBase):
-    pass
-
-
-class HabitUpdate(BaseModel):
-    name: Optional[str] = None
-    time: Optional[str] = None
-
-
-class HabitResponse(HabitBase):
+class HabitResponse(ApiSchema):
     id: int
     user_id: int
+    name: str
+    time: str
     created_at: date
-    check_ins: list[date] = []
-
-    class Config:
-        from_attributes = True
+    check_ins: list[date] = Field(default_factory=list)
 
 
-class CheckInRequest(BaseModel):
-    date: str  # YYYY-MM-DD format
+class CheckInRequest(ApiSchema):
+    date: IsoDate

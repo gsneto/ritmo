@@ -1,67 +1,56 @@
-# Status do Projeto
+# Estado do Ritmo
 
-## ✅ Pronto para Deploy
+Atualizado em 29 de julho de 2026.
 
-O projeto está configurado para deploy no Railway (backend + MySQL) e Netlify (frontend).
+## Estado confirmado
 
-## Estrutura de Deploy
+- A migração FastAPI + React foi preservada no commit local `0ce1d77`, na
+  branch de segurança `safety/ritmo-fastapi-migration-20260729`.
+- O trabalho de correção continua na branch
+  `fix/ritmo-production-ready-20260729`.
+- A arquitetura ativa do código é `backend/` + `frontend/`.
+- A configuração Vercel da raiz aponta para o build de `frontend/` e inclui o
+  fallback de rotas da SPA.
+- Os workflows foram preparados para testar antes de qualquer publicação
+  manual.
+- Nenhum deploy foi executado por estas alterações.
+- A versão antiga continua online em `https://habitos-base.vercel.app`.
+- A versão antiga em produção deve permanecer intacta até a aprovação do
+  preview, dos testes da API e da validação mobile.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Netlify (Frontend)                    │
-│              https://ritmo-app.netlify.app             │
-│                          │                              │
-│                   /api/* redirects                      │
-│                          ▼                              │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │          Railway (Backend + MySQL)              │   │
-│  │     https://ritmo-api.railway.app               │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-```
+## Validações locais concluídas
 
-## Arquivos de Deploy
+- Backend: `13 passed`, `pip check` sem dependências quebradas e `pip-audit`
+  sem vulnerabilidades conhecidas.
+- Frontend: `10 passed`, build Vite concluído e `npm audit` sem
+  vulnerabilidades conhecidas.
+- API real com SQLite isolado: 18 smoke tests aprovados, cobrindo chave de
+  acesso, CRUD, check-in idempotente, estatísticas, treinos, reset e CORS.
+- Persistência confirmada em um segundo processo lendo o arquivo SQLite.
+- Ambiente limpo de produção do backend iniciado apenas com
+  `requirements.txt`, sem dependências de teste.
+- Interface validada em `390 x 844` e `1440 x 1000`, sem rolagem horizontal.
+- Preview local do build final validado com rota direta e sem erros no console.
 
-### Backend (Railway)
-- `Dockerfile` - Build da imagem
-- `railway.toml` - Configuração do deploy
-- `.env.example` - Variáveis de ambiente
+## Portões para considerar a migração pronta
 
-### Frontend (Netlify)
-- `netlify.toml` - Configuração com redirects
-- `vite.config.ts` - Build e proxy
-- `.env.example` - VITE_API_URL
+- [x] Dependências instaladas a partir dos arquivos versionados.
+- [x] Testes automatizados do backend aprovados.
+- [x] Testes automatizados e build do frontend aprovados.
+- [x] API iniciada com banco isolado e smoke tests aprovados.
+- [ ] Segurança, CORS e persistência verificados no backend publicado.
+- [ ] Preview Vercel apontando para a URL real da API.
+- [x] Interface validada localmente em `390 x 844` e `1440 x 1000`.
+- [x] Rotas internas da SPA funcionando por acesso direto no preview local.
+- [ ] Produção promovida manualmente e verificada.
 
-## Deploy Checklist
+## Publicação
 
-### Railway
-- [ ] Conectar repositório GitHub
-- [ ] Adicionar plugin MySQL
-- [ ] Configurar variáveis de ambiente
-- [ ] Deploy automático
+| Componente | Estado | Observação |
+| --- | --- | --- |
+| Versão antiga | Online e preservada | Não substituir antes do preview remoto |
+| Backend FastAPI | Não publicado por este fluxo | Exige alvo, banco persistente, segredos e smoke tests |
+| Frontend React | Não promovido por este fluxo | Primeiro publicar e aprovar um preview |
 
-### Netlify
-- [ ] Conectar repositório GitHub
-- [ ] Build command: `npm run build`
-- [ ] Publish directory: `dist`
-- [ ] Variável: `VITE_API_URL`
-- [ ] Deploy automático
-
-## Funcionalidades Implementadas
-
-### Backend (FastAPI)
-- Models SQLAlchemy (User, Habit, Task, Workout, Exercise)
-- Schemas Pydantic para validação
-- Routers completos com todos os endpoints
-- CORS configurado
-- Seed data automático (perfis e treinos)
-- Endpoint de reset de dados
-
-### Frontend (React + TypeScript)
-- App com React Router
-- CSS migrado do original
-- Componentes: Topbar, Navigation, WorkoutsPanel
-- Páginas: Today, Habits, Tasks, Focus, Progress, Settings
-- Integração completa com API
-- Sistema de notificações
-- Tema claro/escuro
+Consulte [DEPLOY.md](DEPLOY.md) para executar cada portão sem confundir build
+local, preview e produção.

@@ -1,109 +1,110 @@
+import logging
+from collections.abc import Callable
 from contextlib import asynccontextmanager
-from datetime import date
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.orm import Session, sessionmaker
 
-from database import SessionLocal, init_db
-from models.user import User
-from models.workout import Exercise, Workout
+from config import Settings, get_settings
+from database import SessionLocal, get_db, init_db
 from routers import habits, stats, tasks, users, workouts
+from security import require_api_key
+from seed import seed_default_data
+from time_utils import app_today
 
 
-DEFAULT_WORKOUTS = [
-    {"day": "Seg", "title": "Peito e tríceps", "note": "", "exercises": [
-        {"name": "Supino reto", "sets": "3", "reps": "10"},
-        {"name": "Crucifixo", "sets": "3", "reps": "12"},
-    ]},
-    {"day": "Ter", "title": "Costas e bíceps", "note": "", "exercises": [
-        {"name": "Puxada frontal", "sets": "3", "reps": "10"},
-        {"name": "Remada", "sets": "3", "reps": "12"},
-    ]},
-    {"day": "Qua", "title": "Pernas", "note": "", "exercises": [
-        {"name": "Agachamento", "sets": "3", "reps": "10"},
-        {"name": "Leg press", "sets": "3", "reps": "12"},
-    ]},
-    {"day": "Qui", "title": "Ombros e abdômen", "note": "", "exercises": [
-        {"name": "Desenvolvimento", "sets": "3", "reps": "10"},
-        {"name": "Prancha", "sets": "3", "reps": "40s"},
-    ]},
-    {"day": "Sex", "title": "Corpo todo", "note": "", "exercises": [
-        {"name": "Circuito livre", "sets": "3", "reps": "12"},
-    ]},
-    {"day": "Sáb", "title": "Descanso ativo", "note": "Caminhada ou mobilidade", "exercises": []},
-    {"day": "Dom", "title": "Descanso", "note": "Recuperação", "exercises": []},
-]
+logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_db()
-    db = SessionLocal()
-    try:
-        if not db.query(User).first():
-            defaults = [
-                User(profile_id="antonio", name="Antonio", initials="A", theme="light"),
-                User(profile_id="itayna", name="Itayna", initials="I", theme="light"),
-            ]
-            db.add_all(defaults)
-            db.commit()
+def create_app(
+    app_settings: Settings | None = None,
+    *,
+    database_initializer: Callable[[], None] | None = None,
+    session_factory: sessionmaker | None = None,
+) -> FastAPI:
+    settings = app_settings or get_settings()
+    initialize_database = database_initializer or init_db
+    make_session = session_factory or SessionLocal
 
-            for user in db.query(User).all():
-                for workout_data in DEFAULT_WORKOUTS:
-                    workout = Workout(
-                        user_id=user.id,
-                        day=workout_data["day"],
-                        title=workout_data["title"],
-                        note=workout_data["note"],
-                    )
-                    db.add(workout)
-                    db.flush()
-                    for exercise_data in workout_data["exercises"]:
-                        db.add(Exercise(workout_id=workout.id, **exercise_data))
-                db.commit()
-    finally:
-        db.close()
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        initialize_database()
+        db = make_session()
+        try:
+            seed_default_data(db)
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+        yield
 
-    yield
+    docs_enabled = settings.DEBUG
+    application = FastAPI(
+        title=settings.APP_NAME,
+        description="API FastAPI do Ritmo",
+        version="1.1.0",
+        lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
+    )
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["Content-Type", "X-Ritmo-Key"],
+    )
+
+    @application.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        if request.url.path.startswith("/api"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+    protected = [Depends(require_api_key)]
+    application.include_router(users.router, dependencies=protected)
+    application.include_router(habits.router, dependencies=protected)
+    application.include_router(tasks.router, dependencies=protected)
+    application.include_router(workouts.router, dependencies=protected)
+    application.include_router(stats.router, dependencies=protected)
+
+    @application.get("/")
+    def root():
+        return {"message": settings.APP_NAME, "version": "1.1.0"}
+
+    @application.get("/api", dependencies=protected)
+    def api_root():
+        return {"message": settings.APP_NAME, "version": "1.1.0"}
+
+    @application.get("/health")
+    def health(db: Session = Depends(get_db)):
+        try:
+            db.execute(text("SELECT 1"))
+        except Exception as exc:
+            logger.exception("Database health check failed")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database unavailable",
+            ) from exc
+        return {
+            "status": "healthy",
+            "date": app_today().isoformat(),
+            "timezone": settings.TIMEZONE,
+        }
+
+    if app_settings is not None:
+        application.dependency_overrides[get_settings] = lambda: settings
+
+    return application
 
 
-app = FastAPI(
-    title="Ritmo API",
-    description="API FastAPI do Ritmo",
-    version="1.0.0",
-    lifespan=lifespan,
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(users.router)
-app.include_router(habits.router)
-app.include_router(tasks.router)
-app.include_router(workouts.router)
-app.include_router(stats.router)
-
-
-@app.get("/")
-def root():
-    return {"message": "Ritmo API", "version": "1.0.0"}
-
-
-@app.get("/api")
-def api_root():
-    return {"message": "Ritmo API", "version": "1.0.0"}
-
-
-@app.get("/health")
-def health():
-    return {"status": "healthy", "date": date.today().isoformat()}
+app = create_app()

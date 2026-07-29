@@ -1,5 +1,5 @@
-import { NavLink } from 'react-router-dom'
-import { CalendarCheck, Repeat, ListTodo, Timer, ChartNoAxesColumn, Settings } from 'lucide-react'
+import { CalendarCheck, Repeat, ListTodo, Timer, BarChart3, Settings } from 'lucide-react'
+import { AppLink } from '../router'
 
 export default function Navigation() {
   const navItems = [
@@ -7,21 +7,21 @@ export default function Navigation() {
     { to: '/habits', icon: Repeat, label: 'Hábitos' },
     { to: '/tasks', icon: ListTodo, label: 'Tarefas' },
     { to: '/focus', icon: Timer, label: 'Foco' },
-    { to: '/progress', icon: ChartNoAxesColumn, label: 'Evolução' },
+    { to: '/progress', icon: BarChart3, label: 'Evolução' },
     { to: '/settings', icon: Settings, label: 'Ajustes' },
   ]
 
   return (
     <nav className="view-nav" aria-label="Navegação principal">
       {navItems.map(({ to, icon: Icon, label }) => (
-        <NavLink
+        <AppLink
           key={to}
           to={to}
-          className={({ isActive }) => isActive ? 'active' : ''}
+          className={isActive => isActive ? 'active' : ''}
         >
-          <Icon size={18} strokeWidth={2.2} />
+          <Icon size={18} strokeWidth={2.2} aria-hidden="true" />
           <span>{label}</span>
-        </NavLink>
+        </AppLink>
       ))}
     </nav>
   )

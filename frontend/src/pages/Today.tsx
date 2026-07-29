@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { apiRoutes, TodayStats, MonthStats, StreakStats, Task } from '../services/api'
+import { apiRoutes } from '../services/api'
+import type { TodayStats, MonthStats, StreakStats, Task } from '../services/api'
 import { notify } from '../hooks/useNotifications'
-import { Check, Trash2 } from 'lucide-react'
+import { toLocalDateValue } from '../utils/date'
 
 interface TodayProps {
   userId: number
@@ -30,7 +31,7 @@ export default function Today({ userId }: TodayProps) {
       setStreak(streakData.data)
 
       // Filter today's tasks
-      const todayStr = new Date().toISOString().split('T')[0]
+      const todayStr = toLocalDateValue()
       const tasks = tasksResponse.data.filter(t => t.date === todayStr && !t.completed_at)
       setTodaysTasks(tasks)
     } catch (error) {
@@ -39,7 +40,7 @@ export default function Today({ userId }: TodayProps) {
   }
 
   async function toggleCheckIn(habitId: number, done: boolean) {
-    const today = new Date().toISOString().split('T')[0]
+    const today = toLocalDateValue()
     try {
       if (done) {
         await apiRoutes.removeCheckin(habitId, today)
@@ -66,23 +67,13 @@ export default function Today({ userId }: TodayProps) {
     }
   }
 
-  async function deleteTask(taskId: number) {
-    if (!confirm('Remover a tarefa?')) return
-    try {
-      await apiRoutes.deleteTask(taskId)
-      loadData()
-    } catch (error) {
-      console.error('Failed to delete task:', error)
-    }
-  }
-
   function formatTime(time: string): string {
     return time
   }
 
   const doneCount = todayStats?.habits_today.filter(h => h.done).length || 0
-  const totalCount = todayStats?.habits_today.length || 0
   const monthScore = monthStats?.months[monthStats.months.length - 1]?.score || 0
+  const streakDays = streak?.streak || 0
 
   return (
     <div className="view" data-view="today">
@@ -103,7 +94,7 @@ export default function Today({ userId }: TodayProps) {
           </article>
           <article className="metric">
             <span>Sequência</span>
-            <strong>{streak?.streak || 0} dias</strong>
+            <strong>{streakDays} {streakDays === 1 ? 'dia' : 'dias'}</strong>
           </article>
         </div>
       </section>
@@ -132,6 +123,7 @@ export default function Today({ userId }: TodayProps) {
                       className={`check-button ${habit.done ? 'done' : ''}`}
                       onClick={() => toggleCheckIn(habit.id, habit.done)}
                       type="button"
+                      aria-label={`${habit.done ? 'Desmarcar' : 'Marcar'} ${habit.name} hoje`}
                     >
                       {habit.done ? 'Feito' : 'Marcar'}
                     </button>
@@ -160,6 +152,7 @@ export default function Today({ userId }: TodayProps) {
                       className="check-button"
                       onClick={() => toggleTaskCompletion(task)}
                       type="button"
+                      aria-label={`Concluir ${task.name}`}
                     >
                       Concluir
                     </button>

@@ -1,59 +1,82 @@
 # Ritmo
 
-Aplicacao de rotina pessoal com backend em **FastAPI** e frontend em **React/Vite**.
+Aplicativo pessoal de hábitos, tarefas, foco, treinos e progresso.
 
-## Estrutura
+A arquitetura ativa é:
 
-- `backend/` - API FastAPI
-- `frontend/` - interface React
+- `backend/`: API FastAPI e persistência SQLAlchemy;
+- `frontend/`: SPA React, TypeScript e Vite;
+- `vercel.json`: build do `frontend/` e fallback de rotas da SPA;
+- `.github/workflows/`: validação contínua e publicações manuais.
 
-## Backend FastAPI
+O frontend e o backend são aplicações separadas. Em produção, o frontend deve
+receber a URL HTTPS completa da API em `VITE_API_URL`, incluindo o prefixo
+`/api`. O Vercel não hospeda nem redireciona o backend desta configuração.
 
-### Execucao local
+## Desenvolvimento local
+
+### Backend
 
 ```powershell
-cd backend
+Set-Location backend
 python -m venv .venv
-.\\.venv\\Scripts\\Activate.ps1
-pip install -r requirements.txt
-copy .env.example .env
-uvicorn main:app --reload
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+Copy-Item .env.example .env
+.\.venv\Scripts\python.exe -m uvicorn main:app --reload
 ```
 
-Se quiser usar SQLite localmente, deixe:
+O SQLite local usa:
 
 ```env
 DATABASE_URL=sqlite:///./ritmo.db
+RITMO_DEBUG=true
 ```
 
-### Rotas principais
+A API estará disponível localmente em `http://localhost:8000`. Rotas úteis:
 
 - `GET /health`
 - `GET /api/users`
-- `GET /api/users/{id}/habits`
-- `GET /api/users/{id}/tasks`
-- `GET /api/users/{id}/workouts`
-- `GET /api/users/{id}/stats/today`
-- `GET /api/users/{id}/stats/monthly`
-- `GET /api/users/{id}/stats/week`
-- `GET /api/users/{id}/stats/streak`
+- `GET /docs`
 
-## Frontend
+Em produção, `RITMO_DEBUG=false` exige `APP_ACCESS_TOKEN`. O frontend envia essa chave
+no cabeçalho `X-Ritmo-Key`; ela não deve ser versionada.
 
-O frontend continua consumindo a API em `/api`. Em desenvolvimento, configure:
+### Frontend
+
+Em outro terminal:
+
+```powershell
+Set-Location frontend
+Copy-Item .env.example .env
+npm ci
+npm run dev
+```
+
+Para desenvolvimento local:
 
 ```env
 VITE_API_URL=http://localhost:8000/api
 ```
 
-E rode:
+## Validação
 
 ```powershell
-cd frontend
-npm install
-npm run dev
+Set-Location backend
+.\.venv\Scripts\python.exe -m pip_audit -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest -q
+
+Set-Location ..\frontend
+npm test
+npm run build
 ```
 
-## Observacao
+O build não comprova sozinho que a API, o banco e a interface mobile funcionam
+juntos. Consulte [DEPLOY.md](DEPLOY.md) para o fluxo de preview, smoke tests e
+promoção, e [STATUS.md](STATUS.md) para o estado atual.
 
-A API FastAPI do backend usa os mesmos modelos do app atual, entao o frontend deve continuar funcionando sem mudar o contrato das rotas.
+## Regra de publicação
+
+Push e pull request executam testes; não promovem automaticamente esta migração
+para produção pelos workflows do repositório. Preview e produção exigem execução
+manual, e produção exige confirmação explícita. A versão antiga deve permanecer
+online até a nova versão passar pelos testes de API e interface mobile.

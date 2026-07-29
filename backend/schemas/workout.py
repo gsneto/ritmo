@@ -1,49 +1,48 @@
-from pydantic import BaseModel
-from typing import Optional
+from typing import Literal
+
+from pydantic import Field
+
+from schemas.common import ApiSchema, Name100, Name200, OptionalNote, OptionalShortText
 
 
-class ExerciseBase(BaseModel):
-    name: str
-    sets: Optional[str] = None
-    reps: Optional[str] = None
+WorkoutDay = Literal["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
 
 
-class ExerciseCreate(ExerciseBase):
-    pass
+class ExerciseCreate(ApiSchema):
+    name: Name100
+    sets: OptionalShortText | None = None
+    reps: OptionalShortText | None = None
 
 
-class ExerciseResponse(ExerciseBase):
+class ExerciseResponse(ApiSchema):
     id: int
-
-    class Config:
-        from_attributes = True
-
-
-class WorkoutBase(BaseModel):
-    day: str
-    title: str
-    note: Optional[str] = None
+    name: str
+    sets: str | None = None
+    reps: str | None = None
 
 
-class WorkoutCreate(WorkoutBase):
-    exercises: list[ExerciseCreate] = []
+class WorkoutCreate(ApiSchema):
+    day: WorkoutDay
+    title: Name200
+    note: OptionalNote | None = None
+    exercises: list[ExerciseCreate] = Field(default_factory=list, max_length=100)
 
 
-class WorkoutUpdate(BaseModel):
-    day: Optional[str] = None
-    title: Optional[str] = None
-    note: Optional[str] = None
-    exercises: Optional[list[ExerciseCreate]] = None
+class WorkoutUpdate(ApiSchema):
+    day: WorkoutDay | None = None
+    title: Name200 | None = None
+    note: OptionalNote | None = None
+    exercises: list[ExerciseCreate] | None = Field(default=None, max_length=100)
 
 
-class WorkoutResponse(WorkoutBase):
+class WorkoutResponse(ApiSchema):
     id: int
     user_id: int
-    exercises: list[ExerciseResponse] = []
+    day: WorkoutDay
+    title: str
+    note: str | None = None
+    exercises: list[ExerciseResponse] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
 
-
-class WorkoutsUpdateRequest(BaseModel):
-    workouts: list[WorkoutCreate]
+class WorkoutsUpdateRequest(ApiSchema):
+    workouts: list[WorkoutCreate] = Field(max_length=31)

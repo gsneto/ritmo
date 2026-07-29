@@ -1,12 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+
 from database import get_db
 from models.user import User
-from models.habit import Habit
-from models.task import Task
-from models.workout import Workout
 from schemas.user import UserResponse, UserUpdate, ThemeUpdate
+from seed import create_default_workouts
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -53,9 +52,6 @@ def update_theme(user_id: int, data: ThemeUpdate, db: Session = Depends(get_db))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if data.theme not in ["light", "dark"]:
-        raise HTTPException(status_code=400, detail="Theme must be 'light' or 'dark'")
-
     user.theme = data.theme
     db.commit()
     db.refresh(user)
@@ -69,11 +65,21 @@ def reset_user_data(user_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Delete all user's data
-    db.query(Habit).filter(Habit.user_id == user_id).delete()
-    db.query(Task).filter(Task.user_id == user_id).delete()
-    db.query(Workout).filter(Workout.user_id == user_id).delete()
+    try:
+        # ORM deletes honor relationship cascades and leave no orphan rows.
+        for habit in list(user.habits):
+            db.delete(habit)
+        for task in list(user.tasks):
+            db.delete(task)
+        for workout in list(user.workouts):
+            db.delete(workout)
+        db.flush()
 
-    db.commit()
+        # Reset means a clean usable app, including the seven default workouts.
+        create_default_workouts(db, user.id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {"message": f"Data reset for user {user.name}"}

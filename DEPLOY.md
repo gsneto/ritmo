@@ -1,160 +1,168 @@
-# 🚀 Guia de Deploy - Ritmo
+# Publicação segura do Ritmo
 
-## Opção 1: Deploy Manual (Mais Rápido)
+Este documento descreve a arquitetura FastAPI + React. As instruções antigas de
+Netlify, MySQL e URLs presumidas não se aplicam a esta migração.
 
-### Passo 1: Criar Repositório no GitHub
+## Política de promoção
 
-1. Acesse [github.com](https://github.com)
-2. Clique em **"+"** → **"New repository"**
-3. Nome: `ritmo`
-4. **NÃO** marque "Add a README file" (já temos)
-5. Clique **"Create repository"**
-6. Na próxima tela, copie a URL do repositório
+1. Preservar a versão antiga em produção.
+2. Validar backend e frontend localmente e no CI.
+3. Publicar o backend em um ambiente controlado.
+4. Criar um preview do frontend apontando para essa API.
+5. Validar API, persistência, segurança e interface mobile no preview.
+6. Somente então promover manualmente o frontend para produção.
 
-### Passo 2: Enviar Código para GitHub
+Os workflows não publicam em `push`. A publicação acontece apenas por
+`workflow_dispatch`, depois do job de testes.
 
-Abra o terminal na pasta do projeto e execute:
+> Atenção: uma integração Git existente no painel da Vercel pode publicar fora
+> destes workflows. Antes de enviar esta branch para `main`, confirme no painel
+> que a produção não será atualizada automaticamente.
 
-```bash
-# Inicializar git (se não existir)
-git init
-
-# Adicionar todos os arquivos
-git add .
-
-# Commit
-git commit -m "Ritmo - Assistente de Hábitos"
-
-# Adicionar remote (substitua pela URL do seu repositório)
-git remote add origin https://github.com/SEU_USUARIO/ritmo.git
-
-# Enviar
-git branch -M main
-git push -u origin main
-```
-
-### Passo 3: Deploy Backend no Railway
-
-1. Acesse [railway.app](https://railway.app)
-2. Clique **"Login"** → **"Login with GitHub"**
-3. Autorize o acesso
-4. Clique **"New Project"** → **"Deploy from GitHub repo"**
-5. Selecione o repositório `ritmo`
-6. **Adicionar MySQL:**
-   - Clique no projeto → **"Add Plugin"** → **"MySQL"**
-   - Aguarde criar o banco
-7. **Configurar variáveis:**
-   - Clique em **"Variables"**
-   - O Railway já preencheu `MYSQL_*` automaticamente
-   - Adicione (ou edite) estas variáveis:
-     ```
-     DB_HOST = ${MYSQL_HOST}
-     DB_PORT = 3306
-     DB_USER = ${MYSQL_USER}
-     DB_PASSWORD = ${MYSQL_PASSWORD}
-     DB_NAME = ${MYSQL_DATABASE}
-     ```
-8. Aguarde o deploy terminar (~$2-3 min)
-9. Copie a URL do deploy (ex: `https://ritmo.railway.app`)
-
-### Passo 4: Deploy Frontend no Netlify
-
-1. Acesse [netlify.com](https://netlify.com)
-2. Clique **"Login"** → **"Login with GitHub"**
-3. Autorize o acesso
-4. Clique **"Add new site"** → **"Import from Git"**
-5. Selecione `ritmo/frontend`
-6. Configure:
-   - **Base directory:** `frontend` (já deve estar)
-   - **Build command:** `npm run build`
-   - **Publish directory:** `dist`
-7. Clique **"Deploy site"**
-8. **Variáveis de ambiente:**
-   - Vá em **Site settings** → **Environment variables**
-   - Clique **"New variable"**:
-     ```
-     Key: VITE_API_URL
-     Value: https://ritmo.railway.app  (substitua pela sua URL)
-     ```
-9. **Redeploy:**
-   - Vá em **Deploys**
-   - Clique **"Trigger deploy"** → **"Deploy site"**
-10. Copie a URL do site (ex: `https://ritmo.netlify.app`)
-
-### Passo 5: Atualizar Frontend com URL correta
-
-1. No Netlify, vá em **Site settings** → **General**
-2. Copie a **Netlify subdomain URL**
-3. No Railway, copie a URL do backend
-4. Atualize a variável `VITE_API_URL` com a URL do Railway
-
----
-
-## Opção 2: Teste Local (Sem Deploy)
-
-Se quiser testar antes de fazer deploy:
+## 1. Validação local
 
 ### Backend
-```bash
-cd backend
-python -m venv venv
-.\venv\Scripts\activate
-pip install -r requirements.txt
 
-# Criar banco MySQL (você precisa ter MySQL instalado)
-mysql -u root -p
-CREATE DATABASE ritmo_db;
-EXIT
-
-# Rodar
-uvicorn main:app --reload
+```powershell
+Set-Location backend
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+Copy-Item .env.example .env
+.\.venv\Scripts\python.exe -m pip_audit -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m compileall -q .
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m uvicorn main:app --reload
 ```
 
+Em outro terminal, faça pelo menos estes smoke tests:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod http://localhost:8000/api/users
+```
+
+Teste também criação, edição e exclusão de um hábito, uma tarefa e um treino,
+além das rotas de estatísticas. Confirme que reiniciar a API não perde os dados.
+
 ### Frontend
-```bash
-cd frontend
-npm install
+
+```powershell
+Set-Location frontend
+Copy-Item .env.example .env
+npm ci
+npm test
+npm run build
 npm run dev
 ```
 
----
+Com a API local ativa, valide a interface em:
 
-## URLs após deploy
+- mobile: `390 x 844`;
+- desktop: `1440 x 1000`;
+- sem rolagem horizontal;
+- carregamento inicial, troca de perfil, hábitos, tarefas, foco, treinos,
+  progresso, configurações e erros de autorização.
 
+## 2. CI
+
+Os dois workflows executam em pull requests e em pushes para `main` quando os
+arquivos correspondentes mudam:
+
+- `deploy-backend.yml`: instala dependências, compila, executa `pytest` e
+  constrói a imagem Docker;
+- `deploy-frontend.yml`: usa o lockfile, executa os testes e gera o build Vite.
+
+Não prossiga se qualquer job falhar.
+
+## 3. Backend
+
+O workflow oferece publicação manual no Railway porque o repositório já contém
+um Dockerfile do backend. Isso não significa que um projeto, serviço, domínio,
+banco ou credencial já exista.
+
+Crie o ambiente protegido `backend-production` no GitHub e configure:
+
+| Tipo | Nome | Conteúdo |
+| --- | --- | --- |
+| Secret | `RAILWAY_TOKEN` | token de projeto com acesso ao ambiente |
+| Secret | `RAILWAY_PROJECT_ID` | ID do projeto escolhido |
+| Variable | `RAILWAY_ENVIRONMENT` | nome ou ID do ambiente |
+| Variable | `RAILWAY_SERVICE` | nome ou ID do serviço do backend |
+
+No provedor, configure o diretório raiz do serviço como `/backend` e selecione
+`/backend/railway.toml` como arquivo de configuração quando necessário.
+
+Antes de publicar:
+
+- use um banco persistente e configure a `DATABASE_URL`; SQLite em disco
+  efêmero não é adequado para produção;
+- use `RITMO_DEBUG=false`;
+- configure uma chave forte em `APP_ACCESS_TOKEN`;
+- configure `CORS_ORIGINS` apenas com as origens reais do preview e da produção,
+  separadas por vírgula e sem caminhos;
+- mantenha `TIMEZONE=America/Sao_Paulo`, salvo decisão explícita em contrário;
+- não salve segredos em `.env` versionado;
+- mantenha uma forma de restaurar ou exportar os dados.
+
+Para publicar, abra **Actions > Backend CI and manual release > Run workflow**.
+Primeiro execute com `publish = false`. Use `publish = true` apenas depois de
+aprovar o job de testes e revisar o ambiente `backend-production`.
+
+Após a publicação, copie a URL real fornecida pelo provedor e valide:
+
+```powershell
+$env:RITMO_API_URL = "https://<host-real-da-api>"
+$env:RITMO_ACCESS_TOKEN = "<chave-configurada-no-backend>"
+Invoke-RestMethod "$env:RITMO_API_URL/health"
+Invoke-RestMethod `
+  -Uri "$env:RITMO_API_URL/api/users" `
+  -Headers @{ "X-Ritmo-Key" = $env:RITMO_ACCESS_TOKEN }
 ```
-Frontend:  https://seu-app.netlify.app
-Backend:   https://seu-app.railway.app
-API Docs:  https://seu-app.railway.app/docs
-```
 
----
+Use a chave configurada para testar as rotas protegidas. Não continue se o
+health check, a autenticação ou a persistência falharem.
 
-## Solução de Problemas
+## 4. Preview do frontend
 
-### "Cannot connect to database"
-- Verifique as variáveis `DB_*` no Railway
-- Verifique se o MySQL está rodando
+Crie os ambientes protegidos `preview` e `production` no GitHub. Em ambos,
+configure:
 
-### "CORS error"
-- O backend já tem CORS configurado para `localhost:5173` e Netlify
-- Se usar outra URL, adicione em `main.py` → `allow_origins`
+| Tipo | Nome | Conteúdo |
+| --- | --- | --- |
+| Secret | `VERCEL_TOKEN` | token autorizado a publicar |
+| Secret | `VERCEL_ORG_ID` | ID da conta ou equipe |
+| Secret | `VERCEL_PROJECT_ID` | ID do projeto existente |
+| Variable | `VITE_API_URL` | URL HTTPS completa da API, terminando em `/api` |
 
-### "Build failed"
-- Verifique se o `package.json` tem as dependências corretas
-- No Netlify, verifique se o Node version é 18+
+Configure `VITE_API_URL` também nos ambientes Preview e Production do projeto
+na Vercel. Não use `localhost` em builds remotos.
 
----
+No projeto Vercel, mantenha **Root Directory** na raiz do repositório. O
+`vercel.json` já executa instalação e build dentro de `frontend/`; configurar
+`frontend` novamente no painel faria a raiz e os caminhos divergirem.
 
-## Custos
+Abra **Actions > Frontend CI and Vercel release > Run workflow** e escolha
+`preview`. O workflow só publica depois de `npm test` e `npm run build`.
 
-| Serviço | Plano | Preço |
-|---------|-------|-------|
-| Railway | Starter | $5/mês (ou $500 créditos grátis) |
-| Netlify | Starter | FREE |
-| MySQL (Railway) | Starter | $5/mês (ou incluído nos créditos) |
+No endereço de preview retornado pelo workflow:
 
-**Alternativa gratuita:** Use PlanetScale (MySQL serverless) + Railway free tier.
+- repita os smoke tests da API;
+- crie dados e confirme a persistência após recarregar;
+- confira que uma chave inválida é recusada;
+- valide as larguras mobile e desktop;
+- teste uma rota interna aberta diretamente no navegador.
 
----
+## 5. Promoção
 
-Precisa de ajuda com algum passo específico?
+Somente com todos os itens anteriores aprovados:
+
+1. execute novamente **Frontend CI and Vercel release**;
+2. escolha `production`;
+3. marque a confirmação de que preview e mobile foram aprovados;
+4. aguarde testes, build e deploy;
+5. confirme o status final no provedor e faça smoke test da URL pública.
+
+Se a validação final falhar, não altere o backend nem apague dados para
+“acompanhar” o erro. Restaure a implantação anterior do frontend no painel da
+Vercel e investigue a nova versão separadamente.

@@ -1,10 +1,10 @@
-import { BrowserRouter } from 'react-router-dom'
 import App from './App'
+import { RouterProvider } from './router'
 
 export default function AppWrapper() {
   return (
-    <BrowserRouter>
+    <RouterProvider>
       <App />
-    </BrowserRouter>
+    </RouterProvider>
   )
 }

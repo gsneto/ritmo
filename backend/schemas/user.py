@@ -1,32 +1,32 @@
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Literal
+
+from schemas.common import ApiSchema, Initials, Name50, Name100
 
 
-class UserBase(BaseModel):
+Theme = Literal["light", "dark"]
+
+
+class UserCreate(ApiSchema):
+    profile_id: Name50
+    name: Name100
+    initials: Initials
+
+
+class UserUpdate(ApiSchema):
+    name: Name100 | None = None
+    initials: Initials | None = None
+    theme: Theme | None = None
+
+
+class UserResponse(ApiSchema):
+    id: int
     profile_id: str
     name: str
     initials: str
-
-
-class UserCreate(UserBase):
-    pass
-
-
-class UserUpdate(BaseModel):
-    name: Optional[str] = None
-    initials: Optional[str] = None
-    theme: Optional[str] = None
-
-
-class UserResponse(UserBase):
-    id: int
-    theme: str
+    theme: Theme
     created_at: datetime
 
-    class Config:
-        from_attributes = True
 
-
-class ThemeUpdate(BaseModel):
-    theme: str
+class ThemeUpdate(ApiSchema):
+    theme: Theme

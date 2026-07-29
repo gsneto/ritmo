@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { apiRoutes, Habit } from '../services/api'
-import { Trash2, Timer, Dumbbell, Check, Plus, Pencil, X } from 'lucide-react'
+import type { FormEvent } from 'react'
+import { apiRoutes } from '../services/api'
+import type { Habit } from '../services/api'
+import { Trash2, Timer, Dumbbell, Pencil } from 'lucide-react'
 import WorkoutsPanel from '../components/WorkoutsPanel'
+import { toLocalDateValue } from '../utils/date'
+import { useAppRouter } from '../router'
 
 interface HabitsProps {
   userId: number
 }
 
 export default function Habits({ userId }: HabitsProps) {
-  const navigate = useNavigate()
+  const { navigate } = useAppRouter()
   const [habits, setHabits] = useState<Habit[]>([])
   const [entryType, setEntryType] = useState<'habit' | 'task'>('habit')
   const [name, setName] = useState('')
@@ -33,13 +36,13 @@ export default function Habits({ userId }: HabitsProps) {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!name.trim()) return
 
     try {
       if (entryType === 'task') {
-        const today = new Date().toISOString().split('T')[0]
+        const today = toLocalDateValue()
         await apiRoutes.createTask(userId, {
           name: name.trim(),
           date: date || today,
@@ -61,7 +64,7 @@ export default function Habits({ userId }: HabitsProps) {
   }
 
   async function toggleCheckIn(habit: Habit) {
-    const today = new Date().toISOString().split('T')[0]
+    const today = toLocalDateValue()
     const isCheckedIn = habit.check_ins.includes(today)
     try {
       if (isCheckedIn) {
@@ -111,14 +114,14 @@ export default function Habits({ userId }: HabitsProps) {
   }
 
   function goToFocus(habitId: number) {
-    navigate('/focus')
+    navigate(`/focus?habit=${habitId}`)
   }
 
   function openWorkouts() {
     setShowWorkouts(true)
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = toLocalDateValue()
 
   return (
     <div className="view" data-view="habits">
@@ -127,12 +130,12 @@ export default function Habits({ userId }: HabitsProps) {
           <div><p className="section-label">Cadastro</p><h2 id="entryTitle">{entryType === 'task' ? 'Nova tarefa' : 'Novo hábito'}</h2></div>
         </div>
         <form className="entry-form" onSubmit={handleSubmit}>
-          <input type="hidden" value={entryType} />
-          <div className="entry-type" role="group">
+          <div className="entry-type" role="group" aria-label="Tipo de item">
             <button
               type="button"
               className={entryType === 'habit' ? 'active' : ''}
               onClick={() => setEntryType('habit')}
+              aria-pressed={entryType === 'habit'}
             >
               Hábito
             </button>
@@ -140,6 +143,7 @@ export default function Habits({ userId }: HabitsProps) {
               type="button"
               className={entryType === 'task' ? 'active' : ''}
               onClick={() => setEntryType('task')}
+              aria-pressed={entryType === 'task'}
             >
               Tarefa
             </button>
@@ -201,11 +205,13 @@ export default function Habits({ userId }: HabitsProps) {
                         onChange={(e) => setEditName(e.target.value)}
                         maxLength={60}
                         autoFocus
+                        aria-label={`Nome de ${habit.name}`}
                       />
                       <input
                         type="time"
                         value={editTime}
                         onChange={(e) => setEditTime(e.target.value)}
+                        aria-label={`Horário de ${habit.name}`}
                       />
                     </div>
                     <div className="item-actions">
@@ -229,8 +235,9 @@ export default function Habits({ userId }: HabitsProps) {
                           type="button"
                           title="Ir para Foco"
                           onClick={() => goToFocus(habit.id)}
+                          aria-label={`Iniciar foco para ${habit.name}`}
                         >
-                          <Timer size={16} />
+                          <Timer size={16} aria-hidden="true" />
                         </button>
                       )}
                       {isWorkoutHabit(habit.name) && (
@@ -239,14 +246,16 @@ export default function Habits({ userId }: HabitsProps) {
                           type="button"
                           title="Ver treinos"
                           onClick={openWorkouts}
+                          aria-label="Ver treinos da semana"
                         >
-                          <Dumbbell size={16} />
+                          <Dumbbell size={16} aria-hidden="true" />
                         </button>
                       )}
                       <button
                         className={`check-button ${habit.check_ins.includes(today) ? 'done' : ''}`}
                         onClick={() => toggleCheckIn(habit)}
                         type="button"
+                        aria-label={`${habit.check_ins.includes(today) ? 'Desmarcar' : 'Marcar'} ${habit.name} hoje`}
                       >
                         {habit.check_ins.includes(today) ? 'Feito' : 'Marcar'}
                       </button>
@@ -255,16 +264,18 @@ export default function Habits({ userId }: HabitsProps) {
                         type="button"
                         title={`Editar ${habit.name}`}
                         onClick={() => startEditing(habit)}
+                        aria-label={`Editar ${habit.name}`}
                       >
-                        <Pencil size={16} />
+                        <Pencil size={16} aria-hidden="true" />
                       </button>
                       <button
                         className="icon-button small-icon danger-button"
                         onClick={() => deleteHabit(habit.id)}
                         type="button"
                         title={`Remover ${habit.name}`}
+                        aria-label={`Remover ${habit.name}`}
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={16} aria-hidden="true" />
                       </button>
                     </div>
                   </>

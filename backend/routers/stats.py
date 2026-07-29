@@ -1,27 +1,40 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from sqlalchemy import func
 from datetime import date, timedelta
-from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
 from database import get_db
-from models.user import User
 from models.habit import Habit, HabitCheckIn
+from models.user import User
+from time_utils import app_today
 
 router = APIRouter(prefix="/api", tags=["stats"])
+MONTH_LABELS = (
+    "Jan",
+    "Fev",
+    "Mar",
+    "Abr",
+    "Mai",
+    "Jun",
+    "Jul",
+    "Ago",
+    "Set",
+    "Out",
+    "Nov",
+    "Dez",
+)
 
 
-def get_date_str(d: date) -> str:
-    return d.isoformat()
-
-
-def get_today_str() -> str:
-    return get_date_str(date.today())
+def ensure_user_exists(user_id: int, db: Session) -> None:
+    if db.query(User.id).filter(User.id == user_id).first() is None:
+        raise HTTPException(status_code=404, detail="User not found")
 
 
 @router.get("/users/{user_id}/stats/today")
 def get_today_stats(user_id: int, db: Session = Depends(get_db)):
     """Get today's statistics for a user."""
-    today = date.today()
+    ensure_user_exists(user_id, db)
+    today = app_today()
     habits = db.query(Habit).filter(Habit.user_id == user_id).all()
 
     # Filter habits active today
@@ -60,7 +73,8 @@ def get_today_stats(user_id: int, db: Session = Depends(get_db)):
 @router.get("/users/{user_id}/stats/monthly")
 def get_monthly_stats(user_id: int, db: Session = Depends(get_db)):
     """Get monthly statistics for the last 6 months."""
-    current = date.today()
+    ensure_user_exists(user_id, db)
+    current = app_today()
     months = []
 
     for offset in range(5, -1, -1):
@@ -101,7 +115,7 @@ def get_monthly_stats(user_id: int, db: Session = Depends(get_db)):
 
         score = round((completed / available) * 100) if available > 0 else 0
         months.append({
-            "month": first_day.strftime("%b"),
+            "month": MONTH_LABELS[first_day.month - 1],
             "score": score
         })
 
@@ -111,8 +125,9 @@ def get_monthly_stats(user_id: int, db: Session = Depends(get_db)):
 @router.get("/users/{user_id}/stats/streak")
 def get_streak(user_id: int, db: Session = Depends(get_db)):
     """Calculate current streak."""
+    ensure_user_exists(user_id, db)
     streak = 0
-    today = date.today()
+    today = app_today()
 
     for offset in range(366):
         check_date = today - timedelta(days=offset)
@@ -143,7 +158,8 @@ def get_streak(user_id: int, db: Session = Depends(get_db)):
 @router.get("/users/{user_id}/stats/week")
 def get_week_stats(user_id: int, db: Session = Depends(get_db)):
     """Get last 7 days statistics."""
-    today = date.today()
+    ensure_user_exists(user_id, db)
+    today = app_today()
     days = []
 
     for offset in range(6, -1, -1):
@@ -165,7 +181,7 @@ def get_week_stats(user_id: int, db: Session = Depends(get_db)):
         total = len(habits)
         percent = round((done / total) * 100) if total > 0 else 0
 
-        weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]
+        weekdays = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
         days.append({
             "day": weekdays[check_date.weekday()],
             "percent": percent,

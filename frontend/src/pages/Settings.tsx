@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { User } from '../App'
-import { Sun, Moon, Trash2, Bell, BellOff } from 'lucide-react'
+import type { User } from '../services/api'
+import { Sun, Moon, Trash2, Bell, BellOff, KeyRound } from 'lucide-react'
 import { useNotifications } from '../hooks/useNotifications'
 import { apiRoutes } from '../services/api'
 
@@ -10,9 +10,17 @@ interface SettingsProps {
   onUserChange: (user: User) => void
   onThemeChange: (theme: 'light' | 'dark') => void
   onDataReset?: () => void
+  onChangeAccessCode: () => void
 }
 
-export default function Settings({ user, users, onUserChange, onThemeChange, onDataReset }: SettingsProps) {
+export default function Settings({
+  user,
+  users,
+  onUserChange,
+  onThemeChange,
+  onDataReset,
+  onChangeAccessCode,
+}: SettingsProps) {
   const { permission, requestPermission, isSupported } = useNotifications()
   const [isResetting, setIsResetting] = useState(false)
 
@@ -22,13 +30,12 @@ export default function Settings({ user, users, onUserChange, onThemeChange, onD
     setIsResetting(true)
     try {
       await apiRoutes.resetUserData(user.id)
-      if (onDataReset) onDataReset()
+      setIsResetting(false)
       alert('Dados limpos com sucesso!')
-      window.location.reload()
+      if (onDataReset) onDataReset()
     } catch (error) {
       console.error('Failed to reset data:', error)
       alert('Erro ao limpar dados. Tente novamente.')
-    } finally {
       setIsResetting(false)
     }
   }
@@ -76,21 +83,23 @@ export default function Settings({ user, users, onUserChange, onThemeChange, onD
         <div className="panel-head">
           <div><p className="section-label">Aparência</p><h2>Tema</h2></div>
         </div>
-        <div className="theme-switch" role="group">
+        <div className="theme-switch" role="group" aria-label="Escolher tema">
           <button
             type="button"
             className={user.theme === 'light' ? 'active' : ''}
             onClick={() => onThemeChange('light')}
+            aria-pressed={user.theme === 'light'}
           >
-            <Sun size={18} />
+            <Sun size={18} aria-hidden="true" />
             <span>Claro</span>
           </button>
           <button
             type="button"
             className={user.theme === 'dark' ? 'active' : ''}
             onClick={() => onThemeChange('dark')}
+            aria-pressed={user.theme === 'dark'}
           >
-            <Moon size={18} />
+            <Moon size={18} aria-hidden="true" />
             <span>Escuro</span>
           </button>
         </div>
@@ -106,7 +115,7 @@ export default function Settings({ user, users, onUserChange, onThemeChange, onD
               <>
                 <Bell size={20} style={{ color: 'var(--green)' }} />
                 <span style={{ color: 'var(--green)', fontWeight: 600 }}>
-                  Notificações ativadas
+                  Alertas de check-in e Pomodoro ativados neste navegador
                 </span>
               </>
             ) : permission === 'denied' ? (
@@ -120,7 +129,7 @@ export default function Settings({ user, users, onUserChange, onThemeChange, onD
               <>
                 <Bell size={20} style={{ color: 'var(--muted)' }} />
                 <span style={{ color: 'var(--muted)' }}>
-                  Ative para receber lembretes de hábitos
+                  Ative alertas de check-in e conclusão do Pomodoro enquanto o app estiver aberto
                 </span>
                 <button className="primary-button" onClick={handleNotificationPermission} type="button">
                   Ativar
@@ -130,6 +139,17 @@ export default function Settings({ user, users, onUserChange, onThemeChange, onD
           </div>
         </section>
       )}
+
+      <section className="panel settings-panel">
+        <div className="panel-head">
+          <div><p className="section-label">Segurança</p><h2>Código pessoal</h2></div>
+        </div>
+        <p className="settings-copy">Troque o código usado para acessar seus dados neste navegador.</p>
+        <button className="ghost-button settings-action" type="button" onClick={onChangeAccessCode}>
+          <KeyRound size={17} aria-hidden="true" />
+          <span>Trocar código de acesso</span>
+        </button>
+      </section>
 
       <section className="panel data-panel">
         <div className="panel-head">
@@ -141,7 +161,7 @@ export default function Settings({ user, users, onUserChange, onThemeChange, onD
           disabled={isResetting}
           type="button"
         >
-          <Trash2 size={17} />
+          <Trash2 size={17} aria-hidden="true" />
           <span>{isResetting ? 'Limpando...' : 'Limpar dados deste perfil'}</span>
         </button>
       </section>

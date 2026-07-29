@@ -45,36 +45,36 @@ def update_workouts(user_id: int, data: WorkoutsUpdateRequest, db: Session = Dep
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Delete existing workouts
-    db.query(Workout).filter(Workout.user_id == user_id).delete()
-
-    # Create new workouts
-    new_workouts = []
-    for workout_data in data.workouts:
-        workout = Workout(
-            user_id=user_id,
-            day=workout_data.day,
-            title=workout_data.title,
-            note=workout_data.note
-        )
-        db.add(workout)
+    try:
+        # ORM deletion preserves cascades for exercises on every supported DB.
+        for workout in list(user.workouts):
+            db.delete(workout)
         db.flush()
 
-        for ex_data in workout_data.exercises:
-            exercise = Exercise(
-                workout_id=workout.id,
-                name=ex_data.name,
-                sets=ex_data.sets,
-                reps=ex_data.reps
+        new_workouts = []
+        for workout_data in data.workouts:
+            workout = Workout(
+                user_id=user_id,
+                day=workout_data.day,
+                title=workout_data.title,
+                note=workout_data.note,
+                exercises=[
+                    Exercise(
+                        name=exercise_data.name,
+                        sets=exercise_data.sets,
+                        reps=exercise_data.reps,
+                    )
+                    for exercise_data in workout_data.exercises
+                ],
             )
-            db.add(exercise)
+            db.add(workout)
+            new_workouts.append(workout)
 
-        new_workouts.append(workout)
+        db.commit()
+        for workout in new_workouts:
+            db.refresh(workout)
+    except Exception:
+        db.rollback()
+        raise
 
-    db.commit()
-
-    # Refresh all workouts
-    for w in new_workouts:
-        db.refresh(w)
-
-    return [serialize_workout(w) for w in new_workouts]
+    return [serialize_workout(workout) for workout in new_workouts]

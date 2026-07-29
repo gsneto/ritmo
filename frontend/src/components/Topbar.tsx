@@ -1,5 +1,5 @@
 import { Activity, Settings } from 'lucide-react'
-import { User } from '../App'
+import type { User } from '../services/api'
 
 interface TopbarProps {
   user: User
@@ -19,9 +19,9 @@ export default function Topbar({ user, onSettingsClick }: TopbarProps) {
         </div>
       </div>
       <button className="profile-button" onClick={onSettingsClick} type="button" aria-label="Abrir ajustes de perfil">
-        <span className="profile-avatar">{user.initials}</span>
-        <span>{user.name}</span>
-        <Settings size={17} />
+        <span className="profile-avatar" aria-hidden="true">{user.initials}</span>
+        <span className="profile-name">{user.name}</span>
+        <Settings size={17} aria-hidden="true" />
       </button>
     </header>
   )

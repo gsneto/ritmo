@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { apiRoutes, MonthStats, WeekStats, StreakStats, Habit } from '../services/api'
+import { apiRoutes } from '../services/api'
+import type { MonthStats, WeekStats, StreakStats, Habit } from '../services/api'
 
 interface ProgressProps {
   userId: number
@@ -9,7 +10,6 @@ export default function Progress({ userId }: ProgressProps) {
   const [monthStats, setMonthStats] = useState<MonthStats | null>(null)
   const [weekStats, setWeekStats] = useState<WeekStats | null>(null)
   const [streak, setStreak] = useState<StreakStats | null>(null)
-  const [habits, setHabits] = useState<Habit[]>([])
   const [totalCheckins, setTotalCheckins] = useState(0)
 
   useEffect(() => {
@@ -27,7 +27,6 @@ export default function Progress({ userId }: ProgressProps) {
       setMonthStats(month.data)
       setWeekStats(week.data)
       setStreak(streakData.data)
-      setHabits(habitsData.data)
       const total = habitsData.data.reduce((sum: number, h: Habit) => sum + h.check_ins.length, 0)
       setTotalCheckins(total)
     } catch (error) {
@@ -36,6 +35,7 @@ export default function Progress({ userId }: ProgressProps) {
   }
 
   const currentMonthScore = monthStats?.months[monthStats.months.length - 1]?.score || 0
+  const streakDays = streak?.streak || 0
 
   return (
     <div className="view" data-view="progress">
@@ -76,7 +76,7 @@ export default function Progress({ userId }: ProgressProps) {
           </article>
           <article className="history-card">
             <p className="tiny-note">Sequência atual</p>
-            <strong>{streak?.streak || 0} dias</strong>
+            <strong>{streakDays} {streakDays === 1 ? 'dia' : 'dias'}</strong>
           </article>
           <article className="history-card">
             <p className="tiny-note">Check-ins registrados</p>

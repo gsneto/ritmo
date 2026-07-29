@@ -146,7 +146,7 @@ h3 { font-size: 1rem; }
   background: var(--nav);
   box-shadow: 0 4px 15px rgba(23, 33, 54, 0.04);
 }
-.view-nav button {
+.view-nav a {
   display: flex;
   min-width: 0;
   align-items: center;
@@ -158,13 +158,14 @@ h3 { font-size: 1rem; }
   color: var(--muted);
   font-size: 0.88rem;
   font-weight: 700;
+  text-decoration: none;
 }
-.view-nav button.active { background: var(--accent-soft); color: var(--accent); }
-.view-nav button:hover { background: var(--surface-soft); color: var(--text); }
-.view-nav button.active:hover { background: var(--accent-soft); color: var(--accent); }
+.view-nav a.active { background: var(--accent-soft); color: var(--accent); }
+.view-nav a:hover { background: var(--surface-soft); color: var(--text); }
+.view-nav a.active:hover { background: var(--accent-soft); color: var(--accent); }
 .view-nav svg { width: 18px; height: 18px; stroke-width: 2.2; }
 
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, .view-nav a:focus-visible {
   outline: 3px solid rgba(47, 107, 255, 0.28);
   outline-offset: 2px;
 }
@@ -235,6 +236,16 @@ main, .view { display: grid; gap: 18px; }
 .task-filters { padding-bottom: 5px; border-bottom: 1px solid var(--line); }
 .entry-fields { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 12px; }
 label { display: grid; gap: 7px; color: var(--text); font-size: 0.88rem; font-weight: 600; }
+.task-create-form {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(140px, 1fr) minmax(120px, 0.8fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
 
 .habit-list, .task-list, .today-tasks { display: grid; gap: 10px; }
 .habit-item, .task-item, .today-task {
@@ -346,6 +357,14 @@ label { display: grid; gap: 7px; color: var(--text); font-size: 0.88rem; font-we
   font-weight: 700;
 }
 .danger-action svg { width: 17px; height: 17px; }
+.settings-copy { color: var(--muted); line-height: 1.5; }
+.settings-action {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
 
 .theme-switch {
   display: grid;
@@ -377,6 +396,35 @@ label { display: grid; gap: 7px; color: var(--text); font-size: 0.88rem; font-we
   color: var(--muted);
 }
 
+.access-shell, .state-shell {
+  display: grid;
+  min-height: calc(100vh - 56px);
+  place-items: center;
+}
+.access-panel, .state-panel {
+  width: min(100%, 460px);
+  padding: 28px;
+}
+.access-mark { width: 46px; height: 46px; }
+.access-copy { display: grid; gap: 8px; }
+.access-copy h1, .state-panel h1 { font-size: 1.55rem; line-height: 1.15; }
+.access-copy p:last-child, .state-panel p { color: var(--muted); line-height: 1.5; }
+.access-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.state-panel { gap: 16px; }
+.state-panel .primary-button { width: fit-content; }
+.form-error {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 0.88rem;
+}
+
 .inline-edit-form {
   display: grid;
   grid-template-columns: 1fr auto auto;
@@ -398,7 +446,7 @@ label { display: grid; gap: 7px; color: var(--text); font-size: 0.88rem; font-we
   .brand-mark { width: 36px; height: 36px; }
   .brand h1 { font-size: 1.28rem; }
   .profile-button { min-height: 40px; padding-right: 8px; }
-  .hero, .content-grid, .evolution-grid, .entry-fields, .pomodoro-content { grid-template-columns: 1fr; }
+  .hero, .content-grid, .evolution-grid, .entry-fields, .task-create-form, .pomodoro-content { grid-template-columns: 1fr; }
   .hero-metrics, .metric { min-width: 0; }
   .hero-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .hero { padding: 20px; }
@@ -428,14 +476,14 @@ label { display: grid; gap: 7px; color: var(--text); font-size: 0.88rem; font-we
     box-shadow: 0 10px 32px rgba(23, 33, 54, 0.2);
     backdrop-filter: blur(16px);
   }
-  .view-nav button { display: grid; gap: 3px; min-height: 54px; padding: 4px 2px; overflow: hidden; font-size: 0.64rem; }
-  .view-nav button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .view-nav a { display: grid; gap: 3px; min-height: 54px; padding: 4px 2px; overflow: hidden; font-size: 0.64rem; }
+  .view-nav a span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .view-nav svg { width: 19px; height: 19px; }
 }
 
 @media (max-width: 540px) {
   .profile-button { width: 40px; padding: 5px; justify-content: center; }
-  .profile-button span, .profile-button svg:last-child { display: none; }
+  .profile-button .profile-name, .profile-button > svg:last-child { display: none; }
   .hero { gap: 16px; padding: 18px; }
   .hero-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .metric:nth-child(3) { grid-column: 1 / -1; min-height: 76px; }
@@ -447,7 +495,7 @@ label { display: grid; gap: 7px; color: var(--text); font-size: 0.88rem; font-we
   .metric span { font-size: 0.76rem; }
   .metric strong { font-size: 1.08rem; }
   .week-history { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .view-nav button { font-size: 0.56rem; }
+  .view-nav a { font-size: 0.56rem; }
   .profile-card { grid-template-columns: auto 1fr; }
   .profile-card button { grid-column: 1 / -1; width: 100%; }
 }

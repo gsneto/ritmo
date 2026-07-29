@@ -1,41 +1,139 @@
-name: Deploy Frontend
+name: Frontend CI and Vercel release
 
 on:
-  push:
-    branches: [main]
+  pull_request:
     paths:
-      - 'frontend/**'
+      - "frontend/**"
+      - "vercel.json"
+      - ".github/workflows/deploy-frontend.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - "vercel.json"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: "Validar apenas ou publicar manualmente no Vercel"
+        required: true
+        default: validate-only
+        type: choice
+        options:
+          - validate-only
+          - preview
+          - production
+      confirm_production:
+        description: "Confirmo que o preview e os testes mobile foram aprovados"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  validate:
+    name: Test and build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: "20"
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
-        working-directory: frontend
+      - name: Install locked dependencies
         run: npm ci
 
+      - name: Run tests
+        run: npm test
+
       - name: Build
-        working-directory: frontend
         run: npm run build
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
 
-      - name: Deploy to Netlify
-        uses: nwtgck/actions-netlify@v2
+  deploy:
+    name: Deploy ${{ inputs.deploy_target }}
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.deploy_target != 'validate-only'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.deploy_target }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VITE_API_URL: ${{ vars.VITE_API_URL }}
+      DEPLOY_TARGET: ${{ inputs.deploy_target }}
+      CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          publish-dir: frontend/dist
-          production-branch: main
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          deploy-message: "Deploy from GitHub Actions"
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+          node-version: "20"
+
+      - name: Check release configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$DEPLOY_TARGET" == "production" && "$CONFIRM_PRODUCTION" != "true" ]]; then
+            echo "::error::A promoção para produção exige confirmação explícita."
+            exit 1
+          fi
+
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID VITE_API_URL; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::$name não foi configurado no ambiente $DEPLOY_TARGET."
+              exit 1
+            fi
+          done
+
+          if [[ "$VITE_API_URL" != https://* ]]; then
+            echo "::error::VITE_API_URL deve ser a URL HTTPS completa da API, incluindo /api."
+            exit 1
+          fi
+
+          api_url_without_slash="${VITE_API_URL%/}"
+          if [[ "$api_url_without_slash" != */api ]]; then
+            echo "::error::VITE_API_URL deve terminar em /api."
+            exit 1
+          fi
+
+      - name: Build and deploy with Vercel
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel=(npm exec --yes vercel@58.1.0 --)
+
+          "${vercel[@]}" pull \
+            --yes \
+            --environment="$DEPLOY_TARGET" \
+            --token="$VERCEL_TOKEN"
+
+          if [[ "$DEPLOY_TARGET" == "production" ]]; then
+            "${vercel[@]}" build --prod --token="$VERCEL_TOKEN"
+            "${vercel[@]}" deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+          else
+            "${vercel[@]}" build --token="$VERCEL_TOKEN"
+            "${vercel[@]}" deploy --prebuilt --token="$VERCEL_TOKEN"
+          fi

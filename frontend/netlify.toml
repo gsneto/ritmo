@@ -4,8 +4,8 @@
   node_bundler = "esbuild"
 
 [[redirects]]
-  from = "/api/*"
-  to = "https://ritmo-api.up.railway.app/api/:splat"
+  from = "/*"
+  to = "/index.html"
   status = 200
 
 [[headers]]
