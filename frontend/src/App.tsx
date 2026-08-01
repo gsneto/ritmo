@@ -21,6 +21,7 @@ import Navigation from './components/Navigation'
 import AccessCodeGate from './components/AccessCodeGate'
 import { useAppRouter } from './router'
 import { useDailyReminders } from './hooks/useDailyReminders'
+import { resolvePwaShortcut } from './utils/pwaShortcuts'
 
 type AppStatus = 'loading' | 'ready' | 'error' | 'access'
 const VALID_PATHS = new Set([
@@ -102,6 +103,12 @@ export default function App() {
   }, [activeUser])
 
   useEffect(() => {
+    const shortcutDestination = resolvePwaShortcut(search)
+    if (shortcutDestination) {
+      navigate(shortcutDestination, { replace: true })
+      return
+    }
+
     if (pathname === '/focus') {
       navigate(`/reading${search}`, { replace: true })
       return
@@ -204,9 +211,20 @@ export default function App() {
       <Navigation />
       <main key={refreshKey}>
         {activePath === '/today' && <Today userId={activeUser.id} />}
-        {activePath === '/habits' && <Habits userId={activeUser.id} />}
+        {activePath === '/habits' && (
+          <Habits
+            userId={activeUser.id}
+            quickCheckInRequested={new URLSearchParams(search).get('quick') === '1'}
+          />
+        )}
         {activePath === '/tasks' && <Tasks userId={activeUser.id} />}
-        {activePath === '/shopping' && <Shopping userId={activeUser.id} />}
+        {activePath === '/shopping' && (
+          <Shopping
+            userId={activeUser.id}
+            createRequested={new URLSearchParams(search).get('create') === '1'}
+            onCreateRequestHandled={() => navigate('/shopping', { replace: true })}
+          />
+        )}
         {activePath === '/anahi' && <Anahi userId={activeUser.id} />}
         {activePath === '/reading' && <Reading userId={activeUser.id} />}
         {activePath === '/workouts' && <Workouts userId={activeUser.id} />}

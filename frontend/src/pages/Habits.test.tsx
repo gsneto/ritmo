@@ -143,4 +143,14 @@ describe('Habits upgraded experience', () => {
     expect(await screen.findByText('7 dias')).toBeTruthy()
     expect(screen.getByLabelText('Marco de 7 dias: Em ritmo')).toBeTruthy()
   })
+
+  it('focuses the next check-in requested by a PWA shortcut', async () => {
+    render(<Habits userId={1} quickCheckInRequested />)
+
+    const nextControl = await screen.findByRole('button', {
+      name: 'Marcar Treino em casa hoje',
+    })
+    await waitFor(() => expect(document.activeElement).toBe(nextControl))
+    expect(navigateMock).toHaveBeenCalledWith('/habits', { replace: true })
+  })
 })

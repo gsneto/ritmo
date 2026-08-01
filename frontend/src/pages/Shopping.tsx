@@ -39,6 +39,8 @@ import '../styles/finance-upgrade.css'
 
 interface ShoppingProps {
   userId: number
+  createRequested?: boolean
+  onCreateRequestHandled?: () => void
 }
 
 type ShoppingView = 'active' | 'history'
@@ -199,7 +201,11 @@ export function buildShoppingCsv(summary: MonthlyExpenseSummary): string {
   return `\uFEFF${rows.map(row => row.map(csvCell).join(';')).join('\r\n')}`
 }
 
-export default function Shopping({ userId }: ShoppingProps) {
+export default function Shopping({
+  userId,
+  createRequested = false,
+  onCreateRequestHandled,
+}: ShoppingProps) {
   const currentMonth = toLocalDateValue().slice(0, 7)
   const [view, setView] = useState<ShoppingView>('active')
   const [lists, setLists] = useState<ShoppingList[]>([])
@@ -298,6 +304,14 @@ export default function Shopping({ userId }: ShoppingProps) {
       void loadHistory(selectedMonth)
     }
   }, [selectedMonth, userId, view])
+
+  useEffect(() => {
+    if (!createRequested) return
+    setView('active')
+    setShowCreateForm(true)
+    setCreateFormRevealRequest(current => current + 1)
+    onCreateRequestHandled?.()
+  }, [createRequested, onCreateRequestHandled, setCreateFormRevealRequest, setShowCreateForm])
 
   useEffect(() => {
     if (
