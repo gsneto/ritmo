@@ -3,6 +3,7 @@ import json
 import pytest
 
 from config import Settings
+from rate_limit import limiter
 from routers import anahi as anahi_router
 from services import anahi as anahi_service
 from time_utils import app_today
@@ -215,3 +216,36 @@ def test_anahi_route_rejects_unknown_profile_before_calling_provider(
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Perfil nao encontrado."}
+
+
+def test_anahi_route_rate_limits_requests_before_calling_provider(
+    client,
+    auth_headers,
+    user_id,
+    monkeypatch,
+):
+    route = f"/api/users/{user_id}/anahi/ask"
+    provider_calls = 0
+
+    def fake_answer(*_args):
+        nonlocal provider_calls
+        provider_calls += 1
+        return "Resposta controlada"
+
+    monkeypatch.setattr(anahi_router, "generate_anahi_answer", fake_answer)
+    limiter._limiter.storage.reset()
+    try:
+        responses = [
+            client.post(
+                route,
+                headers=auth_headers,
+                json={"question": f"Pergunta {index}"},
+            )
+            for index in range(21)
+        ]
+    finally:
+        limiter._limiter.storage.reset()
+
+    assert [response.status_code for response in responses[:20]] == [200] * 20
+    assert responses[20].status_code == 429
+    assert provider_calls == 20

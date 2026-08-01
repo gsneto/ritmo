@@ -74,6 +74,11 @@ class Settings(BaseSettings):
         ge=1,
         le=60,
     )
+    ANAHI_RATE_LIMIT: str = Field(
+        default="20/minute",
+        validation_alias="ANAHI_RATE_LIMIT",
+        pattern=r"^[1-9][0-9]*/(second|minute|hour|day)s?$",
+    )
     CORS_ORIGINS: str = Field(
         default=LOCAL_CORS_ORIGINS,
         validation_alias="CORS_ORIGINS",

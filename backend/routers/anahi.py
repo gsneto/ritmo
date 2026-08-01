@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from config import Settings, get_settings
 from database import get_db
+from rate_limit import access_key_or_remote_address, anahi_rate_limit, limiter
 from schemas.anahi import AnahiAnswer, AnahiQuestion
 from services.anahi import (
     AnahiNotConfiguredError,
@@ -21,7 +22,13 @@ router = APIRouter(prefix="/api", tags=["anahi"])
 
 
 @router.post("/users/{user_id}/anahi/ask", response_model=AnahiAnswer)
+@limiter.limit(
+    anahi_rate_limit,
+    key_func=access_key_or_remote_address,
+    error_message="Limite de perguntas da ANAHI atingido. Tente novamente em instantes.",
+)
 def ask_anahi(
+    request: Request,
     user_id: int,
     payload: AnahiQuestion,
     db: Session = Depends(get_db),
