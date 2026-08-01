@@ -67,7 +67,11 @@ jobs:
         run: python -m compileall -q .
 
       - name: Run tests
-        run: python -m pytest -q
+        run: >-
+          python -m pytest -q
+          --cov=.
+          --cov-report=term-missing
+          --cov-report=xml
 
       - name: Build backend image
         run: docker build --tag ritmo-backend:ci .

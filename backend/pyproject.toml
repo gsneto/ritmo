@@ -46,3 +46,12 @@ module = [
     "services.anahi_context",
 ]
 ignore_errors = true
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = ["alembic/*", "tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
