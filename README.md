@@ -130,7 +130,7 @@ em variáveis `VITE_*` nem no código do frontend:
 
 ```env
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.6-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
 O Ritmo envia ao provedor apenas um resumo da área relacionada à pergunta e

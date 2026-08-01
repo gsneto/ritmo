@@ -65,7 +65,7 @@ class Settings(BaseSettings):
         validation_alias="GEMINI_API_KEY",
     )
     GEMINI_MODEL: str = Field(
-        default="gemini-3.6-flash",
+        default="gemini-3.5-flash-lite",
         validation_alias="GEMINI_MODEL",
     )
     GEMINI_TIMEOUT_SECONDS: float = Field(

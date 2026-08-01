@@ -28,7 +28,7 @@ def anahi_settings() -> Settings:
         DEBUG=True,
         APP_ACCESS_TOKEN="test-ritmo-key",
         GEMINI_API_KEY="server-only-test-key",
-        GEMINI_MODEL="gemini-3.6-flash",
+        GEMINI_MODEL="gemini-3.5-flash-lite",
         GEMINI_TIMEOUT_SECONDS=12,
         CORS_ORIGINS="http://localhost:5173",
     )
@@ -74,7 +74,7 @@ def test_anahi_service_posts_server_side_request_and_extracts_text(monkeypatch):
     assert recorded["timeout"] == 12
     assert request.full_url == (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        "gemini-3.6-flash:generateContent"
+        "gemini-3.5-flash-lite:generateContent"
     )
     assert "server-only-test-key" not in request.full_url
     assert request.get_header("X-goog-api-key") == "server-only-test-key"
@@ -153,7 +153,7 @@ def test_anahi_route_is_protected_and_returns_safe_errors(
     assert answered.status_code == 200
     assert answered.json() == {
         "answer": "ANAHÍ: Qual o proximo passo? para Antonio",
-        "model": "gemini-3.6-flash",
+        "model": "gemini-3.5-flash-lite",
         "profile_name": "Antonio",
         "as_of": app_today().isoformat(),
         "used_sources": [],
