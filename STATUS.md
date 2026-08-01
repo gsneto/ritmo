@@ -11,7 +11,7 @@ backend atualizadas, hooks de domínio e baseline Alembic.
 
 - Backend: 61 testes, Ruff, mypy, pip-audit e `alembic check` aprovados; cobertura
   de 86%.
-- Frontend: 94 testes, lint e build aprovados; cobertura de statements de 64,64%.
+- Frontend: 94 testes, lint e build aprovados; cobertura de statements de 64,68%.
 - TypeScript 7 foi testado em branch isolada e não foi adotado por incompatibilidade
   atual do `typescript-eslint`.
 - Antes de publicar, validar visualmente React 19 nas telas principais e registrar
