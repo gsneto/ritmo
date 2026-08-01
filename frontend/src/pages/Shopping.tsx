@@ -33,6 +33,7 @@ import type {
 } from '../services/api'
 import { toLocalDateValue } from '../utils/date'
 import { useShoppingCreateForm } from '../hooks/useShoppingCreateForm'
+import ShoppingDateOptions from '../components/ShoppingDateOptions'
 import '../styles/finance-upgrade.css'
 
 
@@ -984,75 +985,16 @@ export default function Shopping({ userId }: ShoppingProps) {
                     disabled={saving}
                   />
                 </label>
-                <fieldset className="shopping-date-schedule">
-                  <legend>Data planejada</legend>
-                  <div className="shopping-date-options">
-                    <label className={
-                      newListDateChoice === 'today' ? 'is-selected' : ''
-                    }>
-                      <input
-                        type="radio"
-                        aria-label="Hoje"
-                        name="shopping_date_choice"
-                        value="today"
-                        checked={newListDateChoice === 'today'}
-                        onChange={() => setNewListDateChoice('today')}
-                        disabled={saving}
-                      />
-                      <span>
-                        <strong>Hoje</strong>
-                        <small>{formatShortDate(localDateWithOffset(0))}</small>
-                      </span>
-                    </label>
-                    <label className={
-                      newListDateChoice === 'tomorrow' ? 'is-selected' : ''
-                    }>
-                      <input
-                        type="radio"
-                        aria-label="Amanhã"
-                        name="shopping_date_choice"
-                        value="tomorrow"
-                        checked={newListDateChoice === 'tomorrow'}
-                        onChange={() => setNewListDateChoice('tomorrow')}
-                        disabled={saving}
-                      />
-                      <span>
-                        <strong>Amanhã</strong>
-                        <small>{formatShortDate(localDateWithOffset(1))}</small>
-                      </span>
-                    </label>
-                    <label className={
-                      newListDateChoice === 'other' ? 'is-selected' : ''
-                    }>
-                      <input
-                        type="radio"
-                        aria-label="Outra data"
-                        name="shopping_date_choice"
-                        value="other"
-                        checked={newListDateChoice === 'other'}
-                        onChange={() => setNewListDateChoice('other')}
-                        disabled={saving}
-                      />
-                      <span>
-                        <strong>Outra data</strong>
-                        <small>Escolher</small>
-                      </span>
-                    </label>
-                  </div>
-                  {newListDateChoice === 'other' && (
-                    <label className="shopping-custom-date">
-                      Escolha a data
-                      <input
-                        type="date"
-                        value={newListDate}
-                        onChange={event => setNewListDate(event.target.value)}
-                        min={localDateWithOffset(0)}
-                        required
-                        disabled={saving}
-                      />
-                    </label>
-                  )}
-                </fieldset>
+                <ShoppingDateOptions
+                  choice={newListDateChoice}
+                  todayLabel={formatShortDate(localDateWithOffset(0))}
+                  tomorrowLabel={formatShortDate(localDateWithOffset(1))}
+                  customDate={newListDate}
+                  minimumDate={localDateWithOffset(0)}
+                  disabled={saving}
+                  onChoiceChange={setNewListDateChoice}
+                  onCustomDateChange={setNewListDate}
+                />
                 <label>
                   Tipo de compra
                   <select
