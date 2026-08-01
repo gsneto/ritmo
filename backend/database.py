@@ -387,7 +387,13 @@ def init_db(
     bind: Engine | None = None,
     session_factory: sessionmaker | None = None,
 ) -> None:
-    """Initialize database tables."""
+    """Create missing tables for local/test bootstrap.
+
+    Production applies versioned schema changes with ``alembic upgrade head``
+    from the container entrypoint. The compatibility checks below remain only
+    for unversioned SQLite databases created by older Ritmo releases and can
+    be removed after those databases have been baselined.
+    """
     from models import habit, push, reading, shopping, task, user, workout  # noqa
 
     selected_engine = bind or engine

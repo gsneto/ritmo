@@ -209,7 +209,14 @@ async def run_push_scheduler(
     session_factory: sessionmaker,
     settings: Settings,
 ) -> None:
-    """Run reminder delivery without blocking FastAPI request handling."""
+    """Run reminder delivery without blocking FastAPI request handling.
+
+    This task is process-local. With more than one API replica, each replica
+    can race through the delivery check and send the same push before the
+    unique database row is committed. The unique constraint prevents duplicate
+    delivery records, but not duplicate network sends. Keep push enabled on a
+    single replica or add a distributed/advisory lock before scaling out.
+    """
     await asyncio.sleep(8)
     while True:
         await asyncio.to_thread(

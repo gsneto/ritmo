@@ -66,6 +66,14 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q .
 
+      - name: Validate Alembic migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DATABASE_URL="sqlite:///./alembic-ci.db"
+          alembic upgrade head
+          alembic check
+
       - name: Run tests
         run: >-
           python -m pytest -q

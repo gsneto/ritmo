@@ -46,6 +46,7 @@ python -m venv .venv
 Copy-Item .env.example .env
 .\.venv\Scripts\python.exe -m pip_audit -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m compileall -q .
+.\.venv\Scripts\alembic.exe upgrade head
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m uvicorn main:app --reload
 ```
@@ -84,9 +85,10 @@ Com a API local ativa, valide a interface em:
 Os dois workflows executam em pull requests e em pushes para `main` quando os
 arquivos correspondentes mudam:
 
-- `deploy-backend.yml`: instala dependências, compila, executa `pytest` e
-  constrói a imagem Docker;
-- `deploy-frontend.yml`: usa o lockfile, executa os testes e gera o build Vite.
+- `deploy-backend.yml`: instala dependências, valida o grafo Alembic, compila,
+  executa `pytest` e constrói a imagem Docker;
+- `deploy-frontend.yml`: usa o lockfile, executa lint, testes com cobertura e
+  gera o build Vite.
 
 Não prossiga se qualquer job falhar.
 
@@ -109,6 +111,16 @@ Crie o ambiente protegido `backend-production` no GitHub e configure:
 
 No provedor, configure o diretório raiz do serviço como `/backend` e selecione
 `/backend/railway.toml` como arquivo de configuração quando necessário.
+
+### Migrações Alembic
+
+O schema novo é criado pela revisão inicial em `backend/alembic/versions/`.
+O `Dockerfile` executa `alembic upgrade head` antes de iniciar a API. Para um
+banco Railway que já existia antes do Alembic, faça um backup e confira o schema
+no staging. Se ele já corresponde ao schema atual, registre o baseline uma única
+vez com `alembic stamp head`; se não corresponder, aplique a revisão em staging
+e planeje a atualização de produção com janela de manutenção. Não use
+`stamp head` em um banco que ainda precise de colunas ou índices.
 
 ### Ambiente de staging do backend
 

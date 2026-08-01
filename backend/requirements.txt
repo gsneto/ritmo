@@ -1,4 +1,5 @@
 fastapi==0.140.13
+alembic==1.18.5
 uvicorn[standard]==0.52.0
 sqlalchemy==2.0.51
 pymysql==1.2.0
