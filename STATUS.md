@@ -4,10 +4,9 @@ Atualizado em 1º de agosto de 2026.
 
 ## Novas features — 1º de agosto de 2026
 
-As oito features estão consolidadas na branch `feat/product-suite-2026-08`.
-Elas foram implementadas e validadas localmente, mas **não foram publicadas** na
-Vercel ou no Railway. A seção de produção abaixo descreve a versão pública
-anterior e não comprova que estas mudanças já estejam online.
+As oito features foram consolidadas na branch `feat/product-suite-2026-08`,
+promovidas para `main` no commit `3d9d7b3` e publicadas em produção no Railway
+e na Vercel.
 
 | Feature | Implementação e teste | Limitação confirmada |
 | --- | --- | --- |
@@ -20,7 +19,7 @@ anterior e não comprova que estas mudanças já estejam online.
 | Entrada por voz | Web Speech API em `pt-BR`, feature detection, preenchimento editável e sem envio automático; suporte e transcrição cobertos por mocks. | Microfone real e PWA instalado no iPhone não foram testados; no iOS o suporte permanece parcial. |
 | Compras compartilhadas | Código curto pareia dois perfis; listas antigas e novas, itens, histórico e preços ficam visíveis para ambos, com migração reversível e teste de isolamento dos demais domínios. | Atualizações feitas no outro aparelho aparecem ao recarregar; não há sincronização em tempo real. O orçamento mensal geral continua por perfil. |
 
-### Validação desta branch
+### Validação automatizada
 
 - Backend: `70 passed`; Ruff e mypy sem erros; cobertura total de 86%.
 - Frontend: `117 passed`; build Vite aprovado; cobertura de statements de
@@ -29,6 +28,21 @@ anterior e não comprova que estas mudanças já estejam online.
 - Banco: `alembic upgrade head`, `alembic check`, downgrade da nova migração e
   novo upgrade aprovados sobre SQLite vazio.
 - Manifest: exatamente dois atalhos, com URLs de check-in e nova compra.
+
+### Validação em produção
+
+- PostgreSQL registrado no baseline Alembic `d755b1cfc868` e atualizado até
+  `b8c19d0a4e32`; `alembic check` não encontrou operações pendentes. As
+  contagens existentes foram preservadas durante a migração.
+- Backend Railway `3e4557c0-9ac2-4e7c-93a1-5acf02c458d6` com estado `SUCCESS`;
+  health, API autenticada, briefing, insights, compras compartilhadas e
+  calendário responderam HTTP 200.
+- Frontend Vercel `dpl_CrRMC1Wo3B8TrFiUYV9aVAsanCRw` com estado `Ready` e alias
+  canônico ativo. O bundle público contém as novas features e a URL correta da
+  API.
+- CORS aprovado entre o domínio canônico e o Railway; a política pública permite
+  microfone somente para o próprio site (`microphone=(self)`). Manifest, service
+  worker, tela offline e os dois atalhos PWA responderam HTTP 200.
 
 ### Validação manual ainda necessária
 
@@ -41,32 +55,32 @@ anterior e não comprova que estas mudanças já estejam online.
 - Exercitar o pareamento em dois aparelhos/perfis e confirmar o fluxo após
   recarregar.
 
-## Auditoria em andamento — 1º de agosto de 2026
+## Auditoria incorporada — 1º de agosto de 2026
 
-Esta entrega está na branch `chore/auditoria-2026-08` e ainda não foi publicada
-na Vercel/Railway. Ela acrescenta rate limit e lockout, Sentry opcional, Error
-Boundary, lint/cobertura no CI, React 19.2.8, Lucide compatível, dependências
-backend atualizadas, hooks de domínio e baseline Alembic.
+Esta entrega foi incorporada à suíte de produto e publicada em `main`. Ela
+acrescenta rate limit e lockout, Sentry opcional, Error Boundary, lint/cobertura
+no CI, React 19.2.8, Lucide compatível, dependências backend atualizadas, hooks
+de domínio e baseline Alembic.
 
 - Backend: 61 testes, Ruff, mypy, pip-audit e `alembic check` aprovados; cobertura
   de 86%.
 - Frontend: 94 testes, lint e build aprovados; cobertura de statements de 64,68%.
 - TypeScript 7 foi testado em branch isolada e não foi adotado por incompatibilidade
   atual do `typescript-eslint`.
-- Antes de publicar, validar visualmente React 19 nas telas principais e registrar
-  o baseline do banco Railway existente conforme `DEPLOY.md`.
+- O baseline do banco Railway foi registrado e as migrações posteriores foram
+  aplicadas sem alterar as contagens existentes.
 
 ## Produção confirmada
 
 - Frontend público: [https://habitos-base.vercel.app](https://habitos-base.vercel.app)
 - API: [health check público](https://supportive-warmth-production-dd70.up.railway.app/health)
 - Frontend publicado na Vercel com estado `Ready`, deployment
-  `dpl_Au6mrpnStvhKN5aAdTzxd3FHVuzE`.
-- Backend FastAPI publicado no Railway com PostgreSQL persistente.
+  `dpl_CrRMC1Wo3B8TrFiUYV9aVAsanCRw`.
+- Backend FastAPI publicado no Railway com estado `SUCCESS`, deployment
+  `3e4557c0-9ac2-4e7c-93a1-5acf02c458d6`, e PostgreSQL persistente.
 - `RITMO_DEBUG=false`, chave de acesso forte, CORS limitado ao domínio público
   e Web Push habilitado com um par VAPID exclusivo.
-- Código da aplicação publicado a partir de `cf209eb` na branch
-  `feature/ritmo-complete-assistant-20260729`.
+- Código da aplicação publicado a partir de `3d9d7b3` na branch `main`.
 - A versão anterior permanece recuperável no histórico Git, no commit
   `6cd2766`.
 
