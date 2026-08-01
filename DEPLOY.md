@@ -47,6 +47,8 @@ Copy-Item .env.example .env
 .\.venv\Scripts\python.exe -m pip_audit -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m compileall -q .
 .\.venv\Scripts\alembic.exe upgrade head
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m mypy config.py main.py rate_limit.py security.py time_utils.py services/anahi.py schemas
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m uvicorn main:app --reload
 ```
@@ -67,7 +69,9 @@ além das rotas de estatísticas. Confirme que reiniciar a API não perde os dad
 Set-Location frontend
 Copy-Item .env.example .env
 npm ci
+npm run lint
 npm test
+npm run test:coverage
 npm run build
 npm run dev
 ```

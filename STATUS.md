@@ -2,6 +2,21 @@
 
 Atualizado em 29 de julho de 2026.
 
+## Auditoria em andamento — 1º de agosto de 2026
+
+Esta entrega está na branch `chore/auditoria-2026-08` e ainda não foi publicada
+na Vercel/Railway. Ela acrescenta rate limit e lockout, Sentry opcional, Error
+Boundary, lint/cobertura no CI, React 19.2.8, Lucide compatível, dependências
+backend atualizadas, hooks de domínio e baseline Alembic.
+
+- Backend: 61 testes, Ruff, mypy, pip-audit e `alembic check` aprovados; cobertura
+  de 86%.
+- Frontend: 94 testes, lint e build aprovados; cobertura de statements de 64,64%.
+- TypeScript 7 foi testado em branch isolada e não foi adotado por incompatibilidade
+  atual do `typescript-eslint`.
+- Antes de publicar, validar visualmente React 19 nas telas principais e registrar
+  o baseline do banco Railway existente conforme `DEPLOY.md`.
+
 ## Produção confirmada
 
 - Frontend público: [https://habitos-base.vercel.app](https://habitos-base.vercel.app)

@@ -73,11 +73,28 @@ outras credenciais nunca devem ser commitados em `.env`.
 ```powershell
 Set-Location backend
 .\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m mypy config.py main.py rate_limit.py security.py time_utils.py services/anahi.py schemas
 
 Set-Location ..\frontend
 npm test
+npm run lint
+npm run test:coverage
 npm run build
 ```
+
+## Decisões de arquitetura da auditoria
+
+- O schema de produção é versionado em `backend/alembic/versions/`; o container
+  aplica `alembic upgrade head` antes de iniciar a API.
+- Workouts, Pomodoro, timers de treino e o formulário de compras usam hooks
+  dedicados, permitindo continuar a extração dos componentes grandes por partes.
+- TanStack Query foi avaliado, mas ficou para uma etapa posterior: primeiro os
+  hooks de domínio precisam estabilizar os contratos de carregamento e mutação;
+  adicionar cache global agora aumentaria o risco de alterar esses fluxos.
+- TypeScript 7 foi avaliado na branch `chore/typescript-7-evaluation`; build e
+  testes passaram, mas o lint não passou porque `typescript-eslint` ainda não
+  suporta TS 7. A branch principal permanece em TypeScript 6.
 
 ## Privacidade
 
