@@ -1292,6 +1292,31 @@ main, .view { display: grid; gap: 18px; }
 .icon-button svg { width: 18px; height: 18px; }
 .small-icon { width: 32px; height: 32px; }
 .danger-button { color: var(--red); }
+.voice-input-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.voice-input-button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--control);
+  color: var(--accent);
+}
+.voice-input-button.is-listening {
+  border-color: var(--red);
+  background: color-mix(in srgb, var(--red) 12%, var(--control));
+  color: var(--red);
+}
+.voice-input-button:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; }
+.shopping-new-item-field { display: grid; min-width: 0; gap: 7px; }
 
 .entry-form { display: grid; gap: 13px; }
 .entry-type, .task-filters { display: flex; flex-wrap: wrap; gap: 4px; }

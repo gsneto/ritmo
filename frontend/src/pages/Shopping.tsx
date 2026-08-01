@@ -34,6 +34,7 @@ import type {
 import { toLocalDateValue } from '../utils/date'
 import { useShoppingCreateForm } from '../hooks/useShoppingCreateForm'
 import ShoppingDateOptions from '../components/ShoppingDateOptions'
+import VoiceInputButton from '../components/VoiceInputButton'
 import '../styles/finance-upgrade.css'
 
 
@@ -1222,17 +1223,25 @@ export default function Shopping({
                   )}
 
                   <form className="shopping-add-item" onSubmit={addItem}>
-                    <label>
-                      <span>Adicionar à lista</span>
-                      <input
-                        value={newItemName}
-                        onChange={event => setNewItemName(event.target.value)}
-                        placeholder="Ex: Arroz, leite, pacote de fraldas"
-                        maxLength={200}
-                        required
-                        disabled={hasPendingMutation}
-                      />
-                    </label>
+                    <div className="shopping-new-item-field">
+                      <label htmlFor="new-shopping-item">Adicionar à lista</label>
+                      <div className="voice-input-field">
+                        <input
+                          id="new-shopping-item"
+                          value={newItemName}
+                          onChange={event => setNewItemName(event.target.value)}
+                          placeholder="Ex: Arroz, leite, pacote de fraldas"
+                          maxLength={200}
+                          required
+                          disabled={hasPendingMutation}
+                        />
+                        <VoiceInputButton
+                          label="nome do item"
+                          onTranscript={setNewItemName}
+                          disabled={hasPendingMutation}
+                        />
+                      </div>
+                    </div>
                     <label className="shopping-quantity-field">
                       <span>Quantidade</span>
                       <input
