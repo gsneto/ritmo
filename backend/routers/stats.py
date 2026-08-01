@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.habit import Habit, HabitCheckIn, habit_is_scheduled
 from models.user import User
+from services.cross_domain_insights import build_cross_domain_insights
 from time_utils import app_today
 
 router = APIRouter(prefix="/api", tags=["stats"])
@@ -202,3 +203,10 @@ def get_week_stats(user_id: int, db: Session = Depends(get_db)):
         })
 
     return {"days": days}
+
+
+@router.get("/users/{user_id}/stats/insights")
+def get_cross_domain_insights(user_id: int, db: Session = Depends(get_db)):
+    """Return deterministic observations only when enough history exists."""
+    ensure_user_exists(user_id, db)
+    return build_cross_domain_insights(db, user_id, app_today())

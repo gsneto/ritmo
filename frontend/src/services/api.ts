@@ -171,6 +171,19 @@ export interface StreakStats {
   streak: number
 }
 
+export interface CrossDomainInsight {
+  key: 'habit_training_days' | 'best_task_weekday' | 'reading_morning_habits'
+  title: string
+  description: string
+  sample_size: number
+}
+
+export interface CrossDomainInsights {
+  history_days: number
+  minimum_history_days: number
+  insights: CrossDomainInsight[]
+}
+
 export interface RitmoBackup {
   version: 1
   app: 'Ritmo'
@@ -447,6 +460,8 @@ export const apiRoutes = {
   getMonthStats: (userId: number) => api.get<MonthStats>(`/users/${userId}/stats/monthly`),
   getWeekStats: (userId: number) => api.get<WeekStats>(`/users/${userId}/stats/week`),
   getStreak: (userId: number) => api.get<StreakStats>(`/users/${userId}/stats/streak`),
+  getInsights: (userId: number) =>
+    api.get<CrossDomainInsights>(`/users/${userId}/stats/insights`),
 }
 
 export { api }

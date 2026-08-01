@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react'
 import { apiRoutes } from '../services/api'
-import type { MonthStats, WeekStats, StreakStats, Habit } from '../services/api'
+import type {
+  CrossDomainInsights,
+  Habit,
+  MonthStats,
+  StreakStats,
+  WeekStats,
+} from '../services/api'
 
 interface ProgressProps {
   userId: number
@@ -11,6 +17,7 @@ export default function Progress({ userId }: ProgressProps) {
   const [weekStats, setWeekStats] = useState<WeekStats | null>(null)
   const [streak, setStreak] = useState<StreakStats | null>(null)
   const [totalCheckins, setTotalCheckins] = useState(0)
+  const [insights, setInsights] = useState<CrossDomainInsights | null>(null)
 
   useEffect(() => {
     loadData()
@@ -18,15 +25,17 @@ export default function Progress({ userId }: ProgressProps) {
 
   async function loadData() {
     try {
-      const [month, week, streakData, habitsData] = await Promise.all([
+      const [month, week, streakData, habitsData, insightsData] = await Promise.all([
         apiRoutes.getMonthStats(userId),
         apiRoutes.getWeekStats(userId),
         apiRoutes.getStreak(userId),
         apiRoutes.getHabits(userId),
+        apiRoutes.getInsights(userId),
       ])
       setMonthStats(month.data)
       setWeekStats(week.data)
       setStreak(streakData.data)
+      setInsights(insightsData.data)
       const total = habitsData.data.reduce((sum: number, h: Habit) => sum + h.check_ins.length, 0)
       setTotalCheckins(total)
     } catch (error) {
@@ -67,6 +76,25 @@ export default function Progress({ userId }: ProgressProps) {
           </div>
         </article>
       </section>
+      {insights && insights.insights.length > 0 && (
+        <section className="panel" aria-labelledby="cross-domain-insights-title">
+          <div className="panel-head">
+            <div>
+              <p className="section-label">Padrões observados</p>
+              <h2 id="cross-domain-insights-title">Conexões do seu ritmo</h2>
+            </div>
+          </div>
+          <div className="insights-grid">
+            {insights.insights.map(insight => (
+              <article className="insight-card" key={insight.key}>
+                <h3>{insight.title}</h3>
+                <p>{insight.description}</p>
+                <small>{insight.sample_size} dias ou registros analisados</small>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="panel">
         <div className="panel-head"><div><p className="section-label">Resumo</p><h2>Sua evolução</h2></div></div>
         <div className="history">
