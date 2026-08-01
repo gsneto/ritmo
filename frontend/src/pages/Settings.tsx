@@ -37,7 +37,13 @@ export default function Settings({
   onDataReset,
   onChangeAccessCode,
 }: SettingsProps) {
-  const { permission, requestPermission, isSupported } = useNotifications()
+  const {
+    permission,
+    requestPermission,
+    sendNotification,
+    isSupported,
+    isSecureContext,
+  } = useNotifications()
   const {
     canInstall,
     install,
@@ -51,6 +57,7 @@ export default function Settings({
   const [installMessage, setInstallMessage] = useState('')
   const [isBackupBusy, setIsBackupBusy] = useState(false)
   const [backupMessage, setBackupMessage] = useState('')
+  const [notificationMessage, setNotificationMessage] = useState('')
   const backupInputRef = useRef<HTMLInputElement>(null)
 
   async function handleReset() {
@@ -70,10 +77,45 @@ export default function Settings({
   }
 
   async function handleNotificationPermission() {
+    setNotificationMessage('')
+    if (!isSecureContext) {
+      setNotificationMessage('Abra o Ritmo pelo endereço HTTPS para ativar notificações.')
+      return
+    }
+    if (isIos && !isInstalled) {
+      setNotificationMessage('No iPhone, instale o Ritmo na Tela de Início antes de ativar.')
+      return
+    }
     const granted = await requestPermission()
     if (granted && push.isConfigured) {
-      await push.subscribe()
+      const subscribed = await push.subscribe()
+      setNotificationMessage(subscribed
+        ? 'Lembretes em segundo plano conectados a este perfil neste aparelho.'
+        : 'A permissão foi liberada, mas o segundo plano não conectou.')
+      return
     }
+    setNotificationMessage(granted
+      ? 'Alertas com o app aberto foram ativados.'
+      : 'A permissão não foi liberada. Confira os ajustes do aparelho.')
+  }
+
+  async function handleNotificationTest() {
+    setNotificationMessage('')
+    if (push.isSubscribed) {
+      const sent = await push.sendTest()
+      setNotificationMessage(sent
+        ? 'Envio de teste aceito pelo serviço; confira a bandeja de notificações.'
+        : 'O envio de teste não foi aceito pelo serviço de notificações.')
+      return
+    }
+
+    const result = await sendNotification({
+      title: 'Teste do Ritmo 🔔',
+      body: 'As notificações deste aparelho estão funcionando.',
+    })
+    setNotificationMessage(result
+      ? 'Aviso local enviado. Se não apareceu, confira os ajustes do aparelho.'
+      : 'O aparelho não conseguiu mostrar o aviso local.')
   }
 
   async function handleInstall() {
@@ -260,19 +302,51 @@ export default function Settings({
         </div>
       </section>
 
-      {isSupported && (
-        <section className="panel settings-panel">
-          <div className="panel-head">
-            <div><p className="section-label">Notificações</p><h2>Alertas</h2></div>
-          </div>
-          <div className="settings-notification-card">
-            {push.isSubscribed ? (
-              <>
-                <Bell size={20} style={{ color: 'var(--green)' }} />
-                <div>
-                  <strong>Lembretes em segundo plano ativados</strong>
-                  <span>O aparelho pode avisar sobre hábitos, tarefas e compras mesmo com o Ritmo fechado.</span>
-                </div>
+      <section className="panel settings-panel">
+        <div className="panel-head">
+          <div><p className="section-label">Notificações</p><h2>Alertas</h2></div>
+        </div>
+        <div className="settings-notification-card">
+          {!isSecureContext ? (
+            <>
+              <BellOff size={20} style={{ color: 'var(--red)' }} />
+              <div>
+                <strong>Abra pelo endereço seguro</strong>
+                <span>Notificações não funcionam pelo IP iniciado com http://. Use o Ritmo instalado pelo endereço HTTPS.</span>
+              </div>
+            </>
+          ) : isIos && !isInstalled ? (
+            <>
+              <Smartphone size={20} style={{ color: 'var(--accent)' }} />
+              <div>
+                <strong>Instale o Ritmo primeiro</strong>
+                <span>No iPhone: Compartilhar → Adicionar à Tela de Início. Depois abra o app instalado e volte aqui.</span>
+              </div>
+            </>
+          ) : !isSupported ? (
+            <>
+              <BellOff size={20} style={{ color: 'var(--red)' }} />
+              <div>
+                <strong>Notificações indisponíveis</strong>
+                <span>Este navegador não oferece notificações para o Ritmo. Tente Safari no iPhone ou Chrome no Android.</span>
+              </div>
+            </>
+          ) : push.isSubscribed ? (
+            <>
+              <Bell size={20} style={{ color: 'var(--green)' }} />
+              <div>
+                <strong>Lembretes em segundo plano ativados</strong>
+                <span>Hábitos, tarefas e compras podem avisar mesmo com o Ritmo fechado.</span>
+              </div>
+              <div className="settings-notification-actions">
+                <button
+                  className="ghost-button"
+                  type="button"
+                  disabled={push.isLoading}
+                  onClick={() => void handleNotificationTest()}
+                >
+                  Testar agora
+                </button>
                 <button
                   className="ghost-button"
                   type="button"
@@ -281,18 +355,30 @@ export default function Settings({
                 >
                   Desativar
                 </button>
-              </>
-            ) : permission === 'granted' ? (
-              <>
-                <Bell size={20} style={{ color: 'var(--green)' }} />
-                <div>
-                  <strong>Alertas locais ativados</strong>
-                  <span>
-                    {push.isConfigured
-                      ? 'Ative o segundo plano para receber lembretes com o app fechado.'
-                      : 'Check-ins e Pomodoro avisam enquanto o app está em uso.'}
-                  </span>
-                </div>
+              </div>
+            </>
+          ) : permission === 'granted' ? (
+            <>
+              <Bell size={20} style={{ color: 'var(--green)' }} />
+              <div>
+                <strong>Alertas com o app aberto</strong>
+                <span>
+                  {push.isConfigured
+                    ? push.isLinkedToOtherProfile
+                      ? 'Este aparelho está vinculado a outro perfil. Ative aqui para transferir os lembretes para este perfil.'
+                      : 'Conecte o segundo plano para receber lembretes com o Ritmo fechado.'
+                    : 'O servidor ainda não está conectado aos avisos em segundo plano.'}
+                </span>
+              </div>
+              <div className="settings-notification-actions">
+                <button
+                  className="ghost-button"
+                  type="button"
+                  disabled={push.isLoading}
+                  onClick={() => void handleNotificationTest()}
+                >
+                  Testar agora
+                </button>
                 {push.isConfigured && push.supported && (
                   <button
                     className="primary-button"
@@ -300,44 +386,48 @@ export default function Settings({
                     disabled={push.isLoading}
                     onClick={() => void push.subscribe()}
                   >
-                    Ativar segundo plano
+                    {push.isLinkedToOtherProfile
+                      ? 'Ativar neste perfil'
+                      : 'Ativar segundo plano'}
                   </button>
                 )}
-              </>
-            ) : permission === 'denied' ? (
-              <>
-                <BellOff size={20} style={{ color: 'var(--red)' }} />
-                <div>
-                  <strong>Notificações bloqueadas</strong>
-                  <span>Libere o Ritmo nos ajustes do navegador ou do iPhone.</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <Bell size={20} style={{ color: 'var(--muted)' }} />
-                <div>
-                  <strong>Receba seus lembretes</strong>
-                  <span>Ative avisos de hábitos, tarefas, compras e conclusão do Pomodoro.</span>
-                </div>
-                <button
-                  className="primary-button"
-                  onClick={() => void handleNotificationPermission()}
-                  disabled={push.isLoading}
-                  type="button"
-                >
-                  Ativar
-                </button>
-              </>
-            )}
-          </div>
-          {push.error && <p className="settings-notification-error" role="alert">{push.error}</p>}
-          {isIos && !isInstalled && (
-            <p className="settings-notification-hint">
-              No iPhone, instale o Ritmo na Tela de Início antes de ativar avisos em segundo plano.
-            </p>
+              </div>
+            </>
+          ) : permission === 'denied' ? (
+            <>
+              <BellOff size={20} style={{ color: 'var(--red)' }} />
+              <div>
+                <strong>Notificações bloqueadas</strong>
+                <span>Libere o Ritmo em Ajustes → Notificações no celular e abra o app novamente.</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <Bell size={20} style={{ color: 'var(--muted)' }} />
+              <div>
+                <strong>Receba seus lembretes</strong>
+                <span>
+                  {push.isLinkedToOtherProfile
+                    ? 'Este aparelho está vinculado a outro perfil. Ative neste perfil para transferir os lembretes.'
+                    : 'Ative avisos de hábitos, tarefas, compras e conclusão do Pomodoro.'}
+                </span>
+              </div>
+              <button
+                className="primary-button"
+                onClick={() => void handleNotificationPermission()}
+                disabled={push.isLoading}
+                type="button"
+              >
+                {push.isLinkedToOtherProfile ? 'Ativar neste perfil' : 'Ativar'}
+              </button>
+            </>
           )}
-        </section>
-      )}
+        </div>
+        {push.error && <p className="settings-notification-error" role="alert">{push.error}</p>}
+        {notificationMessage && (
+          <p className="settings-notification-hint" role="status">{notificationMessage}</p>
+        )}
+      </section>
 
       <section className="panel settings-panel">
         <div className="panel-head">

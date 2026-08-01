@@ -1,12 +1,4 @@
-import {
-  BarChart3,
-  CalendarCheck,
-  ListTodo,
-  Repeat,
-  Settings,
-  ShoppingBasket,
-  Timer,
-} from 'lucide-react'
+import { CalendarCheck, ListTodo, Repeat, ShoppingBasket, Sparkles } from 'lucide-react'
 import { AppLink } from '../router'
 
 export default function Navigation() {
@@ -15,9 +7,7 @@ export default function Navigation() {
     { to: '/habits', icon: Repeat, label: 'Hábitos' },
     { to: '/tasks', icon: ListTodo, label: 'Tarefas' },
     { to: '/shopping', icon: ShoppingBasket, label: 'Compras' },
-    { to: '/focus', icon: Timer, label: 'Foco' },
-    { to: '/progress', icon: BarChart3, label: 'Evolução' },
-    { to: '/settings', icon: Settings, label: 'Ajustes' },
+    { to: '/anahi', icon: Sparkles, label: 'ANAHÍ' },
   ]
 
   return (

@@ -39,7 +39,7 @@ import {
 import { toLocalDateValue } from '../utils/date'
 import '../styles/focus-reading.css'
 
-interface FocusProps {
+interface ReadingProps {
   userId: number
 }
 
@@ -127,7 +127,7 @@ function formatDate(value: string): string {
   }).format(new Date(`${value}T12:00:00`))
 }
 
-export default function Focus({ userId }: FocusProps) {
+export default function Reading({ userId }: ReadingProps) {
   const [searchParams, setSearchParams] = useAppSearchParams()
   const [readingHabits, setReadingHabits] = useState<Habit[]>([])
   const [selectedHabitId, setSelectedHabitId] = useState<number | null>(null)
@@ -335,8 +335,8 @@ export default function Focus({ userId }: FocusProps) {
           setReadingMessage(`25 minutos registrados no diário de “${activeBook.title}”.`)
           await refreshReading(activeBook.id)
         } catch (error) {
-          console.error('Failed to save focus reading session:', error)
-          setReadingError('O foco terminou, mas não foi possível salvar a sessão no diário.')
+          console.error('Failed to save Pomodoro reading session:', error)
+          setReadingError('O Pomodoro terminou, mas não foi possível salvar a sessão no diário.')
         }
       }
       setPhase('break')
@@ -575,8 +575,8 @@ export default function Focus({ userId }: FocusProps) {
   const timerActionLabel = isRunning
     ? 'Pausar'
     : remaining < phaseDuration
-      ? `Continuar ${phase === 'focus' ? 'foco' : 'pausa'}`
-      : `Iniciar ${phase === 'focus' ? 'foco' : 'pausa'}`
+      ? `Continuar ${phase === 'focus' ? 'Pomodoro' : 'pausa'}`
+      : `Iniciar ${phase === 'focus' ? 'Pomodoro' : 'pausa'}`
   const timerStyle = {
     '--focus-timer-progress': `${timerProgress}%`,
   } as CSSProperties
@@ -593,15 +593,15 @@ export default function Focus({ userId }: FocusProps) {
   )
 
   return (
-    <div className="view focus-reading-view" data-view="focus">
+    <div className="view focus-reading-view" data-view="reading">
       <section className={`focus-hero ${phase === 'break' ? 'is-break' : ''}`}>
         <div className="focus-hero-copy">
           <span className="focus-kicker">
-            <Sparkles aria-hidden="true" /> Modo sem distrações
+            <Sparkles aria-hidden="true" /> Pomodoro de leitura
           </span>
           <h2>Leia com presença. Guarde cada avanço.</h2>
           <p>
-            O cronômetro registra os 25 minutos no diário do livro ativo.
+            O Pomodoro registra os 25 minutos no diário do livro ativo.
             Ao terminar, você acrescenta as páginas lidas e suas ideias.
           </p>
 
@@ -633,7 +633,7 @@ export default function Focus({ userId }: FocusProps) {
             <div className="focus-habit-invite">
               <BookOpen aria-hidden="true" />
               <div>
-                <strong>Você pode focar só com o livro ativo</strong>
+                <strong>Você pode ler só com o livro ativo</strong>
                 <span>Crie um hábito de leitura se também quiser marcar sua rotina.</span>
               </div>
             </div>
@@ -646,7 +646,7 @@ export default function Focus({ userId }: FocusProps) {
               {phase === 'focus'
                 ? <Target aria-hidden="true" />
                 : <Coffee aria-hidden="true" />}
-              {phase === 'focus' ? 'Foco' : 'Pausa'}
+              {phase === 'focus' ? 'Pomodoro' : 'Pausa'}
             </span>
             <span>{cycles} {cycles === 1 ? 'ciclo concluído' : 'ciclos concluídos'}</span>
           </div>
@@ -937,7 +937,7 @@ export default function Focus({ userId }: FocusProps) {
                     />
                     <span>
                       <strong>Usar como livro ativo</strong>
-                      <small>O cronômetro salvará o foco no diário deste livro.</small>
+                      <small>O Pomodoro salvará 25 minutos no diário deste livro.</small>
                     </span>
                   </label>
 
@@ -1238,7 +1238,7 @@ export default function Focus({ userId }: FocusProps) {
           </h3>
           {selectedSessions.length === 0 ? (
             <p className="reading-history-empty">
-              Registre uma leitura ou conclua um foco para iniciar o diário.
+              Registre uma leitura ou conclua um Pomodoro para iniciar o diário.
             </p>
           ) : (
             selectedSessions.slice(0, 8).map(session => (
@@ -1249,7 +1249,7 @@ export default function Focus({ userId }: FocusProps) {
                 <div>
                   <strong>{session.book_title}</strong>
                   <small>
-                    {session.source === 'focus' ? 'Foco concluído' : 'Leitura registrada'}
+                    {session.source === 'focus' ? 'Pomodoro concluído' : 'Leitura registrada'}
                     {' · '}{session.duration_minutes} min
                   </small>
                 </div>

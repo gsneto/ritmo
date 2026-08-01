@@ -2,9 +2,12 @@ import hashlib
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from pydantic import SecretStr
+
 from config import Settings
 from models.habit import Habit
 from models.push import PushDelivery, PushSubscription
+from models.user import User
 from push_scheduler import send_due_push_reminders
 
 
@@ -14,6 +17,10 @@ def test_push_config_is_protected_and_disabled_without_vapid(
     user_id,
 ):
     assert client.get(f"/api/users/{user_id}/push-config").status_code == 401
+    assert client.post(
+        f"/api/users/{user_id}/push-subscription/status",
+        json={"endpoint": "https://fcm.googleapis.com/fcm/send/test"},
+    ).status_code == 401
 
     config = client.get(
         f"/api/users/{user_id}/push-config",
@@ -34,6 +41,12 @@ def test_push_config_is_protected_and_disabled_without_vapid(
         },
     )
     assert unavailable.status_code == 503
+
+    test_unavailable = client.post(
+        f"/api/users/{user_id}/push-test",
+        headers=auth_headers,
+    )
+    assert test_unavailable.status_code == 503
 
     unsafe_endpoint = client.put(
         f"/api/users/{user_id}/push-subscription",
@@ -119,3 +132,136 @@ def test_scheduler_sends_each_due_reminder_once(
         assert len(deliveries) == 1
     finally:
         db.close()
+
+
+def test_push_test_sends_from_server_to_active_subscription(
+    context,
+    settings,
+    auth_headers,
+    user_id,
+    monkeypatch,
+):
+    now = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    endpoint = "https://fcm.googleapis.com/fcm/send/push-test-device"
+    db = context.session_factory()
+    try:
+        db.add(
+            PushSubscription(
+                user_id=user_id,
+                endpoint=endpoint,
+                endpoint_hash=hashlib.sha256(endpoint.encode("utf-8")).hexdigest(),
+                p256dh="abcdefgh",
+                auth="abcdefgh",
+                enabled=True,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    settings.VAPID_PUBLIC_KEY = "public-key-test"
+    settings.VAPID_PRIVATE_KEY = SecretStr("private-key-test")
+    sent_payloads = []
+
+    def fake_webpush(**kwargs):
+        sent_payloads.append(kwargs)
+
+    monkeypatch.setattr("routers.push.webpush", fake_webpush)
+    response = context.client.post(
+        f"/api/users/{user_id}/push-test",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"sent": 1, "failed": 0, "expired": 0}
+    assert len(sent_payloads) == 1
+    assert '"title": "Teste do Ritmo' in sent_payloads[0]["data"]
+    assert sent_payloads[0]["ttl"] == 60
+
+
+def test_push_status_requires_explicit_transfer_between_profiles(
+    context,
+    settings,
+    auth_headers,
+    user_id,
+):
+    endpoint = "https://fcm.googleapis.com/fcm/send/shared-device"
+    now = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    db = context.session_factory()
+    try:
+        other_user = (
+            db.query(User)
+            .filter(User.id != user_id)
+            .order_by(User.id)
+            .first()
+        )
+        assert other_user is not None
+        other_user_id = other_user.id
+        db.add(
+            PushSubscription(
+                user_id=other_user_id,
+                endpoint=endpoint,
+                endpoint_hash=hashlib.sha256(endpoint.encode("utf-8")).hexdigest(),
+                p256dh="abcdefgh",
+                auth="abcdefgh",
+                enabled=True,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    status_response = context.client.post(
+        f"/api/users/{user_id}/push-subscription/status",
+        headers=auth_headers,
+        json={"endpoint": endpoint},
+    )
+    assert status_response.status_code == 200
+    assert status_response.json() == {
+        "active": False,
+        "linked_to_other_profile": True,
+    }
+
+    settings.VAPID_PUBLIC_KEY = "public-key-test"
+    settings.VAPID_PRIVATE_KEY = SecretStr("private-key-test")
+    subscription_payload = {
+        "endpoint": endpoint,
+        "keys": {"p256dh": "abcdefgh", "auth": "abcdefgh"},
+    }
+    blocked = context.client.put(
+        f"/api/users/{user_id}/push-subscription",
+        headers=auth_headers,
+        json=subscription_payload,
+    )
+    assert blocked.status_code == 409
+
+    db = context.session_factory()
+    try:
+        unchanged = db.query(PushSubscription).filter_by(endpoint=endpoint).one()
+        assert unchanged.user_id == other_user_id
+        assert unchanged.enabled is True
+    finally:
+        db.close()
+
+    transferred = context.client.put(
+        f"/api/users/{user_id}/push-subscription",
+        headers=auth_headers,
+        json={**subscription_payload, "transfer": True},
+    )
+    assert transferred.status_code == 200
+    assert transferred.json() == {"subscribed": True}
+
+    active_status = context.client.post(
+        f"/api/users/{user_id}/push-subscription/status",
+        headers=auth_headers,
+        json={"endpoint": endpoint},
+    )
+    assert active_status.status_code == 200
+    assert active_status.json() == {
+        "active": True,
+        "linked_to_other_profile": False,
+    }

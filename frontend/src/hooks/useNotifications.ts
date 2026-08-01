@@ -10,6 +10,10 @@ function notificationsAvailable(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window
 }
 
+function secureContextAvailable(): boolean {
+  return typeof window !== 'undefined' && window.isSecureContext === true
+}
+
 function currentPermission(): NotificationPermission {
   return notificationsAvailable() ? Notification.permission : 'default'
 }
@@ -35,8 +39,8 @@ async function showSystemNotification(
         })
         return registration
       }
-    } catch (error) {
-      console.warn('Service worker notification unavailable:', error)
+    } catch {
+      // Fall through to the browser Notification API below.
     }
   }
 
@@ -49,8 +53,14 @@ export function useNotifications() {
   const [permission, setPermission] = useState<NotificationPermission>(currentPermission)
 
   useEffect(() => {
-    if (notificationsAvailable()) {
-      setPermission(Notification.permission)
+    if (!notificationsAvailable()) return undefined
+    const syncPermission = () => setPermission(Notification.permission)
+    syncPermission()
+    window.addEventListener('focus', syncPermission)
+    document.addEventListener('visibilitychange', syncPermission)
+    return () => {
+      window.removeEventListener('focus', syncPermission)
+      document.removeEventListener('visibilitychange', syncPermission)
     }
   }, [])
 
@@ -93,6 +103,7 @@ export function useNotifications() {
     requestPermission,
     sendNotification,
     isSupported: notificationsAvailable(),
+    isSecureContext: secureContextAvailable(),
   }
 }
 
@@ -124,10 +135,10 @@ export const notify = {
 
   pomodoroComplete: (phase: 'focus' | 'break') => {
     if (canNotify()) {
-      const title = phase === 'focus' ? 'Tempo de foco concluído! 🎯' : 'Pausa terminada! ☕'
+      const title = phase === 'focus' ? 'Pomodoro concluído! 🎯' : 'Pausa terminada! ☕'
       const body = phase === 'focus'
         ? 'Ótimo trabalho! Faça uma pausa.'
-        : 'Hora de voltar ao foco!'
+        : 'Hora de voltar ao Pomodoro!'
 
       void showSystemNotification(title, {
         body,

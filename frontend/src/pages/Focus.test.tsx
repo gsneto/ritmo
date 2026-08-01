@@ -9,7 +9,7 @@ import {
   type ReadingSession,
   type ReadingSummary,
 } from '../services/readingApi'
-import Focus from './Focus'
+import Reading from './Focus'
 
 vi.mock('../services/api', () => ({
   apiRoutes: {
@@ -138,7 +138,7 @@ const summary: ReadingSummary = {
   ],
 }
 
-async function renderFocus(options?: {
+async function renderReading(options?: {
   books?: ReadingBook[]
   habits?: typeof readingHabit[]
   notes?: ReadingNote[]
@@ -191,7 +191,7 @@ async function renderFocus(options?: {
 
   render(
     <RouterProvider>
-      <Focus userId={1} />
+      <Reading userId={1} />
     </RouterProvider>,
   )
 
@@ -202,9 +202,9 @@ async function renderFocus(options?: {
   })
 }
 
-describe('Focus timer, library and reading journal', () => {
+describe('Leitura, Pomodoro e diário', () => {
   beforeEach(() => {
-    window.history.replaceState({}, '', '/focus')
+    window.history.replaceState({}, '', '/reading')
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 29, 12, 0, 0))
   })
@@ -215,21 +215,21 @@ describe('Focus timer, library and reading journal', () => {
   })
 
   it('labels a paused timer as a continuation', async () => {
-    await renderFocus()
+    await renderReading()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Iniciar foco' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar Pomodoro' }))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000)
     })
     fireEvent.click(screen.getByRole('button', { name: 'Pausar' }))
 
-    expect(screen.getByRole('button', { name: 'Continuar foco' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Continuar Pomodoro' })).toBeTruthy()
   })
 
-  it('saves a completed reading focus in the journal and checks the habit', async () => {
-    await renderFocus()
+  it('saves a completed Pomodoro in the journal and checks the habit', async () => {
+    await renderReading()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Iniciar foco' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Iniciar Pomodoro' }))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(25 * 60 * 1000)
       await vi.advanceTimersByTimeAsync(1)
@@ -248,7 +248,7 @@ describe('Focus timer, library and reading journal', () => {
   })
 
   it('shows the library, weekly result and page-linked note', async () => {
-    await renderFocus()
+    await renderReading()
 
     expect(screen.getByText('20 páginas')).toBeTruthy()
     expect(screen.getByText('30 min')).toBeTruthy()
@@ -260,7 +260,7 @@ describe('Focus timer, library and reading journal', () => {
   })
 
   it('places Minha biblioteca before the weekly summary cards', async () => {
-    await renderFocus()
+    await renderReading()
 
     const libraryPanel = screen
       .getByRole('heading', { name: 'Livros, progresso e histórico' })
@@ -274,7 +274,7 @@ describe('Focus timer, library and reading journal', () => {
   })
 
   it('updates book progress and preserves its original notes', async () => {
-    await renderFocus()
+    await renderReading()
 
     fireEvent.change(screen.getByLabelText('Página atual'), {
       target: { value: '160' },
@@ -299,7 +299,7 @@ describe('Focus timer, library and reading journal', () => {
   })
 
   it('adds a future title and can make it active', async () => {
-    await renderFocus()
+    await renderReading()
 
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar livro' }))
     fireEvent.change(screen.getByLabelText('Livro que estou lendo'), {
@@ -335,7 +335,7 @@ describe('Focus timer, library and reading journal', () => {
   })
 
   it('registers pages, duration and a dated note for the selected book', async () => {
-    await renderFocus()
+    await renderReading()
 
     fireEvent.change(screen.getByLabelText('Página inicial'), {
       target: { value: '80' },
@@ -376,17 +376,17 @@ describe('Focus timer, library and reading journal', () => {
     })
   })
 
-  it('keeps focus disabled only when there is no active book or reading habit', async () => {
-    await renderFocus({ books: [], habits: [], notes: [], sessions: [] })
+  it('keeps Pomodoro disabled only when there is no active book or reading habit', async () => {
+    await renderReading({ books: [], habits: [], notes: [], sessions: [] })
 
     expect(screen.getByText('Comece sua biblioteca')).toBeTruthy()
     expect(
-      screen.getByRole('button', { name: 'Iniciar foco' }).hasAttribute('disabled'),
+      screen.getByRole('button', { name: 'Iniciar Pomodoro' }).hasAttribute('disabled'),
     ).toBe(true)
   })
 
   it('blocks a current page greater than the total', async () => {
-    await renderFocus()
+    await renderReading()
 
     fireEvent.change(screen.getByLabelText('Página atual'), {
       target: { value: '400' },

@@ -46,7 +46,8 @@ body {
 
 .topbar {
   position: relative;
-  overflow: hidden;
+  z-index: 5;
+  overflow: visible;
   border-color: color-mix(in srgb, var(--identity-black) 18%, var(--line));
   border-top: 4px solid var(--identity-black);
 }
@@ -128,20 +129,68 @@ body {
   box-shadow: 0 3px 10px rgba(40, 27, 21, 0.1);
 }
 
-.topbar-settings-button {
+.topbar-menu-button {
   display: inline-grid;
   width: 44px;
   height: 44px;
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 13px;
+  border-radius: 50%;
   background: var(--surface-soft);
   color: var(--text);
 }
 
-.topbar-settings-button:hover {
+.topbar-menu-button:hover {
   border-color: color-mix(in srgb, var(--identity-red) 35%, var(--line));
+  color: var(--identity-red);
+}
+
+.topbar-menu-button[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--identity-red) 46%, var(--line));
+  background: var(--identity-red-soft);
+  color: var(--identity-red);
+}
+
+.topbar-menu {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.topbar-menu-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 10px);
+  right: 0;
+  display: grid;
+  width: min(210px, calc(100vw - 28px));
+  gap: 4px;
+  padding: 7px;
+  border: 1px solid color-mix(in srgb, var(--identity-black) 22%, var(--line));
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow: 0 16px 32px rgba(20, 13, 10, 0.2);
+}
+
+.topbar-menu-popover button {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 800;
+  text-align: left;
+}
+
+.topbar-menu-popover button:hover,
+.topbar-menu-popover button:focus-visible {
+  background: var(--identity-red-soft);
   color: var(--identity-red);
 }
 
@@ -273,7 +322,7 @@ textarea:focus-visible,
     border-radius: 13px;
   }
 
-  .topbar-settings-button {
+  .topbar-menu-button {
     width: 40px;
     height: 40px;
   }

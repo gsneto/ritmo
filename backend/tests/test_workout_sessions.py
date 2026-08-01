@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from models.workout import (
@@ -178,6 +179,98 @@ def test_guided_workout_flow_is_idempotent_and_keeps_history_snapshot(
         assert logged.weight_kg == Decimal("8.50")
     finally:
         db.close()
+
+
+def test_empty_session_can_be_discarded_and_finished_session_stops_at_last_set(
+    context,
+    client,
+    auth_headers,
+    user_id,
+):
+    workout = _first_trainable_workout(client, auth_headers, user_id)
+
+    empty_started = client.post(
+        f"/api/users/{user_id}/workouts/{workout['id']}/sessions",
+        headers=auth_headers,
+        json={
+            "idempotency_key": "workout-discard-empty",
+            "rest_seconds": 60,
+        },
+    )
+    assert empty_started.status_code == 200
+    empty_session = empty_started.json()
+
+    discarded = client.delete(
+        f"/api/workout-sessions/{empty_session['id']}",
+        headers=auth_headers,
+    )
+    assert discarded.status_code == 204
+    assert discarded.content == b""
+
+    active = client.get(
+        f"/api/users/{user_id}/workout-sessions/active",
+        headers=auth_headers,
+    )
+    assert active.status_code == 200
+    assert active.json() is None
+
+    db = context.session_factory()
+    try:
+        assert db.query(WorkoutSession).filter_by(id=empty_session["id"]).first() is None
+        assert (
+            db.query(WorkoutSessionExercise)
+            .filter_by(session_id=empty_session["id"])
+            .count()
+            == 0
+        )
+    finally:
+        db.close()
+
+    started = client.post(
+        f"/api/users/{user_id}/workouts/{workout['id']}/sessions",
+        headers=auth_headers,
+        json={
+            "idempotency_key": "workout-stale-duration",
+            "rest_seconds": 60,
+        },
+    )
+    assert started.status_code == 200
+    session = started.json()
+    set_id = session["exercises"][0]["sets"][0]["id"]
+
+    completed_set = client.put(
+        f"/api/workout-session-sets/{set_id}",
+        headers=auth_headers,
+        json={"completed": True, "weight_kg": "8.00", "reps_completed": 10},
+    )
+    assert completed_set.status_code == 200
+
+    cannot_discard_completed_session = client.delete(
+        f"/api/workout-sessions/{session['id']}",
+        headers=auth_headers,
+    )
+    assert cannot_discard_completed_session.status_code == 409
+
+    expected_duration_seconds = 37 * 60 + 9
+    db = context.session_factory()
+    try:
+        stored_session = db.query(WorkoutSession).filter_by(id=session["id"]).one()
+        stored_set = db.query(WorkoutSetLog).filter_by(id=set_id).one()
+        stale_started_at = stored_session.started_at - timedelta(hours=51)
+        stored_session.started_at = stale_started_at
+        stored_set.completed_at = stale_started_at + timedelta(
+            seconds=expected_duration_seconds
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    finished = client.post(
+        f"/api/workout-sessions/{session['id']}/finish",
+        headers=auth_headers,
+    )
+    assert finished.status_code == 200
+    assert finished.json()["duration_seconds"] == expected_duration_seconds
 
 
 def test_workout_session_validation_and_security(

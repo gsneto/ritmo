@@ -1,4 +1,5 @@
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote, quote_plus, urlsplit
@@ -57,6 +58,22 @@ class Settings(BaseSettings):
         default="mailto:admin@ritmo.local",
         validation_alias="VAPID_SUBJECT",
     )
+    # ANAHÍ is served only by the backend. Keep this secret out of the
+    # frontend build and source control.
+    GEMINI_API_KEY: SecretStr | None = Field(
+        default=None,
+        validation_alias="GEMINI_API_KEY",
+    )
+    GEMINI_MODEL: str = Field(
+        default="gemini-3.6-flash",
+        validation_alias="GEMINI_MODEL",
+    )
+    GEMINI_TIMEOUT_SECONDS: float = Field(
+        default=15,
+        validation_alias="GEMINI_TIMEOUT_SECONDS",
+        ge=1,
+        le=60,
+    )
     CORS_ORIGINS: str = Field(
         default=LOCAL_CORS_ORIGINS,
         validation_alias="CORS_ORIGINS",
@@ -77,6 +94,26 @@ class Settings(BaseSettings):
             raise ValueError("APP_ACCESS_TOKEN must be a string")
         value = value.strip()
         return value or None
+
+    @field_validator("GEMINI_API_KEY", mode="before")
+    @classmethod
+    def normalize_gemini_api_key(cls, value):
+        if value is None:
+            return None
+        if isinstance(value, SecretStr):
+            value = value.get_secret_value()
+        if not isinstance(value, str):
+            raise ValueError("GEMINI_API_KEY must be a string")
+        value = value.strip()
+        return value or None
+
+    @field_validator("GEMINI_MODEL")
+    @classmethod
+    def validate_gemini_model(cls, value: str) -> str:
+        model = value.strip()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", model):
+            raise ValueError("GEMINI_MODEL contains invalid characters")
+        return model
 
     @model_validator(mode="after")
     def validate_runtime_settings(self):
@@ -138,6 +175,12 @@ class Settings(BaseSettings):
         if self.APP_ACCESS_TOKEN is None:
             return None
         return self.APP_ACCESS_TOKEN.get_secret_value()
+
+    @property
+    def gemini_api_key(self) -> str | None:
+        if self.GEMINI_API_KEY is None:
+            return None
+        return self.GEMINI_API_KEY.get_secret_value().strip() or None
 
     @property
     def push_enabled(self) -> bool:

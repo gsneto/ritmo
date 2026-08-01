@@ -27,33 +27,47 @@ export function usePushNotifications(userId: number) {
   const [isConfigured, setIsConfigured] = useState(false)
   const [publicKey, setPublicKey] = useState<string | null>(null)
   const [isSubscribed, setIsSubscribed] = useState(false)
+  const [isLinkedToOtherProfile, setIsLinkedToOtherProfile] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null)
   const supported = pushSupported()
 
   const refresh = useCallback(async () => {
     setIsLoading(true)
     setError('')
+    setIsSubscribed(false)
+    setIsLinkedToOtherProfile(false)
     try {
       const response = await apiRoutes.getPushConfig(userId)
       setIsConfigured(response.data.enabled)
       setPublicKey(response.data.public_key)
-      if (!supported) {
+      if (!supported || !response.data.enabled || !response.data.public_key) {
         setIsSubscribed(false)
+        setLastSyncedAt(new Date())
         return
       }
       const registration = await navigator.serviceWorker.getRegistration()
       if (!registration) {
         setIsSubscribed(false)
+        setLastSyncedAt(new Date())
         return
       }
       const subscription = await registration.pushManager.getSubscription()
-      setIsSubscribed(Boolean(subscription))
-      if (response.data.enabled && subscription) {
-        await apiRoutes.savePushSubscription(userId, subscription.toJSON())
+      if (subscription) {
+        const subscriptionStatus = await apiRoutes.getPushSubscriptionStatus(
+          userId,
+          subscription.endpoint,
+        )
+        setIsSubscribed(
+          subscriptionStatus.data.active && Notification.permission === 'granted',
+        )
+        setIsLinkedToOtherProfile(
+          subscriptionStatus.data.linked_to_other_profile,
+        )
       }
-    } catch (loadError) {
-      console.error('Failed to load push configuration:', loadError)
+      setLastSyncedAt(new Date())
+    } catch {
       setError('Não foi possível verificar os lembretes em segundo plano.')
     } finally {
       setIsLoading(false)
@@ -64,36 +78,53 @@ export function usePushNotifications(userId: number) {
     void refresh()
   }, [refresh])
 
+  useEffect(() => {
+    if (!supported) return undefined
+    const serviceWorker = navigator.serviceWorker
+    const handleControllerChange = () => void refresh()
+    serviceWorker.addEventListener('controllerchange', handleControllerChange)
+    return () => {
+      serviceWorker.removeEventListener('controllerchange', handleControllerChange)
+    }
+  }, [refresh, supported])
+
   const subscribe = useCallback(async () => {
     if (!supported || !isConfigured || !publicKey) return false
     setIsLoading(true)
     setError('')
     try {
-      const permission = await Notification.requestPermission()
+      const permission = Notification.permission === 'granted'
+        ? 'granted'
+        : await Notification.requestPermission()
       if (permission !== 'granted') {
         setError('Permissão de notificações não concedida.')
         return false
       }
-      const registration = (
+      const initialRegistration = (
         await navigator.serviceWorker.getRegistration()
         || await navigator.serviceWorker.register('/sw.js')
       )
-      await navigator.serviceWorker.ready
+      const registration = await navigator.serviceWorker.ready || initialRegistration
       const existing = await registration.pushManager.getSubscription()
       const subscription = existing || await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: base64UrlToUint8Array(publicKey),
       })
       try {
-        await apiRoutes.savePushSubscription(userId, subscription.toJSON())
-      } catch (saveError) {
+        await apiRoutes.savePushSubscription(
+          userId,
+          subscription.toJSON(),
+          Boolean(existing),
+        )
+      } catch {
         if (!existing) await subscription.unsubscribe()
-        throw saveError
+        throw new Error('Push subscription could not be saved')
       }
       setIsSubscribed(true)
+      setIsLinkedToOtherProfile(false)
+      setLastSyncedAt(new Date())
       return true
-    } catch (subscribeError) {
-      console.error('Failed to subscribe to Web Push:', subscribeError)
+    } catch {
       setError('Não foi possível ativar os lembretes neste aparelho.')
       return false
     } finally {
@@ -109,6 +140,7 @@ export function usePushNotifications(userId: number) {
       const registration = await navigator.serviceWorker.getRegistration()
       if (!registration) {
         setIsSubscribed(false)
+        setIsLinkedToOtherProfile(false)
         return true
       }
       const subscription = await registration.pushManager.getSubscription()
@@ -117,9 +149,10 @@ export function usePushNotifications(userId: number) {
         await subscription.unsubscribe()
       }
       setIsSubscribed(false)
+      setIsLinkedToOtherProfile(false)
+      setLastSyncedAt(new Date())
       return true
-    } catch (unsubscribeError) {
-      console.error('Failed to unsubscribe from Web Push:', unsubscribeError)
+    } catch {
       setError('Não foi possível desativar os lembretes neste aparelho.')
       return false
     } finally {
@@ -127,14 +160,37 @@ export function usePushNotifications(userId: number) {
     }
   }, [supported, userId])
 
+  const sendTest = useCallback(async () => {
+    if (!isSubscribed || !isConfigured) return false
+    setIsLoading(true)
+    setError('')
+    try {
+      const response = await apiRoutes.sendPushTest(userId)
+      if (response.data.sent < 1) {
+        setError('O envio de teste não foi aceito pelo serviço de notificações.')
+        return false
+      }
+      setLastSyncedAt(new Date())
+      return true
+    } catch {
+      setError('Não foi possível enviar o aviso de teste em segundo plano.')
+      return false
+    } finally {
+      setIsLoading(false)
+    }
+  }, [isConfigured, isSubscribed, userId])
+
   return {
     supported,
     isConfigured,
     isSubscribed,
+    isLinkedToOtherProfile,
     isLoading,
     error,
+    lastSyncedAt,
     subscribe,
     unsubscribe,
+    sendTest,
     refresh,
   }
 }

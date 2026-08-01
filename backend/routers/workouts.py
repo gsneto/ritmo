@@ -415,6 +415,16 @@ def _aware_duration_seconds(started_at: datetime, ended_at: datetime) -> int:
     return max(0, int((ended_at - started_at).total_seconds()))
 
 
+def _last_completed_set_at(session: WorkoutSession) -> datetime | None:
+    completed_at_values = [
+        set_log.completed_at
+        for exercise in session.exercises
+        for set_log in exercise.sets
+        if set_log.completed_at is not None
+    ]
+    return max(completed_at_values) if completed_at_values else None
+
+
 def serialize_session(
     session: WorkoutSession,
     exercise_progress: dict[str, dict] | None = None,
@@ -734,10 +744,32 @@ def finish_workout_session(session_id: int, db: Session = Depends(get_db)):
     session.completed_at = completed_at
     session.duration_seconds = _aware_duration_seconds(
         session.started_at,
-        completed_at,
+        _last_completed_set_at(session) or completed_at,
     )
     db.commit()
     return _serialize_session_with_progress(_get_session(session.id, db), db)
+
+
+@router.delete(
+    "/workout-sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def discard_empty_workout_session(session_id: int, db: Session = Depends(get_db)):
+    session = _claim_session(session_id, db)
+    _ensure_active(session)
+    completed_sets = sum(
+        set_log.completed_at is not None
+        for exercise in session.exercises
+        for set_log in exercise.sets
+    )
+    if completed_sets:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Workout sessions with completed sets must be finished",
+        )
+
+    db.delete(session)
+    db.commit()
 
 
 @router.get(

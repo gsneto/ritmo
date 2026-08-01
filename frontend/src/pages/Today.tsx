@@ -17,6 +17,7 @@ import {
   TrendingUp,
   Zap,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { apiRoutes } from '../services/api'
 import type {
   MonthStats,
@@ -34,6 +35,11 @@ import {
   type WorkoutSession,
   type WorkoutTemplate,
 } from '../services/workoutSessionApi'
+import {
+  buildRhythmPlan,
+  type RhythmAction,
+  type RhythmActionKind,
+} from '../utils/rhythmPlan'
 
 interface TodayProps {
   userId: number
@@ -41,35 +47,62 @@ interface TodayProps {
 
 const WORKOUT_DAY = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
-function formatShortDate(value: string): string {
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-  }).format(new Date(`${value}T12:00:00`))
+const RHYTHM_ACTION_ICONS: Record<RhythmActionKind, LucideIcon> = {
+  workout: Dumbbell,
+  task: Target,
+  habit: Zap,
+  shopping: ShoppingBasket,
+  reading: BookOpen,
+  plan: Sparkles,
+}
+
+const DEFAULT_RHYTHM_ACTION: RhythmAction = {
+  id: 'plan-day',
+  kind: 'plan',
+  eyebrow: 'Dia organizado',
+  title: 'Você está em dia',
+  detail: 'Use este espaço para escolher uma próxima ação leve.',
+  to: '/tasks?create=1',
+  label: 'Planejar algo',
+}
+
+function nextLocalDate(value: string): string {
+  const nextDate = new Date(`${value}T12:00:00`)
+  nextDate.setDate(nextDate.getDate() + 1)
+  return toLocalDateValue(nextDate)
 }
 
 export default function Today({ userId }: TodayProps) {
   const [todayStats, setTodayStats] = useState<TodayStats | null>(null)
   const [monthStats, setMonthStats] = useState<MonthStats | null>(null)
   const [streak, setStreak] = useState<StreakStats | null>(null)
-  const [todaysTasks, setTodaysTasks] = useState<Task[]>([])
-  const [nextShopping, setNextShopping] = useState<ShoppingList | null>(null)
+  const [pendingTasks, setPendingTasks] = useState<Task[]>([])
+  const [shoppingLists, setShoppingLists] = useState<ShoppingList[]>([])
   const [activeBook, setActiveBook] = useState<ReadingBook | null>(null)
   const [todayWorkout, setTodayWorkout] = useState<WorkoutTemplate | null>(null)
   const [activeWorkout, setActiveWorkout] = useState<WorkoutSession | null>(null)
   const [isLoadingAssistant, setIsLoadingAssistant] = useState(true)
+  const [assistantActionId, setAssistantActionId] = useState<string | null>(null)
+  const [now, setNow] = useState(() => new Date())
+  const currentDate = toLocalDateValue(now)
+  const currentTime = now.toTimeString().slice(0, 5)
 
   useEffect(() => {
-    loadData()
-  }, [userId])
+    const interval = window.setInterval(() => setNow(new Date()), 60_000)
+    return () => window.clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    void loadData()
+  }, [userId, currentDate])
 
   async function loadData() {
     setIsLoadingAssistant(true)
     setTodayStats(null)
     setMonthStats(null)
     setStreak(null)
-    setTodaysTasks([])
-    setNextShopping(null)
+    setPendingTasks([])
+    setShoppingLists([])
     setActiveBook(null)
     setTodayWorkout(null)
     setActiveWorkout(null)
@@ -94,22 +127,20 @@ export default function Today({ userId }: TodayProps) {
       workoutsResult,
       activeWorkoutResult,
     ] = results
-    const todayStr = toLocalDateValue()
-
     if (todayResult.status === 'fulfilled') setTodayStats(todayResult.value.data)
     if (monthResult.status === 'fulfilled') setMonthStats(monthResult.value.data)
     if (streakResult.status === 'fulfilled') setStreak(streakResult.value.data)
     if (tasksResult.status === 'fulfilled') {
-      setTodaysTasks(
+      setPendingTasks(
         tasksResult.value.data
-          .filter(task => task.date === todayStr && !task.completed_at)
-          .sort((first, second) => first.time.localeCompare(second.time)),
+          .filter(task => !task.completed_at)
+          .sort((first, second) => (
+            first.date.localeCompare(second.date) || first.time.localeCompare(second.time)
+          )),
       )
     }
     if (shoppingResult.status === 'fulfilled') {
-      const upcoming = [...shoppingResult.value.data]
-        .sort((first, second) => first.planned_date.localeCompare(second.planned_date))[0]
-      setNextShopping(upcoming || null)
+      setShoppingLists(shoppingResult.value.data)
     }
     if (bookResult.status === 'fulfilled') setActiveBook(bookResult.value.data)
     if (workoutsResult.status === 'fulfilled') {
@@ -133,7 +164,7 @@ export default function Today({ userId }: TodayProps) {
   }
 
   async function toggleCheckIn(habitId: number, done: boolean) {
-    const today = toLocalDateValue()
+    const today = currentDate
     try {
       if (done) {
         await apiRoutes.removeCheckin(habitId, today)
@@ -145,7 +176,7 @@ export default function Today({ userId }: TodayProps) {
           notify.checkin(habit.name)
         }
       }
-      loadData()
+      await loadData()
     } catch (error) {
       console.error('Failed to toggle check-in:', error)
     }
@@ -154,9 +185,42 @@ export default function Today({ userId }: TodayProps) {
   async function toggleTaskCompletion(task: Task) {
     try {
       await apiRoutes.completeTask(task.id)
-      loadData()
+      await loadData()
     } catch (error) {
       console.error('Failed to toggle task:', error)
+    }
+  }
+
+  async function runAssistantAction(action: RhythmAction) {
+    if (!action.quickAction) return
+    setAssistantActionId(action.id)
+    try {
+      if (action.quickAction === 'checkin' && action.habitId) {
+        await apiRoutes.checkinHabit(action.habitId, currentDate)
+        const habit = todayStats?.habits_today.find(item => item.id === action.habitId)
+        if (habit) notify.checkin(habit.name)
+      }
+      if (action.quickAction === 'complete-task' && action.taskId) {
+        await apiRoutes.completeTask(action.taskId)
+      }
+      await loadData()
+    } catch (error) {
+      console.error('Failed to run assistant action:', error)
+    } finally {
+      setAssistantActionId(null)
+    }
+  }
+
+  async function deferAssistantTask(action: RhythmAction) {
+    if (!action.taskId) return
+    setAssistantActionId(action.id)
+    try {
+      await apiRoutes.updateTask(action.taskId, { date: nextLocalDate(currentDate) })
+      await loadData()
+    } catch (error) {
+      console.error('Failed to defer assistant task:', error)
+    } finally {
+      setAssistantActionId(null)
     }
   }
 
@@ -168,84 +232,22 @@ export default function Today({ userId }: TodayProps) {
     : 0
   const monthScore = monthStats?.months[monthStats.months.length - 1]?.score || 0
   const streakDays = streak?.streak || 0
-  const currentTime = new Date().toTimeString().slice(0, 5)
-  const overdueTask = todaysTasks.find(task => task.time <= currentTime)
-  const nextTask = todaysTasks.find(task => task.time > currentTime)
-  const pendingHabit = todayStats?.habits_today
-    .filter(habit => !habit.done)
-    .sort((first, second) => first.time.localeCompare(second.time))[0]
-  const nextAction = activeWorkout
-    ? {
-        eyebrow: 'Treino em andamento',
-        title: `Continue ${activeWorkout.workout_title}`,
-        detail: `${activeWorkout.completed_sets} de ${activeWorkout.total_sets} séries concluídas.`,
-        to: '/habits?workout=1',
-        label: 'Retomar treino',
-        icon: Dumbbell,
-      }
-    : overdueTask
-      ? {
-          eyebrow: 'Prioridade agora',
-          title: overdueTask.name,
-          detail: `Estava planejada para ${overdueTask.time}. Resolva ou reorganize.`,
-          to: '/tasks',
-          label: 'Abrir tarefas',
-          icon: Target,
-        }
-      : pendingHabit && (!nextTask || pendingHabit.time <= nextTask.time)
-        ? {
-            eyebrow: 'Próximo passo',
-            title: pendingHabit.name,
-            detail: `Seu check-in está previsto para ${pendingHabit.time}.`,
-            to: '/habits',
-            label: 'Abrir hábitos',
-            icon: Zap,
-          }
-        : nextTask
-          ? {
-              eyebrow: 'A seguir',
-              title: nextTask.name,
-              detail: `Planejada para hoje às ${nextTask.time}.`,
-              to: '/tasks',
-              label: 'Ver agenda',
-              icon: Clock3,
-            }
-          : nextShopping && nextShopping.planned_date <= toLocalDateValue()
-            ? {
-                eyebrow: 'Compra planejada',
-                title: nextShopping.name,
-                detail: `${nextShopping.items.length} itens esperando por você.`,
-                to: '/shopping',
-                label: 'Abrir lista',
-                icon: ShoppingBasket,
-              }
-            : todayWorkout && todayWorkout.exercises.length > 0
-              ? {
-                  eyebrow: 'Treino de hoje',
-                  title: todayWorkout.title,
-                  detail: `${todayWorkout.exercises.length} exercícios no seu plano de casa.`,
-                  to: '/habits?workout=1',
-                  label: 'Iniciar treino',
-                  icon: Dumbbell,
-                }
-              : activeBook
-                ? {
-                    eyebrow: 'Momento de foco',
-                    title: `Continue “${activeBook.title}”`,
-                    detail: `Página ${activeBook.current_page} de ${activeBook.total_pages} · ${activeBook.progress_percent}% concluído.`,
-                    to: '/focus',
-                    label: 'Continuar leitura',
-                    icon: BookOpen,
-                  }
-                : {
-                    eyebrow: 'Dia organizado',
-                    title: 'Você está em dia',
-                    detail: 'Use este espaço para escolher uma próxima ação leve.',
-                    to: '/tasks?create=1',
-                    label: 'Planejar algo',
-                    icon: Sparkles,
-                  }
-  const NextActionIcon = nextAction.icon
+  const todaysTasks = pendingTasks
+    .filter(task => task.date === currentDate)
+    .sort((first, second) => first.time.localeCompare(second.time))
+  const rhythmPlan = buildRhythmPlan({
+    currentDate,
+    currentTime,
+    habits: todayStats?.habits_today ?? [],
+    pendingTasks,
+    shoppingLists,
+    activeBook,
+    todayWorkout,
+    activeWorkout,
+  })
+  const nextAction = rhythmPlan[0] ?? DEFAULT_RHYTHM_ACTION
+  const laterActions = rhythmPlan.slice(1)
+  const NextActionIcon = RHYTHM_ACTION_ICONS[nextAction.kind]
   const formattedDate = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'long',
     day: 'numeric',
@@ -378,69 +380,69 @@ export default function Today({ userId }: TodayProps) {
           </span>
           <div className="assistant-next-copy">
             <p className="section-label" id="today-assistant-title">
-              {isLoadingAssistant ? 'Organizando seu dia' : nextAction.eyebrow}
+              {isLoadingAssistant ? 'Organizando seu dia' : `Agora · ${nextAction.eyebrow}`}
             </p>
             <h2>{isLoadingAssistant ? 'Buscando sua próxima ação…' : nextAction.title}</h2>
             <p>{isLoadingAssistant ? 'Hábitos, tarefas, treino, leitura e compras em um só lugar.' : nextAction.detail}</p>
           </div>
-          {!isLoadingAssistant && (
+          {!isLoadingAssistant && nextAction.quickAction ? (
+            <div className="assistant-quick-actions">
+              <button
+                className="assistant-primary-action"
+                type="button"
+                onClick={() => void runAssistantAction(nextAction)}
+                disabled={assistantActionId === nextAction.id}
+              >
+                <Check size={17} aria-hidden="true" />
+                <span>{assistantActionId === nextAction.id ? 'Salvando…' : nextAction.label}</span>
+              </button>
+              {nextAction.quickAction === 'complete-task' && (
+                <button
+                  className="assistant-secondary-action"
+                  type="button"
+                  onClick={() => void deferAssistantTask(nextAction)}
+                  disabled={assistantActionId === nextAction.id}
+                >
+                  <CalendarDays size={16} aria-hidden="true" />
+                  <span>Adiar para amanhã</span>
+                </button>
+              )}
+            </div>
+          ) : !isLoadingAssistant ? (
             <AppLink to={nextAction.to} className="assistant-primary-action">
               <span>{nextAction.label}</span>
               <ArrowRight size={17} aria-hidden="true" />
             </AppLink>
-          )}
+          ) : null}
         </article>
 
-        <div className="assistant-timeline" aria-label="Visão do seu dia">
-          <AppLink to="/tasks" className="assistant-timeline-item">
-            <span className="assistant-timeline-icon task"><Clock3 size={18} /></span>
-            <span>
-              <small>Agenda</small>
-              <strong>
-                {todaysTasks.length > 0
-                  ? `${todaysTasks.length} ${todaysTasks.length === 1 ? 'tarefa pendente' : 'tarefas pendentes'}`
-                  : 'Nenhuma pendência hoje'}
-              </strong>
-            </span>
-            <ArrowRight size={16} aria-hidden="true" />
-          </AppLink>
-          <AppLink to="/shopping" className="assistant-timeline-item">
-            <span className="assistant-timeline-icon shopping"><ShoppingBasket size={18} /></span>
-            <span>
-              <small>Próxima compra</small>
-              <strong>
-                {nextShopping
-                  ? `${nextShopping.name} · ${formatShortDate(nextShopping.planned_date)}`
-                  : 'Nenhuma compra planejada'}
-              </strong>
-            </span>
-            <ArrowRight size={16} aria-hidden="true" />
-          </AppLink>
-          <AppLink to="/habits?workout=1" className="assistant-timeline-item">
-            <span className="assistant-timeline-icon workout"><Dumbbell size={18} /></span>
-            <span>
-              <small>Treino</small>
-              <strong>
-                {activeWorkout
-                  ? `${activeWorkout.workout_title} em andamento`
-                  : todayWorkout?.title || 'Descanso planejado'}
-              </strong>
-            </span>
-            <ArrowRight size={16} aria-hidden="true" />
-          </AppLink>
-          <AppLink to="/focus" className="assistant-timeline-item">
-            <span className="assistant-timeline-icon reading"><BookOpen size={18} /></span>
-            <span>
-              <small>Leitura</small>
-              <strong>
-                {activeBook
-                  ? `${activeBook.title} · ${activeBook.progress_percent}%`
-                  : 'Escolha seu próximo livro'}
-              </strong>
-            </span>
-            <ArrowRight size={16} aria-hidden="true" />
-          </AppLink>
-        </div>
+        {!isLoadingAssistant && laterActions.length > 0 && (
+          <div className="assistant-trail" role="region" aria-label="Trilha viva do seu dia">
+            <div className="assistant-trail-head">
+              <div>
+                <p className="section-label">Trilha do dia</p>
+                <h2>Depois do agora</h2>
+              </div>
+              <span>{laterActions.length} {laterActions.length === 1 ? 'passo' : 'passos'}</span>
+            </div>
+            <div className="assistant-timeline">
+              {laterActions.map((action, index) => {
+                const ActionIcon = RHYTHM_ACTION_ICONS[action.kind]
+                return (
+                  <AppLink key={action.id} to={action.to} className="assistant-timeline-item">
+                    <span className={`assistant-timeline-icon ${action.kind}`}><ActionIcon size={18} /></span>
+                    <span>
+                      <small>{index === 0 ? 'Em seguida' : 'Depois'} · {action.eyebrow}</small>
+                      <strong>{action.title}</strong>
+                      <em>{action.detail}</em>
+                    </span>
+                    <ArrowRight size={16} aria-hidden="true" />
+                  </AppLink>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="today-agenda-section" aria-label="Agenda de hoje">

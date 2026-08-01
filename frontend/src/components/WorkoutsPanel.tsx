@@ -12,8 +12,10 @@ import {
   RotateCcw,
   SkipForward,
   TimerReset,
+  Trash2,
   TrendingUp,
   Trophy,
+  Video,
   X,
 } from 'lucide-react'
 import {
@@ -26,13 +28,13 @@ import {
   type WorkoutSessionSet,
   type WorkoutTemplate,
 } from '../services/workoutSessionApi'
+import { getExerciseVideo } from '../utils/exerciseVideos'
 import '../styles/workout-session.css'
 
 
 interface WorkoutsPanelProps {
   userId: number
   isOpen: boolean
-  onClose: () => void
   onSessionFinished?: () => void | Promise<void>
 }
 
@@ -68,6 +70,8 @@ const GUIDED_STEPS: Array<{ id: Exclude<GuidedStep, 'complete'>; label: string }
   { id: 'series', label: 'Série' },
   { id: 'rest', label: 'Descanso' },
 ]
+
+const STALE_SESSION_SECONDS = 4 * 60 * 60
 
 const EMPTY_HISTORY: WorkoutHistory = {
   total_sessions: 0,
@@ -257,6 +261,25 @@ function findSetContext(
   return null
 }
 
+function elapsedThroughLastCompletedSet(session: WorkoutSession): number | null {
+  const startedAt = Date.parse(session.started_at)
+  if (!Number.isFinite(startedAt)) return null
+
+  let lastCompletedSetAt: number | null = null
+  for (const exercise of session.exercises) {
+    for (const set of exercise.sets) {
+      if (!set.completed_at) continue
+      const completedAt = Date.parse(set.completed_at)
+      if (!Number.isFinite(completedAt)) continue
+      lastCompletedSetAt = Math.max(lastCompletedSetAt ?? completedAt, completedAt)
+    }
+  }
+
+  return lastCompletedSetAt === null
+    ? null
+    : Math.max(0, Math.floor((lastCompletedSetAt - startedAt) / 1000))
+}
+
 function historyDate(value: string | null): string {
   if (!value) return ''
   return new Intl.DateTimeFormat('pt-BR', {
@@ -268,7 +291,6 @@ function historyDate(value: string | null): string {
 export default function WorkoutsPanel({
   userId,
   isOpen,
-  onClose,
   onSessionFinished,
 }: WorkoutsPanelProps) {
   const [workouts, setWorkouts] = useState<WorkoutTemplate[]>([])
@@ -294,9 +316,12 @@ export default function WorkoutsPanel({
   const [savingSetId, setSavingSetId] = useState<number | null>(null)
   const [savingPreferenceKey, setSavingPreferenceKey] = useState<string | null>(null)
   const [isFinishing, setIsFinishing] = useState(false)
+  const [isDiscarding, setIsDiscarding] = useState(false)
   const [isApplyingPlan, setIsApplyingPlan] = useState(false)
   const [showFinishConfirm, setShowFinishConfirm] = useState(false)
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
   const [showPlanConfirm, setShowPlanConfirm] = useState(false)
+  const [showExerciseVideo, setShowExerciseVideo] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const idempotencyKeys = useRef<Record<number, string>>({})
@@ -318,9 +343,17 @@ export default function WorkoutsPanel({
     setEditingIndex(null)
     setEditData(null)
     setShowFinishConfirm(false)
+    setShowDiscardConfirm(false)
     setShowPlanConfirm(false)
+    setShowExerciseVideo(false)
     setError('')
   }, [userId])
+
+  useEffect(() => {
+    if (guidedStep === 'series' || guidedStep === 'rest' || guidedStep === 'complete') {
+      setShowExerciseVideo(false)
+    }
+  }, [guidedStep])
 
   useEffect(() => {
     if (!activeSession) {
@@ -597,6 +630,7 @@ export default function WorkoutsPanel({
     setRestTimer({ remaining: 0, running: false })
     setSetStartedAt(null)
     setSeriesElapsedSeconds(0)
+    setShowExerciseVideo(false)
     setError('')
   }
 
@@ -605,6 +639,7 @@ export default function WorkoutsPanel({
     setPreparedWeight('')
     setPreparedReps('')
     setGuidedStep('weight')
+    setShowExerciseVideo(false)
     setError('')
   }
 
@@ -789,6 +824,22 @@ export default function WorkoutsPanel({
     }
   }
 
+  async function discardSession() {
+    if (!activeSession) return
+    setIsDiscarding(true)
+    setError('')
+    try {
+      await workoutSessionApi.discardSession(activeSession.id)
+      adoptSession(null)
+      setRestTimer({ remaining: 0, running: false })
+      setShowDiscardConfirm(false)
+    } catch {
+      setError('Não foi possível cancelar este treino. Tente novamente.')
+    } finally {
+      setIsDiscarding(false)
+    }
+  }
+
   if (!isOpen) return null
 
   const todayDay = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][new Date().getDay()]
@@ -799,10 +850,19 @@ export default function WorkoutsPanel({
   const currentContext = activeSession
     ? findSetContext(activeSession, currentSetId)
     : null
+  const isStaleActiveSession = activeSession !== null
+    && elapsedSeconds >= STALE_SESSION_SECONDS
+  const lastCompletedSetElapsedSeconds = activeSession
+    ? elapsedThroughLastCompletedSet(activeSession)
+    : null
+  const finishDurationSeconds = isStaleActiveSession && lastCompletedSetElapsedSeconds !== null
+    ? lastCompletedSetElapsedSeconds
+    : elapsedSeconds
   const preparedExercise = preparedWorkout?.exercises[0] ?? null
   const currentExerciseName = currentContext?.exercise.name
     ?? preparedExercise?.name
     ?? ''
+  const currentExerciseVideo = getExerciseVideo(currentExerciseName)
   const currentProgress = currentContext?.exercise.progress
     ?? (
       preparedExercise
@@ -865,15 +925,6 @@ export default function WorkoutsPanel({
           <p className="section-label">Treino em casa</p>
           <h2>{activeSession ? 'Treino em andamento' : 'Seus treinos com halteres'}</h2>
         </div>
-        <button
-          className="icon-button"
-          onClick={onClose}
-          type="button"
-          title="Fechar treinos"
-          aria-label="Fechar treinos"
-        >
-          <X size={18} />
-        </button>
       </div>
 
       {error && <p className="workout-session-alert" role="alert">{error}</p>}
@@ -889,10 +940,43 @@ export default function WorkoutsPanel({
             </div>
             <div className="guided-main-timer" aria-label="Tempo total de treino">
               <Clock3 size={19} aria-hidden="true" />
-              <span>{activeSession ? 'Tempo total' : 'Cronômetro'}</span>
-              <strong>{activeSession ? formatTimer(elapsedSeconds) : 'Aguardando'}</strong>
+              <span>
+                {activeSession
+                  ? isStaleActiveSession
+                    ? 'Treino interrompido'
+                    : 'Tempo total'
+                  : 'Cronômetro'}
+              </span>
+              <strong>
+                {activeSession
+                  ? isStaleActiveSession
+                    ? 'Pausado'
+                    : formatTimer(elapsedSeconds)
+                  : 'Aguardando'}
+              </strong>
             </div>
           </header>
+
+          {isStaleActiveSession && (
+            <aside className="guided-stale-session" role="alert">
+              <div>
+                <strong>Seu treino ficou aberto por muito tempo.</strong>
+                <p>
+                  {activeSession.completed_sets === 0
+                    ? 'Nenhuma série foi registrada. Você pode descartá-lo sem criar histórico.'
+                    : 'Ao encerrar, a duração vai considerar até a última série registrada.'}
+                </p>
+              </div>
+              {activeSession.completed_sets === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowDiscardConfirm(true)}
+                >
+                  Descartar treino
+                </button>
+              )}
+            </aside>
+          )}
 
           <ol className="guided-timeline" aria-label="Etapas de cada série">
             {GUIDED_STEPS.map((step, index) => {
@@ -950,7 +1034,52 @@ export default function WorkoutsPanel({
                     Série {currentSetNumber} de {currentTargetSets}
                     {currentPlannedReps ? ` • meta de ${currentPlannedReps} reps` : ''}
                   </p>
+                  {currentExerciseVideo
+                    && !showExerciseVideo
+                    && (guidedStep === 'weight' || guidedStep === 'ready') && (
+                    <button
+                      className="guided-video-trigger"
+                      type="button"
+                      onClick={() => setShowExerciseVideo(true)}
+                      aria-expanded={showExerciseVideo}
+                    >
+                      <Video size={17} aria-hidden="true" />
+                      Ver execução
+                    </button>
+                  )}
                 </header>
+
+                {showExerciseVideo && currentExerciseVideo && (
+                  <section
+                    className="guided-video-preview"
+                    aria-label={`Execução de ${currentExerciseName}`}
+                  >
+                    <div className="guided-video-preview-head">
+                      <div>
+                        <span>Demonstração rápida</span>
+                        <strong>{currentExerciseName}</strong>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowExerciseVideo(false)}
+                        aria-label="Fechar execução"
+                      >
+                        <X size={19} aria-hidden="true" />
+                      </button>
+                    </div>
+                    <video
+                      src={currentExerciseVideo.src}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      preload="metadata"
+                      aria-label={`Vídeo demonstrativo de ${currentExerciseName}`}
+                    />
+                    <p>{currentExerciseVideo.cue}</p>
+                    <small>O cronômetro continua parado enquanto você se prepara.</small>
+                  </section>
+                )}
 
                 {guidedStep === 'weight' && (
                   <div className="guided-step-content">
@@ -1611,7 +1740,7 @@ export default function WorkoutsPanel({
             <h3 id="finish-workout-title">Finalizar este treino?</h3>
             <p>
               Você concluiu {activeSession.completed_sets} de {activeSession.total_sets} séries
-              em {formatTimer(elapsedSeconds)}.
+              em {formatTimer(finishDurationSeconds)}.
             </p>
             <div>
               <button
@@ -1629,6 +1758,41 @@ export default function WorkoutsPanel({
                 disabled={isFinishing}
               >
                 {isFinishing ? 'Salvando…' : 'Finalizar agora'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDiscardConfirm && activeSession && (
+        <div className="workout-modal-backdrop" role="presentation">
+          <div
+            className="workout-confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="discard-workout-title"
+          >
+            <span className="workout-dialog-icon danger"><Trash2 size={23} /></span>
+            <h3 id="discard-workout-title">Descartar este treino?</h3>
+            <p>
+              Nenhuma série foi registrada. O treino será removido sem entrar no histórico.
+            </p>
+            <div>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setShowDiscardConfirm(false)}
+                disabled={isDiscarding}
+              >
+                Continuar treino
+              </button>
+              <button
+                className="workout-danger-button"
+                type="button"
+                onClick={() => void discardSession()}
+                disabled={isDiscarding}
+              >
+                {isDiscarding ? 'Descartando…' : 'Sim, descartar'}
               </button>
             </div>
           </div>

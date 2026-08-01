@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Ritmo — Assistente pessoal",
   "short_name": "Ritmo",
-  "description": "Hábitos, tarefas, compras, treinos, foco e leitura em um só lugar.",
+  "description": "Hábitos, tarefas, compras, treinos, leitura e Pomodoro em um só lugar.",
   "lang": "pt-BR",
   "dir": "ltr",
   "start_url": "/today",

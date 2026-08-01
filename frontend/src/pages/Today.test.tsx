@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiRoutes } from '../services/api'
@@ -17,6 +17,7 @@ vi.mock('../services/api', () => ({
     removeCheckin: vi.fn(),
     checkinHabit: vi.fn(),
     completeTask: vi.fn(),
+    updateTask: vi.fn(),
   },
 }))
 
@@ -140,11 +141,11 @@ describe('Today intelligent assistant', () => {
 
     expect(await screen.findByText('Continue Pernas com halteres')).toBeTruthy()
     expect(screen.getByText('2 de 4 séries concluídas.')).toBeTruthy()
-    expect(screen.getByText('Compra mensal ·', { exact: false })).toBeTruthy()
-    expect(screen.getByText('A queda do céu · 20%')).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Trilha viva do seu dia' })).toBeTruthy()
+    expect(screen.getAllByText('Pagar conta')).not.toHaveLength(0)
     expect(
       screen.getByRole('link', { name: /Retomar treino/ }).getAttribute('href'),
-    ).toBe('/habits?workout=1')
+    ).toBe('/workouts')
   })
 
   it('keeps core habits visible if an optional assistant source fails', async () => {
@@ -155,7 +156,63 @@ describe('Today intelligent assistant', () => {
 
     expect(await screen.findAllByText('Beber água')).not.toHaveLength(0)
     await waitFor(() => {
-      expect(screen.getByText('Escolha seu próximo livro')).toBeTruthy()
+      expect(screen.getByRole('button', { name: /Marcar agora/ })).toBeTruthy()
+    })
+  })
+
+  it('marks the due habit directly from the live trail', async () => {
+    vi.mocked(workoutSessionApi.getActiveSession).mockResolvedValueOnce(null)
+    vi.mocked(apiRoutes.checkinHabit).mockResolvedValue({} as never)
+
+    render(<Today userId={1} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Marcar agora/ }))
+
+    await waitFor(() => {
+      expect(apiRoutes.checkinHabit).toHaveBeenCalledWith(1, toLocalDateValue())
+    })
+  })
+
+  it('lets an overdue task move to tomorrow without opening the tasks page', async () => {
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    vi.mocked(workoutSessionApi.getActiveSession).mockResolvedValueOnce(null)
+    vi.mocked(apiRoutes.getTodayStats).mockResolvedValueOnce({
+      data: {
+        today_progress: '100%',
+        checked_count: '1 de 1 feitos',
+        habits_today: [
+          { id: 1, name: 'Beber água', time: '08:00', done: true },
+        ],
+      },
+    } as never)
+    vi.mocked(apiRoutes.getTasks).mockResolvedValueOnce({
+      data: [{
+        id: 2,
+        user_id: 1,
+        name: 'Pagar conta atrasada',
+        date: toLocalDateValue(yesterday),
+        time: '10:00',
+        completed_at: null,
+        recurrence: 'none',
+        recurrence_interval: 1,
+        recurrence_parent_id: null,
+        created_at: yesterday.toISOString(),
+      }],
+    } as never)
+    vi.mocked(apiRoutes.updateTask).mockResolvedValue({} as never)
+
+    render(<Today userId={1} />)
+
+    expect(await screen.findByText('Pagar conta atrasada')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Adiar para amanhã/ }))
+
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    await waitFor(() => {
+      expect(apiRoutes.updateTask).toHaveBeenCalledWith(2, {
+        date: toLocalDateValue(tomorrow),
+      })
     })
   })
 

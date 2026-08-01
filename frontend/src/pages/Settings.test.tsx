@@ -33,15 +33,19 @@ describe('settings mobile installation', () => {
       requestPermission: vi.fn(),
       sendNotification: vi.fn(),
       isSupported: false,
+      isSecureContext: true,
     })
     vi.mocked(usePushNotifications).mockReturnValue({
       supported: false,
       isConfigured: false,
       isSubscribed: false,
+      isLinkedToOtherProfile: false,
       isLoading: false,
       error: '',
+      lastSyncedAt: null,
       subscribe: vi.fn(),
       unsubscribe: vi.fn(),
+      sendTest: vi.fn(),
       refresh: vi.fn(),
     })
   })
@@ -94,5 +98,183 @@ describe('settings mobile installation', () => {
     expect((await screen.findByRole('status')).textContent).toContain(
       'Instalação iniciada',
     )
+  })
+
+  it('explains why notifications cannot work over an insecure phone address', () => {
+    vi.mocked(useNotifications).mockReturnValue({
+      permission: 'default',
+      requestPermission: vi.fn(),
+      sendNotification: vi.fn(),
+      isSupported: false,
+      isSecureContext: false,
+    })
+    vi.mocked(usePwaInstall).mockReturnValue({
+      canInstall: false,
+      isInstalled: false,
+      isIos: false,
+      isAndroid: true,
+      install: vi.fn(),
+    })
+
+    render(
+      <Settings
+        user={user}
+        users={[user]}
+        onUserChange={vi.fn()}
+        onChangeAccessCode={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Abra pelo endereço seguro')).toBeTruthy()
+    expect(screen.getByText(/não funcionam pelo IP iniciado com http:\/\//i)).toBeTruthy()
+  })
+
+  it('sends a visible local test when permission is already granted', async () => {
+    const sendNotification = vi.fn().mockResolvedValue({})
+    vi.mocked(useNotifications).mockReturnValue({
+      permission: 'granted',
+      requestPermission: vi.fn(),
+      sendNotification,
+      isSupported: true,
+      isSecureContext: true,
+    })
+    vi.mocked(usePwaInstall).mockReturnValue({
+      canInstall: false,
+      isInstalled: true,
+      isIos: false,
+      isAndroid: true,
+      install: vi.fn(),
+    })
+
+    render(
+      <Settings
+        user={user}
+        users={[user]}
+        onUserChange={vi.fn()}
+        onChangeAccessCode={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Alertas com o app aberto')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Testar agora' }))
+    await waitFor(() => expect(sendNotification).toHaveBeenCalledOnce())
+    expect(screen.getByRole('status').textContent).toContain('Aviso local enviado')
+  })
+
+  it('describes a background test as accepted by the service, not confirmed by the phone', async () => {
+    const sendTest = vi.fn().mockResolvedValue(true)
+    vi.mocked(useNotifications).mockReturnValue({
+      permission: 'granted',
+      requestPermission: vi.fn(),
+      sendNotification: vi.fn(),
+      isSupported: true,
+      isSecureContext: true,
+    })
+    vi.mocked(usePushNotifications).mockReturnValue({
+      supported: true,
+      isConfigured: true,
+      isSubscribed: true,
+      isLinkedToOtherProfile: false,
+      isLoading: false,
+      error: '',
+      lastSyncedAt: null,
+      subscribe: vi.fn(),
+      unsubscribe: vi.fn(),
+      sendTest,
+      refresh: vi.fn(),
+    })
+    vi.mocked(usePwaInstall).mockReturnValue({
+      canInstall: false,
+      isInstalled: true,
+      isIos: false,
+      isAndroid: true,
+      install: vi.fn(),
+    })
+
+    render(
+      <Settings
+        user={user}
+        users={[user]}
+        onUserChange={vi.fn()}
+        onChangeAccessCode={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Testar agora' }))
+    await waitFor(() => expect(sendTest).toHaveBeenCalledOnce())
+    expect(screen.getByRole('status').textContent).toContain(
+      'Envio de teste aceito pelo serviço; confira a bandeja de notificações.',
+    )
+  })
+
+  it('tells iPhone users to install the PWA before enabling notifications', () => {
+    vi.mocked(useNotifications).mockReturnValue({
+      permission: 'default',
+      requestPermission: vi.fn(),
+      sendNotification: vi.fn(),
+      isSupported: true,
+      isSecureContext: true,
+    })
+    vi.mocked(usePwaInstall).mockReturnValue({
+      canInstall: false,
+      isInstalled: false,
+      isIos: true,
+      isAndroid: false,
+      install: vi.fn(),
+    })
+
+    render(
+      <Settings
+        user={user}
+        users={[user]}
+        onUserChange={vi.fn()}
+        onChangeAccessCode={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Instale o Ritmo primeiro')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Ativar' })).toBeNull()
+  })
+
+  it('makes moving a browser subscription to this profile explicit', () => {
+    vi.mocked(useNotifications).mockReturnValue({
+      permission: 'granted',
+      requestPermission: vi.fn(),
+      sendNotification: vi.fn(),
+      isSupported: true,
+      isSecureContext: true,
+    })
+    vi.mocked(usePushNotifications).mockReturnValue({
+      supported: true,
+      isConfigured: true,
+      isSubscribed: false,
+      isLinkedToOtherProfile: true,
+      isLoading: false,
+      error: '',
+      lastSyncedAt: null,
+      subscribe: vi.fn(),
+      unsubscribe: vi.fn(),
+      sendTest: vi.fn(),
+      refresh: vi.fn(),
+    })
+    vi.mocked(usePwaInstall).mockReturnValue({
+      canInstall: false,
+      isInstalled: true,
+      isIos: false,
+      isAndroid: true,
+      install: vi.fn(),
+    })
+
+    render(
+      <Settings
+        user={user}
+        users={[user]}
+        onUserChange={vi.fn()}
+        onChangeAccessCode={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText(/vinculado a outro perfil/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Ativar neste perfil' })).toBeTruthy()
   })
 })

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   AlertCircle,
@@ -16,7 +16,6 @@ import {
 } from 'lucide-react'
 import { apiRoutes } from '../services/api'
 import type { Habit } from '../services/api'
-import WorkoutsPanel from '../components/WorkoutsPanel'
 import { toLocalDateValue } from '../utils/date'
 import { useAppRouter } from '../router'
 import '../styles/routine-upgrade.css'
@@ -50,7 +49,7 @@ function daysSummary(days: number[]): string {
 }
 
 export default function Habits({ userId }: HabitsProps) {
-  const { navigate, search } = useAppRouter()
+  const { navigate } = useAppRouter()
   const [habits, setHabits] = useState<Habit[]>([])
   const [name, setName] = useState('')
   const [time, setTime] = useState('09:00')
@@ -60,12 +59,9 @@ export default function Habits({ userId }: HabitsProps) {
   const [editTime, setEditTime] = useState('')
   const [editActiveDays, setEditActiveDays] = useState<number[]>(EVERY_DAY)
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
-  const [showWorkouts, setShowWorkouts] = useState(false)
-  const [workoutHabitId, setWorkoutHabitId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const workoutsRef = useRef<HTMLDivElement>(null)
 
   const today = toLocalDateValue()
   const todayWeekday = (new Date().getDay() + 6) % 7
@@ -87,22 +83,6 @@ export default function Habits({ userId }: HabitsProps) {
   useEffect(() => {
     void loadHabits(true)
   }, [loadHabits])
-
-  useEffect(() => {
-    if (new URLSearchParams(search || '').get('workout') === '1') {
-      setWorkoutHabitId(null)
-      setShowWorkouts(true)
-    }
-  }, [search])
-
-  useEffect(() => {
-    if (showWorkouts) {
-      workoutsRef.current?.scrollIntoView?.({
-        behavior: 'smooth',
-        block: 'start',
-      })
-    }
-  }, [showWorkouts])
 
   const orderedHabits = useMemo(
     () => [...habits].sort((a, b) => a.time.localeCompare(b.time)),
@@ -232,37 +212,8 @@ export default function Habits({ userId }: HabitsProps) {
     return /treino|exerc[ií]cio|muscula[cç][aã]o/i.test(habitName)
   }
 
-  function goToFocus(habitId: number) {
-    navigate(`/focus?habit=${habitId}`)
-  }
-
-  function openWorkouts(habitId: number | null) {
-    setWorkoutHabitId(habitId)
-    setShowWorkouts(true)
-  }
-
-  function closeWorkouts() {
-    setShowWorkouts(false)
-    setWorkoutHabitId(null)
-    if (new URLSearchParams(search || '').get('workout') === '1') {
-      navigate('/habits', { replace: true })
-    }
-  }
-
-  async function handleWorkoutFinished() {
-    const habit = habits.find(item => item.id === workoutHabitId)
-    if (!habit || habit.check_ins.includes(today)) {
-      await loadHabits()
-      return
-    }
-
-    try {
-      await apiRoutes.checkinHabit(habit.id, today)
-      await loadHabits()
-    } catch (checkInError) {
-      console.error('Failed to check in workout habit:', checkInError)
-      setError('O treino foi finalizado, mas não foi possível marcar o hábito como feito.')
-    }
+  function goToReading(habitId: number) {
+    navigate(`/reading?habit=${habitId}`)
   }
 
   return (
@@ -328,14 +279,17 @@ export default function Habits({ userId }: HabitsProps) {
               required
             />
           </label>
-          <label>
+          <label className="routine-time-field">
             Horário
-            <input
-              type="time"
-              value={time}
-              onChange={event => setTime(event.target.value)}
-              required
-            />
+            <span className="routine-time-control">
+              <Clock3 size={18} aria-hidden="true" />
+              <input
+                type="time"
+                value={time}
+                onChange={event => setTime(event.target.value)}
+                required
+              />
+            </span>
           </label>
           <fieldset className="routine-day-picker">
             <legend>Dias da semana</legend>
@@ -417,23 +371,6 @@ export default function Habits({ userId }: HabitsProps) {
         )}
       </section>
 
-      <section className="routine-workout-entry" aria-label="Treinos em casa">
-        <span className="routine-workout-entry-icon" aria-hidden="true">
-          <Dumbbell size={24} />
-        </span>
-        <div>
-          <p className="routine-kicker">Treino com halteres</p>
-          <strong>Inicie, registre cargas e acompanhe sua evolução</strong>
-          <small>Descanso cronometrado, séries, repetições e recordes em um só lugar.</small>
-        </div>
-        <button
-          type="button"
-          onClick={() => openWorkouts(null)}
-        >
-          Abrir treinos
-        </button>
-      </section>
-
       <section className="panel routine-panel">
         <div className="routine-section-head">
           <div>
@@ -491,13 +428,16 @@ export default function Habits({ userId }: HabitsProps) {
                           required
                         />
                       </label>
-                      <label>
+                      <label className="routine-time-field">
                         Horário
-                        <input
-                          type="time"
-                          value={editTime}
-                          onChange={event => setEditTime(event.target.value)}
-                        />
+                        <span className="routine-time-control">
+                          <Clock3 size={18} aria-hidden="true" />
+                          <input
+                            type="time"
+                            value={editTime}
+                            onChange={event => setEditTime(event.target.value)}
+                          />
+                        </span>
                       </label>
                       <fieldset className="routine-day-picker routine-day-picker-edit">
                         <legend>Dias</legend>
@@ -577,18 +517,18 @@ export default function Habits({ userId }: HabitsProps) {
                           <button
                             className="routine-special-action focus"
                             type="button"
-                            onClick={() => goToFocus(habit.id)}
+                            onClick={() => goToReading(habit.id)}
                             disabled={busyKey !== null}
                           >
                             <Timer size={17} aria-hidden="true" />
-                            <span>Foco</span>
+                            <span>Leitura</span>
                           </button>
                         )}
                         {isWorkoutHabit(habit.name) && (
                           <button
                             className="routine-special-action workout"
                             type="button"
-                            onClick={() => openWorkouts(habit.id)}
+                            onClick={() => navigate(`/workouts?habit=${habit.id}`)}
                             disabled={busyKey !== null}
                           >
                             <Dumbbell size={17} aria-hidden="true" />
@@ -651,14 +591,6 @@ export default function Habits({ userId }: HabitsProps) {
         )}
       </section>
 
-      <div ref={workoutsRef}>
-        <WorkoutsPanel
-          userId={userId}
-          isOpen={showWorkouts}
-          onClose={closeWorkouts}
-          onSessionFinished={handleWorkoutFinished}
-        />
-      </div>
     </div>
   )
 }

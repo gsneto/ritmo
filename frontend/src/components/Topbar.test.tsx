@@ -4,8 +4,8 @@ import Topbar from './Topbar'
 
 
 describe('Topbar', () => {
-  it('shows only the first name with the bow and accessible icon controls', () => {
-    const onSettingsClick = vi.fn()
+  it('shows only the first name with the bow and an accessible more-options menu', () => {
+    const onMenuNavigate = vi.fn()
     const onThemeChange = vi.fn()
 
     render(
@@ -17,7 +17,7 @@ describe('Topbar', () => {
           initials: 'AS',
           theme: 'light',
         }}
-        onSettingsClick={onSettingsClick}
+        onMenuNavigate={onMenuNavigate}
         onThemeChange={onThemeChange}
       />,
     )
@@ -34,7 +34,32 @@ describe('Topbar', () => {
     fireEvent.click(darkButton)
     expect(onThemeChange).toHaveBeenCalledWith('dark')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Abrir ajustes' }))
-    expect(onSettingsClick).toHaveBeenCalledOnce()
+    const menuButton = screen.getByRole('button', { name: 'Abrir mais opções' })
+    expect(menuButton.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(menuButton)
+    expect(menuButton.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('menuitem', { name: 'Treinos' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Leitura' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Evolução' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Configurações' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Treinos' }))
+    expect(onMenuNavigate).toHaveBeenCalledWith('/workouts')
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    fireEvent.click(menuButton)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Leitura' }))
+    expect(onMenuNavigate).toHaveBeenCalledWith('/reading')
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    fireEvent.click(menuButton)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Evolução' }))
+    expect(onMenuNavigate).toHaveBeenCalledWith('/progress')
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    fireEvent.click(menuButton)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Configurações' }))
+    expect(onMenuNavigate).toHaveBeenCalledWith('/settings')
   })
 })

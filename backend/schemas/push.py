@@ -30,6 +30,9 @@ class PushSubscriptionUpsert(ApiSchema):
     endpoint: PushEndpoint
     expirationTime: int | None = Field(default=None, ge=0)
     keys: PushKeys
+    # Existing browser subscriptions are device-wide. A client may only move
+    # one to another profile after an explicit user action.
+    transfer: bool = False
 
     @field_validator("endpoint")
     @classmethod
@@ -65,6 +68,17 @@ class PushSubscriptionDelete(ApiSchema):
         return PushSubscriptionUpsert.validate_push_service(value)
 
 
+class PushSubscriptionStatusRequest(ApiSchema):
+    """Browser endpoint to check against one selected Ritmo profile."""
+
+    endpoint: PushEndpoint
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_push_service(cls, value: str) -> str:
+        return PushSubscriptionUpsert.validate_push_service(value)
+
+
 class PushConfigResponse(ApiSchema):
     enabled: bool
     public_key: str | None = None
@@ -72,3 +86,16 @@ class PushConfigResponse(ApiSchema):
 
 class PushSubscriptionResponse(ApiSchema):
     subscribed: bool
+
+
+class PushSubscriptionStatusResponse(ApiSchema):
+    """Whether this browser endpoint is enabled for the requested profile."""
+
+    active: bool
+    linked_to_other_profile: bool
+
+
+class PushTestResponse(ApiSchema):
+    sent: int
+    failed: int
+    expired: int

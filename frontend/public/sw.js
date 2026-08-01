@@ -1,10 +1,11 @@
-const CACHE_NAME = 'ritmo-shell-v4'
+const CACHE_NAME = 'ritmo-shell-v7'
 const APP_SHELL = [
   '/',
   '/today',
   '/offline.html',
   '/manifest.webmanifest',
   '/grafismo-indigena-ritmo.png',
+  '/anahi-foto.jpeg',
   '/ritmo-icon-192.png',
   '/ritmo-icon-512.png',
   '/apple-touch-icon.png',
@@ -108,16 +109,19 @@ self.addEventListener('push', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close()
-  const target = event.notification.data?.url || '/today'
+  let target = new URL(event.notification.data?.url || '/today', self.location.origin)
+  if (target.origin !== self.location.origin) {
+    target = new URL('/today', self.location.origin)
+  }
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then(clients => {
         const existing = clients.find(client => 'focus' in client)
         if (existing) {
-          existing.navigate(target)
-          return existing.focus()
+          return existing.navigate(target.href)
+            .then(navigated => navigated?.focus() || existing.focus())
         }
-        return self.clients.openWindow(target)
+        return self.clients.openWindow(target.href)
       }),
   )
 })

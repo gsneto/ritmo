@@ -11,9 +11,11 @@ import Today from './pages/Today'
 import Habits from './pages/Habits'
 import Tasks from './pages/Tasks'
 import Shopping from './pages/Shopping'
-import Focus from './pages/Focus'
+import Reading from './pages/Focus'
 import Progress from './pages/Progress'
 import Settings from './pages/Settings'
+import Workouts from './pages/Workouts'
+import Anahi from './pages/Anahi'
 import Topbar from './components/Topbar'
 import Navigation from './components/Navigation'
 import AccessCodeGate from './components/AccessCodeGate'
@@ -26,13 +28,15 @@ const VALID_PATHS = new Set([
   '/habits',
   '/tasks',
   '/shopping',
-  '/focus',
+  '/anahi',
+  '/reading',
+  '/workouts',
   '/progress',
   '/settings',
 ])
 
 export default function App() {
-  const { pathname, navigate } = useAppRouter()
+  const { pathname, search, navigate } = useAppRouter()
   const [users, setUsers] = useState<User[]>([])
   const [activeUser, setActiveUser] = useState<User | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -98,10 +102,20 @@ export default function App() {
   }, [activeUser])
 
   useEffect(() => {
+    if (pathname === '/focus') {
+      navigate(`/reading${search}`, { replace: true })
+      return
+    }
+
+    if (pathname === '/habits' && new URLSearchParams(search).get('workout') === '1') {
+      navigate('/workouts', { replace: true })
+      return
+    }
+
     if (!VALID_PATHS.has(pathname)) {
       navigate('/today', { replace: true })
     }
-  }, [navigate, pathname])
+  }, [navigate, pathname, search])
 
   async function handleAccessSubmit(code: string) {
     setAccessKey(code)
@@ -128,8 +142,8 @@ export default function App() {
     }
   }
 
-  function handleSettingsClick() {
-    navigate('/settings')
+  function handleHeaderMenuNavigate(destination: '/workouts' | '/reading' | '/progress' | '/settings') {
+    navigate(destination)
   }
 
   async function changeTheme(theme: 'light' | 'dark') {
@@ -181,7 +195,7 @@ export default function App() {
     <div className="app-shell">
       <Topbar
         user={activeUser}
-        onSettingsClick={handleSettingsClick}
+        onMenuNavigate={handleHeaderMenuNavigate}
         onThemeChange={changeTheme}
       />
       <div className="identity-band" aria-hidden="true">
@@ -193,7 +207,9 @@ export default function App() {
         {activePath === '/habits' && <Habits userId={activeUser.id} />}
         {activePath === '/tasks' && <Tasks userId={activeUser.id} />}
         {activePath === '/shopping' && <Shopping userId={activeUser.id} />}
-        {activePath === '/focus' && <Focus userId={activeUser.id} />}
+        {activePath === '/anahi' && <Anahi userId={activeUser.id} />}
+        {activePath === '/reading' && <Reading userId={activeUser.id} />}
+        {activePath === '/workouts' && <Workouts userId={activeUser.id} />}
         {activePath === '/progress' && <Progress userId={activeUser.id} />}
         {activePath === '/settings' && (
           <Settings

@@ -2,6 +2,7 @@ import axios from 'axios'
 
 export const ACCESS_KEY_STORAGE_KEY = 'ritmo-access-key'
 export const UNAUTHORIZED_EVENT = 'ritmo:unauthorized'
+export const REMINDERS_CHANGED_EVENT = 'ritmo:reminders-changed'
 
 // In development, Vite proxies /api to FastAPI. Production must provide the
 // complete API prefix, for example https://api.example.com/api.
@@ -199,6 +200,17 @@ export interface PushConfig {
   public_key: string | null
 }
 
+export interface PushSubscriptionStatus {
+  active: boolean
+  linked_to_other_profile: boolean
+}
+
+export interface PushTestResult {
+  sent: number
+  failed: number
+  expired: number
+}
+
 export interface WorkoutInput {
   day: string
   title: string
@@ -238,7 +250,17 @@ api.interceptors.request.use((config) => {
 })
 
 api.interceptors.response.use(
-  response => response,
+  response => {
+    const method = response.config.method?.toLowerCase()
+    if (
+      typeof window !== 'undefined'
+      && method
+      && ['post', 'put', 'patch', 'delete'].includes(method)
+    ) {
+      window.dispatchEvent(new Event(REMINDERS_CHANGED_EVENT))
+    }
+    return response
+  },
   (error: unknown) => {
     if (
       isUnauthorizedError(error)
@@ -265,16 +287,27 @@ export const apiRoutes = {
     api.put<BackupRestoreResponse>(`/users/${id}/backup`, backup),
   getPushConfig: (id: number) =>
     api.get<PushConfig>(`/users/${id}/push-config`),
-  savePushSubscription: (id: number, subscription: PushSubscriptionJSON) =>
+  getPushSubscriptionStatus: (id: number, endpoint: string) =>
+    api.post<PushSubscriptionStatus>(
+      `/users/${id}/push-subscription/status`,
+      { endpoint },
+    ),
+  savePushSubscription: (
+    id: number,
+    subscription: PushSubscriptionJSON,
+    transfer = false,
+  ) =>
     api.put<{ subscribed: boolean }>(
       `/users/${id}/push-subscription`,
-      subscription,
+      { ...subscription, transfer },
     ),
   deletePushSubscription: (id: number, endpoint: string) =>
     api.delete<{ subscribed: boolean }>(
       `/users/${id}/push-subscription`,
       { data: { endpoint } },
     ),
+  sendPushTest: (id: number) =>
+    api.post<PushTestResult>(`/users/${id}/push-test`),
 
   // Habits
   getHabits: (userId: number) => api.get<Habit[]>(`/users/${userId}/habits`),

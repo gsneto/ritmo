@@ -175,6 +175,10 @@ export const workoutSessionApi = {
     return response.data
   },
 
+  discardSession: async (sessionId: number): Promise<void> => {
+    await api.delete(`/workout-sessions/${sessionId}`)
+  },
+
   getHistory: async (
     userId: number,
     limit = 8,

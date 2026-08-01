@@ -485,14 +485,17 @@ export default function Tasks({ userId }: TasksProps) {
                 </label>
               )}
             </fieldset>
-            <label>
+            <label className="routine-time-field">
               Horário
-              <input
-                type="time"
-                value={newTime}
-                onChange={event => setNewTime(event.target.value)}
-                required
-              />
+              <span className="routine-time-control">
+                <Clock3 size={18} aria-hidden="true" />
+                <input
+                  type="time"
+                  value={newTime}
+                  onChange={event => setNewTime(event.target.value)}
+                  required
+                />
+              </span>
             </label>
             <label>
               Repetição
@@ -631,13 +634,16 @@ export default function Tasks({ userId }: TasksProps) {
                                 required
                               />
                             </label>
-                            <label>
+                            <label className="routine-time-field">
                               Horário
-                              <input
-                                type="time"
-                                value={editTime}
-                                onChange={event => setEditTime(event.target.value)}
-                              />
+                              <span className="routine-time-control">
+                                <Clock3 size={18} aria-hidden="true" />
+                                <input
+                                  type="time"
+                                  value={editTime}
+                                  onChange={event => setEditTime(event.target.value)}
+                                />
+                              </span>
                             </label>
                             <label>
                               Repetição

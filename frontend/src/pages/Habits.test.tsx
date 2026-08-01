@@ -21,22 +21,6 @@ vi.mock('../router', () => ({
   useAppRouter: () => ({ navigate: navigateMock }),
 }))
 
-vi.mock('../components/WorkoutsPanel', () => ({
-  default: ({
-    isOpen,
-    onSessionFinished,
-  }: {
-    isOpen: boolean
-    onSessionFinished?: () => void | Promise<void>
-  }) => isOpen
-    ? (
-        <button type="button" onClick={() => void onSessionFinished?.()}>
-          Finalizar treino de teste
-        </button>
-      )
-    : null,
-}))
-
 function habit(
   id: number,
   name: string,
@@ -112,26 +96,25 @@ describe('Habits upgraded experience', () => {
     })
   })
 
-  it('marks the workout habit after a finished session', async () => {
+  it('opens the separate workout area from a workout habit', async () => {
     render(<Habits userId={1} />)
 
     await screen.findByText('Hábitos de hoje')
     fireEvent.click(screen.getByRole('button', { name: 'Treino' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Finalizar treino de teste' }))
 
-    await waitFor(() => {
-      expect(apiRoutes.checkinHabit).toHaveBeenCalledWith(2, today)
-    })
+    expect(navigateMock).toHaveBeenCalledWith('/workouts?habit=2')
   })
 
-  it('keeps workouts accessible even without a workout-named habit', async () => {
-    vi.mocked(apiRoutes.getHabits).mockResolvedValueOnce({ data: [] } as never)
+  it('opens Leitura with the selected reading habit', async () => {
+    vi.mocked(apiRoutes.getHabits).mockResolvedValueOnce({
+      data: [habit(3, 'Leitura', '20:00')],
+    } as never)
     render(<Habits userId={1} />)
 
-    await screen.findByText('Adicione seu primeiro hábito')
-    fireEvent.click(screen.getByRole('button', { name: 'Abrir treinos' }))
+    await screen.findByText('Hábitos de hoje')
+    fireEvent.click(screen.getByRole('button', { name: 'Leitura' }))
 
-    expect(screen.getByRole('button', { name: 'Finalizar treino de teste' })).toBeTruthy()
+    expect(navigateMock).toHaveBeenCalledWith('/reading?habit=3')
   })
 
   it('keeps a clear recovery action when loading fails', async () => {

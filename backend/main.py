@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from config import Settings, get_settings
 from database import SessionLocal, get_db, init_db
 from push_scheduler import run_push_scheduler
-from routers import backup, habits, push, reading, shopping, stats, tasks, users, workouts
+from routers import anahi, backup, habits, push, reading, shopping, stats, tasks, users, workouts
 from security import require_api_key
 from seed import seed_default_data
 from time_utils import app_today
@@ -92,6 +92,7 @@ def create_app(
     application.include_router(stats.router, dependencies=protected)
     application.include_router(shopping.router, dependencies=protected)
     application.include_router(reading.router, dependencies=protected)
+    application.include_router(anahi.router, dependencies=protected)
     application.include_router(backup.router, dependencies=protected)
     application.include_router(push.router, dependencies=protected)
 

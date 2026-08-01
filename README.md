@@ -29,7 +29,8 @@
 | **Compras** | Lista com check, quantidade, preço, orçamento e conclusão no mercado |
 | **Finanças** | Histórico mensal, comparação, saldo, categorias, preço anterior e CSV |
 | **Treinos** | Cronômetro, descanso, séries, carga, recordes e sugestão de progressão |
-| **Foco e leitura** | Pomodoro, biblioteca, página atual, progresso, sessões e anotações |
+| **Leitura e Pomodoro** | Biblioteca, página atual, progresso, sessões, anotações e cronômetro Pomodoro |
+| **ANAHÍ** | Assistente de IA que consulta, por perfil, resumos de hábitos, tarefas, leitura, compras e treinos |
 | **Seus dados** | Backup e restauração completos por perfil |
 
 O aplicativo também oferece tema claro/escuro, instalação na tela inicial,
@@ -119,6 +120,22 @@ VAPID_SUBJECT=mailto:voce@exemplo.com
 
 Sem essas chaves, os lembretes locais e os cronômetros continuam funcionando,
 mas o Web Push permanece desativado.
+
+Cada navegador mantém o segundo plano ligado a um perfil por vez. Ao trocar de
+perfil, o Ritmo preserva os alertas locais e só transfere o Web Push quando a
+pessoa toca em **Ativar neste perfil**.
+
+A ANAHÍ é opcional e usa a chave somente no backend. Nunca coloque essa chave
+em variáveis `VITE_*` nem no código do frontend:
+
+```env
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.6-flash
+```
+
+O Ritmo envia ao provedor apenas um resumo da área relacionada à pergunta e
+mantém anotações de leitura, itens detalhados de compras e cargas de treino fora
+do contexto da IA.
 
 ## Testes
 
