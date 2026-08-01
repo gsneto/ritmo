@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from database import get_db
+from models.push import AnahiBriefing
 from models.shopping import ShoppingMonthlyBudget
 from models.user import User
 from models.workout import WorkoutExercisePreference
@@ -86,6 +87,9 @@ def reset_user_data(user_id: int, db: Session = Depends(get_db)):
         ).delete(synchronize_session=False)
         db.query(WorkoutExercisePreference).filter(
             WorkoutExercisePreference.user_id == user.id,
+        ).delete(synchronize_session=False)
+        db.query(AnahiBriefing).filter(
+            AnahiBriefing.user_id == user.id,
         ).delete(synchronize_session=False)
         db.flush()
 

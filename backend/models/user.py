@@ -1,4 +1,7 @@
-from sqlalchemy import Column, DateTime, Enum, Integer, String
+from datetime import time
+
+from sqlalchemy import Boolean, Column, DateTime, Enum, Integer, String
+from sqlalchemy import Time as SqlTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -13,6 +16,13 @@ class User(Base):
     name = Column(String(100), nullable=False)
     initials = Column(String(3), nullable=False)
     theme = Column(Enum("light", "dark", name="theme_enum"), default="light")
+    briefing_enabled = Column(Boolean, nullable=False, default=False, server_default="0")
+    briefing_time = Column(
+        SqlTime,
+        nullable=False,
+        default=lambda: time(7, 30),
+        server_default="07:30:00",
+    )
     created_at = Column(DateTime, server_default=func.now())
 
     # Relationships

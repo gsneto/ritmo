@@ -19,6 +19,9 @@ vi.mock('../hooks/usePushNotifications', () => ({
   usePushNotifications: vi.fn(),
 }))
 
+const getBriefingSettings = vi.spyOn(apiRoutes, 'getBriefingSettings')
+const updateBriefingSettings = vi.spyOn(apiRoutes, 'updateBriefingSettings')
+
 const user: User = {
   id: 1,
   profile_id: 'antonio',
@@ -29,6 +32,13 @@ const user: User = {
 
 describe('settings mobile installation', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
+    getBriefingSettings.mockResolvedValue({
+      data: { enabled: false, time: '07:30' },
+    } as never)
+    updateBriefingSettings.mockResolvedValue({
+      data: { enabled: true, time: '06:45' },
+    } as never)
     vi.mocked(useNotifications).mockReturnValue({
       permission: 'default',
       requestPermission: vi.fn(),
@@ -144,6 +154,43 @@ describe('settings mobile installation', () => {
 
     click.mockRestore()
     exportRequest.mockRestore()
+  })
+
+  it('configures the daily ANAHÍ briefing for the active profile', async () => {
+    vi.mocked(usePwaInstall).mockReturnValue({
+      canInstall: false,
+      isInstalled: true,
+      isIos: false,
+      isAndroid: true,
+      install: vi.fn(),
+    })
+
+    render(
+      <Settings
+        user={user}
+        users={[user]}
+        onUserChange={vi.fn()}
+        onChangeAccessCode={vi.fn()}
+      />,
+    )
+
+    const enabled = await screen.findByRole('checkbox', {
+      name: 'Receber briefing diário',
+    })
+    await waitFor(() => expect((enabled as HTMLInputElement).disabled).toBe(false))
+    fireEvent.click(enabled)
+    fireEvent.change(screen.getByLabelText('Horário'), {
+      target: { value: '06:45' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar briefing' }))
+
+    await waitFor(() => {
+      expect(updateBriefingSettings).toHaveBeenCalledWith(1, {
+        enabled: true,
+        time: '06:45',
+      })
+    })
+    expect(screen.getByText('Briefing diário programado para 06:45.')).toBeTruthy()
   })
 
   it('explains why notifications cannot work over an insecure phone address', () => {

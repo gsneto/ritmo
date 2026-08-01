@@ -382,6 +382,29 @@ def _ensure_push_subscription_schema(bind: Engine) -> None:
             )
 
 
+def _ensure_user_briefing_schema(bind: Engine) -> None:
+    """Keep pre-Alembic local databases usable after briefing settings ship."""
+    inspector = inspect(bind)
+    if "users" not in set(inspector.get_table_names()):
+        return
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    with bind.begin() as connection:
+        if "briefing_enabled" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN briefing_enabled "
+                    "BOOLEAN NOT NULL DEFAULT false"
+                )
+            )
+        if "briefing_time" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN briefing_time "
+                    "TIME NOT NULL DEFAULT '07:30:00'"
+                )
+            )
+
+
 def init_db(
     *,
     bind: Engine | None = None,
@@ -403,5 +426,6 @@ def init_db(
     _ensure_reading_library_schema(selected_engine)
     _ensure_shopping_finance_schema(selected_engine)
     _ensure_routine_recurrence_schema(selected_engine)
+    _ensure_user_briefing_schema(selected_engine)
     _ensure_push_subscription_schema(selected_engine)
     _ensure_checkin_uniqueness(selected_engine, selected_session_factory)

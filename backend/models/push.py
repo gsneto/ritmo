@@ -1,6 +1,7 @@
 from sqlalchemy import (
     Boolean,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -58,4 +59,27 @@ class PushDelivery(Base):
         index=True,
     )
     reminder_key = Column(String(180), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class AnahiBriefing(Base):
+    __tablename__ = "anahi_briefings"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "briefing_date",
+            name="uq_anahi_briefings_user_date",
+        ),
+        Index("ix_anahi_briefings_created", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    briefing_date = Column(Date, nullable=False)
+    body = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
