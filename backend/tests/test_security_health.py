@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from config import Settings
 from database import get_db
 from main import create_app
-from security import require_api_key
+from security import auth_failure_limiter, validate_api_key
 
 
 def test_api_requires_configured_key_but_public_routes_do_not(client, auth_headers):
@@ -34,7 +34,7 @@ def test_debug_can_run_without_a_key_but_production_cannot():
         APP_ACCESS_TOKEN=None,
         CORS_ORIGINS="http://localhost:5173",
     )
-    assert require_api_key(None, development) is None
+    assert validate_api_key(None, development, "development-test") is None
 
     with pytest.raises(ValidationError, match="APP_ACCESS_TOKEN is required"):
         Settings(
@@ -56,8 +56,26 @@ def test_debug_can_run_without_a_key_but_production_cannot():
     assert production_app.openapi_url is None
 
     with pytest.raises(HTTPException) as error:
-        require_api_key("incorrect", production)
+        validate_api_key("incorrect", production, "production-test")
     assert error.value.status_code == 401
+
+
+def test_repeated_invalid_keys_trigger_temporary_lockout(client, auth_headers):
+    auth_failure_limiter.reset()
+    try:
+        rejected = [
+            client.get("/api", headers={"X-Ritmo-Key": "wrong"})
+            for _ in range(9)
+        ]
+        locked = client.get("/api", headers={"X-Ritmo-Key": "wrong"})
+        valid_during_lockout = client.get("/api", headers=auth_headers)
+    finally:
+        auth_failure_limiter.reset()
+
+    assert [response.status_code for response in rejected] == [401] * 9
+    assert locked.status_code == 429
+    assert locked.headers["retry-after"] == "300"
+    assert valid_during_lockout.status_code == 429
 
 
 def test_database_url_uses_pymysql_and_escapes_credentials():

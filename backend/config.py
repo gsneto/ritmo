@@ -46,6 +46,24 @@ class Settings(BaseSettings):
         default=None,
         validation_alias="APP_ACCESS_TOKEN",
     )
+    AUTH_MAX_FAILURES: int = Field(
+        default=10,
+        validation_alias="AUTH_MAX_FAILURES",
+        ge=1,
+        le=100,
+    )
+    AUTH_FAILURE_WINDOW_SECONDS: int = Field(
+        default=60,
+        validation_alias="AUTH_FAILURE_WINDOW_SECONDS",
+        ge=1,
+        le=3_600,
+    )
+    AUTH_LOCKOUT_SECONDS: int = Field(
+        default=300,
+        validation_alias="AUTH_LOCKOUT_SECONDS",
+        ge=1,
+        le=86_400,
+    )
     VAPID_PUBLIC_KEY: str | None = Field(
         default=None,
         validation_alias="VAPID_PUBLIC_KEY",
