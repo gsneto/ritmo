@@ -91,6 +91,40 @@ def test_anahi_service_posts_server_side_request_and_extracts_text(monkeypatch):
     }
 
 
+def test_anahi_briefing_uses_a_short_dedicated_prompt(monkeypatch):
+    recorded: dict[str, object] = {}
+
+    def fake_urlopen(request, timeout):
+        recorded["request"] = request
+        recorded["timeout"] = timeout
+        return FakeResponse({
+            "candidates": [{
+                "content": {
+                    "parts": [{"text": "Hoje há dois hábitos. Comece pelo mais curto."}],
+                },
+            }],
+        })
+
+    monkeypatch.setattr(anahi_service, "urlopen", fake_urlopen)
+    answer = anahi_service.generate_anahi_briefing(
+        anahi_settings(),
+        {
+            "profile": {"name": "Antonio"},
+            "habits": {"total_today": 2},
+            "tasks": {"today_count": 1},
+        },
+    )
+
+    assert answer == "Hoje há dois hábitos. Comece pelo mais curto."
+    request = recorded["request"]
+    body = json.loads(request.data.decode("utf-8"))
+    assert body["contents"][0]["parts"][-1] == {
+        "text": "Prepare o briefing de hoje.",
+    }
+    assert body["generationConfig"]["maxOutputTokens"] == 192
+    assert "briefing matinal" in body["systemInstruction"]["parts"][0]["text"]
+
+
 def test_anahi_service_handles_timeout_and_unusable_response_without_network(monkeypatch):
     settings = anahi_settings()
 

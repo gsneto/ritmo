@@ -11,6 +11,8 @@ from database import get_db
 from models.push import PushSubscription
 from models.user import User
 from schemas.push import (
+    BriefingSettingsResponse,
+    BriefingSettingsUpdate,
     PushConfigResponse,
     PushSubscriptionDelete,
     PushSubscriptionResponse,
@@ -32,6 +34,42 @@ def _endpoint_hash(endpoint: str) -> str:
 def _ensure_user(user_id: int, db: Session) -> None:
     if db.query(User.id).filter(User.id == user_id).first() is None:
         raise HTTPException(status_code=404, detail="User not found")
+
+
+@router.get(
+    "/{user_id}/briefing-settings",
+    response_model=BriefingSettingsResponse,
+)
+def get_briefing_settings(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return BriefingSettingsResponse(
+        enabled=user.briefing_enabled,
+        time=user.briefing_time,
+    )
+
+
+@router.put(
+    "/{user_id}/briefing-settings",
+    response_model=BriefingSettingsResponse,
+)
+def update_briefing_settings(
+    user_id: int,
+    data: BriefingSettingsUpdate,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.briefing_enabled = data.enabled
+    user.briefing_time = data.time
+    db.commit()
+    db.refresh(user)
+    return BriefingSettingsResponse(
+        enabled=user.briefing_enabled,
+        time=user.briefing_time,
+    )
 
 
 @router.get("/{user_id}/push-config", response_model=PushConfigResponse)

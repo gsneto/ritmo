@@ -200,6 +200,11 @@ export interface PushConfig {
   public_key: string | null
 }
 
+export interface BriefingSettings {
+  enabled: boolean
+  time: string
+}
+
 export interface PushSubscriptionStatus {
   active: boolean
   linked_to_other_profile: boolean
@@ -289,6 +294,10 @@ export const apiRoutes = {
     api.put<BackupRestoreResponse>(`/users/${id}/backup`, backup),
   getPushConfig: (id: number) =>
     api.get<PushConfig>(`/users/${id}/push-config`),
+  getBriefingSettings: (id: number) =>
+    api.get<BriefingSettings>(`/users/${id}/briefing-settings`),
+  updateBriefingSettings: (id: number, settings: BriefingSettings) =>
+    api.put<BriefingSettings>(`/users/${id}/briefing-settings`, settings),
   getPushSubscriptionStatus: (id: number, endpoint: string) =>
     api.post<PushSubscriptionStatus>(
       `/users/${id}/push-subscription/status`,

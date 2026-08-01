@@ -3,7 +3,7 @@ from urllib.parse import urlsplit
 
 from pydantic import Field, StringConstraints, field_validator
 
-from schemas.common import ApiSchema
+from schemas.common import ApiSchema, HourMinute
 
 PushEndpoint = Annotated[
     str,
@@ -98,3 +98,13 @@ class PushTestResponse(ApiSchema):
     sent: int
     failed: int
     expired: int
+
+
+class BriefingSettingsResponse(ApiSchema):
+    enabled: bool
+    time: HourMinute
+
+
+class BriefingSettingsUpdate(ApiSchema):
+    enabled: bool
+    time: HourMinute

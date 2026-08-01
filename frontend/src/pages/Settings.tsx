@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -61,7 +62,34 @@ export default function Settings({
   const [isCalendarBusy, setIsCalendarBusy] = useState(false)
   const [calendarMessage, setCalendarMessage] = useState('')
   const [notificationMessage, setNotificationMessage] = useState('')
+  const [briefingEnabled, setBriefingEnabled] = useState(false)
+  const [briefingTime, setBriefingTime] = useState('07:30')
+  const [briefingLoading, setBriefingLoading] = useState(true)
+  const [briefingMessage, setBriefingMessage] = useState('')
   const backupInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    let active = true
+    setBriefingLoading(true)
+    setBriefingMessage('')
+    apiRoutes.getBriefingSettings(user.id)
+      .then(response => {
+        if (!active) return
+        setBriefingEnabled(response.data.enabled)
+        setBriefingTime(response.data.time)
+      })
+      .catch(() => {
+        if (active) {
+          setBriefingMessage('Não foi possível carregar a configuração do briefing.')
+        }
+      })
+      .finally(() => {
+        if (active) setBriefingLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [user.id])
 
   async function handleReset() {
     if (!confirm(`Limpar TODOS os dados de ${user.name}?\n\nIsso remove:\n- Todos os hábitos\n- Todas as tarefas\n- O plano e o histórico de treinos\n- O livro e suas anotações\n- Todas as listas de compras\n- Todo o histórico de gastos\n\nEsta ação não pode ser desfeita.`)) return
@@ -138,6 +166,28 @@ export default function Settings({
       )
     } finally {
       setIsInstalling(false)
+    }
+  }
+
+  async function handleBriefingSave() {
+    setBriefingLoading(true)
+    setBriefingMessage('')
+    try {
+      const response = await apiRoutes.updateBriefingSettings(user.id, {
+        enabled: briefingEnabled,
+        time: briefingTime,
+      })
+      setBriefingEnabled(response.data.enabled)
+      setBriefingTime(response.data.time)
+      setBriefingMessage(
+        response.data.enabled
+          ? `Briefing diário programado para ${response.data.time}.`
+          : 'Briefing diário desativado.',
+      )
+    } catch {
+      setBriefingMessage('Não foi possível salvar o briefing. Tente novamente.')
+    } finally {
+      setBriefingLoading(false)
     }
   }
 
@@ -448,9 +498,44 @@ export default function Settings({
             </>
           )}
         </div>
+        <div className="settings-briefing-card">
+          <div>
+            <strong>Bom dia com a ANAHÍ</strong>
+            <span>Resumo curto dos hábitos e tarefas do dia, uma vez pela manhã.</span>
+          </div>
+          <label className="settings-briefing-toggle">
+            <input
+              type="checkbox"
+              checked={briefingEnabled}
+              onChange={event => setBriefingEnabled(event.target.checked)}
+              disabled={briefingLoading}
+            />
+            Receber briefing diário
+          </label>
+          <label>
+            Horário
+            <input
+              type="time"
+              value={briefingTime}
+              onChange={event => setBriefingTime(event.target.value)}
+              disabled={!briefingEnabled || briefingLoading}
+            />
+          </label>
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={() => void handleBriefingSave()}
+            disabled={briefingLoading}
+          >
+            {briefingLoading ? 'Salvando…' : 'Salvar briefing'}
+          </button>
+        </div>
         {push.error && <p className="settings-notification-error" role="alert">{push.error}</p>}
         {notificationMessage && (
           <p className="settings-notification-hint" role="status">{notificationMessage}</p>
+        )}
+        {briefingMessage && (
+          <p className="settings-notification-hint" role="status">{briefingMessage}</p>
         )}
       </section>
 
