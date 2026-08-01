@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   AlertCircle,
+  Award,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -17,6 +18,7 @@ import {
 import { apiRoutes } from '../services/api'
 import type { Habit } from '../services/api'
 import { toLocalDateValue } from '../utils/date'
+import { getHabitStreak, getStreakBadge } from '../utils/streak'
 import { useAppRouter } from '../router'
 import '../styles/routine-upgrade.css'
 
@@ -409,6 +411,8 @@ export default function Habits({ userId }: HabitsProps) {
               const isScheduledToday = configuredDays(habit).includes(todayWeekday)
               const isBusy = busyKey?.endsWith(`-${habit.id}`) ?? false
               const isDeleting = pendingDeleteId === habit.id
+              const streakCount = getHabitStreak(habit.check_ins, configuredDays(habit))
+              const streakBadge = getStreakBadge(streakCount)
 
               return (
                 <article
@@ -497,6 +501,20 @@ export default function Habits({ userId }: HabitsProps) {
                         <div className="routine-item-title">
                           <strong>{habit.name}</strong>
                           {isDone && <span className="routine-status done">Feito hoje</span>}
+                          {streakCount > 0 && (
+                            <span className="routine-streak-count">
+                              {streakCount} {streakCount === 1 ? 'dia' : 'dias'}
+                            </span>
+                          )}
+                          {streakBadge && (
+                            <span
+                              className={`routine-streak-badge is-${streakBadge.tone}`}
+                              aria-label={`Marco de ${streakBadge.minimum} dias: ${streakBadge.label}`}
+                            >
+                              <Award size={13} aria-hidden="true" />
+                              {streakBadge.label}
+                            </span>
+                          )}
                         </div>
                         <small className="routine-habit-schedule">
                           <span className="routine-habit-time">

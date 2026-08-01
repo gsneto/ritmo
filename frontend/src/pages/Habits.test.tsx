@@ -38,6 +38,14 @@ function habit(
   }
 }
 
+function recentCheckIns(count: number): string[] {
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date()
+    date.setDate(date.getDate() - index)
+    return toLocalDateValue(date)
+  })
+}
+
 describe('Habits upgraded experience', () => {
   const today = toLocalDateValue()
   const habits = [
@@ -123,5 +131,16 @@ describe('Habits upgraded experience', () => {
 
     expect(await screen.findByRole('alert')).toBeTruthy()
     expect(screen.getByText('Não foi possível carregar seus hábitos. Tente novamente.')).toBeTruthy()
+  })
+
+  it('shows the streak milestone reached by a habit', async () => {
+    vi.mocked(apiRoutes.getHabits).mockResolvedValueOnce({
+      data: [habit(4, 'Meditar', '07:00', recentCheckIns(7))],
+    } as never)
+
+    render(<Habits userId={1} />)
+
+    expect(await screen.findByText('7 dias')).toBeTruthy()
+    expect(screen.getByLabelText('Marco de 7 dias: Em ritmo')).toBeTruthy()
   })
 })
