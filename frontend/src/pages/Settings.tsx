@@ -7,6 +7,7 @@ import type { RitmoBackup, User } from '../services/api'
 import {
   Bell,
   BellOff,
+  CalendarPlus,
   Download,
   FileJson,
   KeyRound,
@@ -57,6 +58,8 @@ export default function Settings({
   const [installMessage, setInstallMessage] = useState('')
   const [isBackupBusy, setIsBackupBusy] = useState(false)
   const [backupMessage, setBackupMessage] = useState('')
+  const [isCalendarBusy, setIsCalendarBusy] = useState(false)
+  const [calendarMessage, setCalendarMessage] = useState('')
   const [notificationMessage, setNotificationMessage] = useState('')
   const backupInputRef = useRef<HTMLInputElement>(null)
 
@@ -161,6 +164,28 @@ export default function Settings({
       setBackupMessage('Não foi possível criar o backup. Tente novamente.')
     } finally {
       setIsBackupBusy(false)
+    }
+  }
+
+  async function handleCalendarDownload() {
+    setIsCalendarBusy(true)
+    setCalendarMessage('')
+    try {
+      const response = await apiRoutes.getCalendarExport(user.id)
+      const objectUrl = URL.createObjectURL(response.data)
+      const anchor = document.createElement('a')
+      anchor.href = objectUrl
+      anchor.download = `ritmo-${user.profile_id}-calendario.ics`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(objectUrl)
+      setCalendarMessage('Calendário baixado. Abra o arquivo para importar seus horários.')
+    } catch (error) {
+      console.error('Failed to export calendar:', error)
+      setCalendarMessage('Não foi possível exportar o calendário. Tente novamente.')
+    } finally {
+      setIsCalendarBusy(false)
     }
   }
 
@@ -458,6 +483,15 @@ export default function Settings({
         </div>
         <div className="settings-backup-actions">
           <button
+            className="ghost-button"
+            type="button"
+            onClick={() => void handleCalendarDownload()}
+            disabled={isCalendarBusy}
+          >
+            <CalendarPlus size={17} aria-hidden="true" />
+            <span>{isCalendarBusy ? 'Gerando calendário…' : 'Exportar calendário'}</span>
+          </button>
+          <button
             className="primary-button"
             type="button"
             onClick={() => void handleBackupDownload()}
@@ -490,6 +524,9 @@ export default function Settings({
         </p>
         {backupMessage && (
           <p className="settings-backup-status" role="status">{backupMessage}</p>
+        )}
+        {calendarMessage && (
+          <p className="settings-backup-status" role="status">{calendarMessage}</p>
         )}
       </section>
 

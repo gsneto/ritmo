@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useNotifications } from '../hooks/useNotifications'
 import { usePwaInstall } from '../hooks/usePwaInstall'
 import { usePushNotifications } from '../hooks/usePushNotifications'
+import { apiRoutes } from '../services/api'
 import type { User } from '../services/api'
 import Settings from './Settings'
 
@@ -98,6 +99,51 @@ describe('settings mobile installation', () => {
     expect((await screen.findByRole('status')).textContent).toContain(
       'Instalação iniciada',
     )
+  })
+
+  it('downloads the calendar export for the active profile', async () => {
+    vi.mocked(usePwaInstall).mockReturnValue({
+      canInstall: false,
+      isInstalled: true,
+      isIos: false,
+      isAndroid: true,
+      install: vi.fn(),
+    })
+    const exportRequest = vi.spyOn(apiRoutes, 'getCalendarExport').mockResolvedValue({
+      data: new Blob(['BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n'], {
+        type: 'text/calendar',
+      }),
+    } as never)
+    const createObjectUrl = vi.fn(() => 'blob:ritmo-calendar')
+    const revokeObjectUrl = vi.fn()
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: createObjectUrl,
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: revokeObjectUrl,
+    })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    render(
+      <Settings
+        user={user}
+        users={[user]}
+        onUserChange={vi.fn()}
+        onChangeAccessCode={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar calendário' }))
+
+    await waitFor(() => expect(exportRequest).toHaveBeenCalledWith(1))
+    expect(createObjectUrl).toHaveBeenCalledOnce()
+    expect(click).toHaveBeenCalledOnce()
+    expect(screen.getByRole('status').textContent).toContain('Calendário baixado')
+
+    click.mockRestore()
+    exportRequest.mockRestore()
   })
 
   it('explains why notifications cannot work over an insecure phone address', () => {

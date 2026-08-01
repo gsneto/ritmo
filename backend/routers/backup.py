@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+import re
+
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
+from config import Settings, get_settings
 from database import get_db
 from models.habit import Habit, HabitCheckIn, decode_active_days
 from models.reading import ReadingBook, ReadingNote, ReadingSession
@@ -16,6 +19,7 @@ from models.workout import (
     WorkoutSetLog,
 )
 from schemas.backup import BackupRestoreResponse, RitmoBackup
+from services.calendar_export import build_user_calendar
 from time_utils import app_now
 
 router = APIRouter(prefix="/api/users", tags=["backup"])
@@ -26,6 +30,23 @@ def _get_user(user_id: int, db: Session) -> User:
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+
+@router.get("/{user_id}/export/calendar.ics")
+def export_user_calendar(
+    user_id: int,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    """Export scheduled habits and unfinished tasks as iCalendar."""
+    user = _get_user(user_id, db)
+    safe_profile_id = re.sub(r"[^A-Za-z0-9_-]+", "-", user.profile_id).strip("-")
+    filename = f"ritmo-{safe_profile_id or user.id}.ics"
+    return Response(
+        content=build_user_calendar(db, user, settings.TIMEZONE),
+        media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{user_id}/backup", response_model=RitmoBackup)
