@@ -31,6 +31,7 @@ vi.mock('../services/workoutSessionApi', () => ({
   workoutSessionApi: {
     getWorkouts: vi.fn(),
     getActiveSession: vi.fn(),
+    getHistory: vi.fn(),
   },
 }))
 
@@ -58,7 +59,7 @@ describe('Today intelligent assistant', () => {
         today_progress: '0%',
         checked_count: '0 de 1 feitos',
         habits_today: [
-          { id: 1, name: 'Beber água', time: '08:00', done: false },
+          { id: 1, name: 'Beber água', time: '00:00', done: false },
         ],
       },
     } as never)
@@ -133,6 +134,14 @@ describe('Today intelligent assistant', () => {
       max_weight_kg: '10.00',
       total_volume_kg: '200.00',
       exercises: [],
+    })
+    vi.mocked(workoutSessionApi.getHistory).mockResolvedValue({
+      total_sessions: 0,
+      total_minutes: 0,
+      completed_sets: 0,
+      total_volume_kg: '0.00',
+      sessions: [],
+      exercise_progress: [],
     })
   })
 
@@ -226,5 +235,58 @@ describe('Today intelligent assistant', () => {
 
     expect(checkInSection.previousElementSibling?.classList.contains('today-hero')).toBe(true)
     expect(checkInSection.nextElementSibling?.classList.contains('today-assistant')).toBe(true)
+  })
+
+  it('does not ask for another workout after one was completed today', async () => {
+    const workoutDay = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][new Date().getDay()]
+    const completedAt = new Date().toISOString()
+    vi.mocked(apiRoutes.getTodayStats).mockResolvedValueOnce({
+      data: {
+        today_progress: '0%',
+        checked_count: '0 de 0 feitos',
+        habits_today: [],
+      },
+    } as never)
+    vi.mocked(apiRoutes.getTasks).mockResolvedValueOnce({ data: [] } as never)
+    vi.mocked(apiRoutes.getShoppingLists).mockResolvedValueOnce({ data: [] } as never)
+    vi.mocked(readingApi.getActiveBook).mockResolvedValueOnce({ data: null } as never)
+    vi.mocked(workoutSessionApi.getActiveSession).mockResolvedValueOnce(null)
+    vi.mocked(workoutSessionApi.getWorkouts).mockResolvedValueOnce([{
+      id: 9,
+      user_id: 1,
+      day: workoutDay,
+      title: 'Treino em casa',
+      note: '',
+      exercises: [{ id: 1, name: 'Agachamento', sets: '3', reps: '12' }],
+    }])
+    vi.mocked(workoutSessionApi.getHistory).mockResolvedValueOnce({
+      total_sessions: 1,
+      total_minutes: 25,
+      completed_sets: 3,
+      total_volume_kg: '180.00',
+      sessions: [{
+        id: 44,
+        user_id: 1,
+        workout_id: 9,
+        workout_title: 'Treino em casa',
+        workout_day: workoutDay,
+        status: 'completed',
+        rest_seconds: 60,
+        started_at: new Date(Date.now() - 25 * 60_000).toISOString(),
+        completed_at: completedAt,
+        duration_seconds: 1_500,
+        total_sets: 3,
+        completed_sets: 3,
+        max_weight_kg: '8.00',
+        total_volume_kg: '180.00',
+        exercises: [],
+      }],
+      exercise_progress: [],
+    })
+
+    render(<Today userId={1} />)
+
+    expect(await screen.findByText('Voc\u00ea est\u00e1 em dia')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: /Iniciar treino/ })).toBeNull()
   })
 })

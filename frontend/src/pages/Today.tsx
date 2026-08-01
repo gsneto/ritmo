@@ -81,6 +81,7 @@ export default function Today({ userId }: TodayProps) {
   const [activeBook, setActiveBook] = useState<ReadingBook | null>(null)
   const [todayWorkout, setTodayWorkout] = useState<WorkoutTemplate | null>(null)
   const [activeWorkout, setActiveWorkout] = useState<WorkoutSession | null>(null)
+  const [workoutCompletedToday, setWorkoutCompletedToday] = useState(false)
   const [isLoadingAssistant, setIsLoadingAssistant] = useState(true)
   const [assistantActionId, setAssistantActionId] = useState<string | null>(null)
   const [now, setNow] = useState(() => new Date())
@@ -106,6 +107,7 @@ export default function Today({ userId }: TodayProps) {
     setActiveBook(null)
     setTodayWorkout(null)
     setActiveWorkout(null)
+    setWorkoutCompletedToday(false)
     const results = await Promise.allSettled([
         apiRoutes.getTodayStats(userId),
         apiRoutes.getMonthStats(userId),
@@ -115,6 +117,7 @@ export default function Today({ userId }: TodayProps) {
         readingApi.getActiveBook(userId),
         workoutSessionApi.getWorkouts(userId),
         workoutSessionApi.getActiveSession(userId),
+        workoutSessionApi.getHistory(userId, 1),
     ])
 
     const [
@@ -126,6 +129,7 @@ export default function Today({ userId }: TodayProps) {
       bookResult,
       workoutsResult,
       activeWorkoutResult,
+      workoutHistoryResult,
     ] = results
     if (todayResult.status === 'fulfilled') setTodayStats(todayResult.value.data)
     if (monthResult.status === 'fulfilled') setMonthStats(monthResult.value.data)
@@ -154,6 +158,15 @@ export default function Today({ userId }: TodayProps) {
     }
     if (activeWorkoutResult.status === 'fulfilled') {
       setActiveWorkout(activeWorkoutResult.value)
+    }
+    if (workoutHistoryResult.status === 'fulfilled') {
+      setWorkoutCompletedToday(
+        workoutHistoryResult.value.sessions.some(session => (
+          session.status === 'completed'
+          && session.completed_at !== null
+          && toLocalDateValue(new Date(session.completed_at)) === currentDate
+        )),
+      )
     }
 
     const failures = results.filter(result => result.status === 'rejected')
@@ -244,6 +257,7 @@ export default function Today({ userId }: TodayProps) {
     activeBook,
     todayWorkout,
     activeWorkout,
+    workoutCompletedToday,
   })
   const nextAction = rhythmPlan[0] ?? DEFAULT_RHYTHM_ACTION
   const laterActions = rhythmPlan.slice(1)

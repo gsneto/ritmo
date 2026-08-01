@@ -34,6 +34,7 @@ interface RhythmPlanInput {
   activeBook: ReadingBook | null
   todayWorkout: WorkoutTemplate | null
   activeWorkout: WorkoutSession | null
+  workoutCompletedToday: boolean
 }
 
 function shortDate(value: string): string {
@@ -155,7 +156,11 @@ export function buildRhythmPlan(input: RhythmPlanInput): RhythmAction[] {
     })
   }
 
-  if (!input.activeWorkout && input.todayWorkout?.exercises.length) {
+  if (
+    !input.activeWorkout
+    && !input.workoutCompletedToday
+    && input.todayWorkout?.exercises.length
+  ) {
     actions.push({
       id: `workout-plan-${input.todayWorkout.id}`,
       kind: 'workout',

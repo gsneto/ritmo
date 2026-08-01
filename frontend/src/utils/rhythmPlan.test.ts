@@ -66,6 +66,7 @@ const input = (overrides: Partial<RhythmPlanInput> = {}): RhythmPlanInput => ({
   activeBook: null,
   todayWorkout: null,
   activeWorkout: null,
+  workoutCompletedToday: false,
   ...overrides,
 })
 
@@ -145,5 +146,18 @@ describe('buildRhythmPlan', () => {
       to: '/tasks?create=1',
       label: 'Planejar algo',
     }])
+  })
+
+  it('does not suggest the planned workout after a workout was completed today', () => {
+    const actions = buildRhythmPlan(input({
+      todayWorkout: workout(),
+      workoutCompletedToday: true,
+    }))
+
+    expect(actions.some(action => action.id.startsWith('workout-plan-'))).toBe(false)
+    expect(actions[0]).toMatchObject({
+      id: 'plan-day',
+      eyebrow: 'Dia organizado',
+    })
   })
 })
