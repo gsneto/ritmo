@@ -102,8 +102,10 @@ Crie o ambiente protegido `backend-production` no GitHub e configure:
 | --- | --- | --- |
 | Secret | `RAILWAY_TOKEN` | token de projeto com acesso ao ambiente |
 | Secret | `RAILWAY_PROJECT_ID` | ID do projeto escolhido |
+| Secret | `APP_ACCESS_TOKEN` | mesma chave forte configurada no serviço |
 | Variable | `RAILWAY_ENVIRONMENT` | nome ou ID do ambiente |
 | Variable | `RAILWAY_SERVICE` | nome ou ID do serviço do backend |
+| Variable | `BACKEND_BASE_URL` | origem HTTPS pública, sem `/api` |
 
 No provedor, configure o diretório raiz do serviço como `/backend` e selecione
 `/backend/railway.toml` como arquivo de configuração quando necessário.
@@ -137,8 +139,10 @@ Invoke-RestMethod `
   -Headers @{ "X-Ritmo-Key" = $env:RITMO_ACCESS_TOKEN }
 ```
 
-Use a chave configurada para testar as rotas protegidas. Não continue se o
-health check, a autenticação ou a persistência falharem.
+O workflow repete automaticamente as duas primeiras verificações após o
+`railway up` e falha se `/health` não informar estado saudável ou se `/api`
+não aceitar a chave. Use o roteiro manual acima também para conferir a
+persistência antes da promoção. Não continue se qualquer verificação falhar.
 
 ## 4. Preview do frontend
 

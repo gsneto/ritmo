@@ -78,6 +78,8 @@ jobs:
       RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
       RAILWAY_ENVIRONMENT: ${{ vars.RAILWAY_ENVIRONMENT }}
       RAILWAY_SERVICE: ${{ vars.RAILWAY_SERVICE }}
+      BACKEND_BASE_URL: ${{ vars.BACKEND_BASE_URL }}
+      APP_ACCESS_TOKEN: ${{ secrets.APP_ACCESS_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -91,12 +93,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in RAILWAY_TOKEN RAILWAY_PROJECT_ID RAILWAY_ENVIRONMENT RAILWAY_SERVICE; do
+          for name in RAILWAY_TOKEN RAILWAY_PROJECT_ID RAILWAY_ENVIRONMENT RAILWAY_SERVICE BACKEND_BASE_URL APP_ACCESS_TOKEN; do
             if [[ -z "${!name:-}" ]]; then
               echo "::error::$name não foi configurado no ambiente backend-production."
               exit 1
             fi
           done
+
+          if [[ "$BACKEND_BASE_URL" != https://* ]]; then
+            echo "::error::BACKEND_BASE_URL must be the public HTTPS API origin."
+            exit 1
+          fi
 
       - name: Publish tested backend
         run: >-
@@ -106,3 +113,26 @@ jobs:
           --project "$RAILWAY_PROJECT_ID"
           --environment "$RAILWAY_ENVIRONMENT"
           --service "$RAILWAY_SERVICE"
+
+      - name: Smoke test published backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="${BACKEND_BASE_URL%/}"
+
+          health_json="$(
+            curl --fail --silent --show-error \
+              --retry 12 --retry-all-errors --retry-delay 5 \
+              --connect-timeout 10 --max-time 20 \
+              "$base_url/health"
+          )"
+          jq -e '.status == "healthy"' <<<"$health_json" >/dev/null
+
+          protected_json="$(
+            curl --fail --silent --show-error \
+              --retry 5 --retry-all-errors --retry-delay 2 \
+              --connect-timeout 10 --max-time 20 \
+              --header "X-Ritmo-Key: $APP_ACCESS_TOKEN" \
+              "$base_url/api"
+          )"
+          jq -e '.message and .version' <<<"$protected_json" >/dev/null
