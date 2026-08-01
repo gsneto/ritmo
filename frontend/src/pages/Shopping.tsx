@@ -981,6 +981,7 @@ export default function Shopping({ userId }: ShoppingProps) {
                     }>
                       <input
                         type="radio"
+                        aria-label="Hoje"
                         name="shopping_date_choice"
                         value="today"
                         checked={newListDateChoice === 'today'}
@@ -997,6 +998,7 @@ export default function Shopping({ userId }: ShoppingProps) {
                     }>
                       <input
                         type="radio"
+                        aria-label="Amanhã"
                         name="shopping_date_choice"
                         value="tomorrow"
                         checked={newListDateChoice === 'tomorrow'}
@@ -1013,6 +1015,7 @@ export default function Shopping({ userId }: ShoppingProps) {
                     }>
                       <input
                         type="radio"
+                        aria-label="Outra data"
                         name="shopping_date_choice"
                         value="other"
                         checked={newListDateChoice === 'other'}
@@ -1087,6 +1090,7 @@ export default function Shopping({ userId }: ShoppingProps) {
                   <label className="shopping-repeat-toggle">
                     <input
                       type="checkbox"
+                      aria-label="Criar a próxima automaticamente"
                       checked={newListRepeat}
                       onChange={event => setNewListRepeat(event.target.checked)}
                       disabled={saving}
@@ -1407,7 +1411,6 @@ export default function Shopping({ userId }: ShoppingProps) {
                                       inputMode="decimal"
                                       placeholder="0,00"
                                       aria-label={`Preço de ${item.name}`}
-                                      autoFocus
                                       required
                                       disabled={busyItemId === item.id}
                                     />

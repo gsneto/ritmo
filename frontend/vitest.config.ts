@@ -7,5 +7,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: false,
     setupFiles: ['./src/test/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcovonly'],
+      reportsDirectory: './coverage',
+      exclude: ['src/test/**', '**/*.test.{ts,tsx}', '**/vite-env.d.ts'],
+    },
   },
 })

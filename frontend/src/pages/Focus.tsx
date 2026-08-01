@@ -926,6 +926,7 @@ export default function Reading({ userId }: ReadingProps) {
 
                   <label className="reading-active-choice">
                     <input
+                      aria-label="Usar como livro ativo"
                       checked={bookForm.isActive}
                       disabled={bookForm.status === 'concluido'}
                       onChange={event => setBookForm(previous => ({

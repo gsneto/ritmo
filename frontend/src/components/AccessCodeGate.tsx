@@ -45,7 +45,6 @@ export default function AccessCodeGate({ message, onSubmit }: AccessCodeGateProp
               onChange={event => setCode(event.target.value)}
               autoComplete="current-password"
               required
-              autoFocus
             />
           </label>
           {message && <p className="form-error" role="alert">{message}</p>}

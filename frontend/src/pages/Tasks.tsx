@@ -421,7 +421,6 @@ export default function Tasks({ userId }: TasksProps) {
                 onChange={event => setNewName(event.target.value)}
                 maxLength={60}
                 required
-                autoFocus
                 placeholder="Ex: Pagar a conta de luz"
               />
             </label>
@@ -431,6 +430,7 @@ export default function Tasks({ userId }: TasksProps) {
                 <label className={newDateChoice === 'today' ? 'is-selected' : ''}>
                   <input
                     type="radio"
+                    aria-label="Hoje"
                     name="task_date_choice"
                     value="today"
                     checked={newDateChoice === 'today'}
@@ -445,6 +445,7 @@ export default function Tasks({ userId }: TasksProps) {
                 <label className={newDateChoice === 'tomorrow' ? 'is-selected' : ''}>
                   <input
                     type="radio"
+                    aria-label="Amanhã"
                     name="task_date_choice"
                     value="tomorrow"
                     checked={newDateChoice === 'tomorrow'}
@@ -459,6 +460,7 @@ export default function Tasks({ userId }: TasksProps) {
                 <label className={newDateChoice === 'other' ? 'is-selected' : ''}>
                   <input
                     type="radio"
+                    aria-label="Outra data"
                     name="task_date_choice"
                     value="other"
                     checked={newDateChoice === 'other'}
@@ -621,7 +623,6 @@ export default function Tasks({ userId }: TasksProps) {
                                 value={editName}
                                 onChange={event => setEditName(event.target.value)}
                                 maxLength={60}
-                                autoFocus
                                 required
                               />
                             </label>

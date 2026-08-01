@@ -424,7 +424,6 @@ export default function Habits({ userId }: HabitsProps) {
                           value={editName}
                           onChange={event => setEditName(event.target.value)}
                           maxLength={60}
-                          autoFocus
                           required
                         />
                       </label>
