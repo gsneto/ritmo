@@ -24,6 +24,7 @@ import '../styles/routine-upgrade.css'
 
 interface HabitsProps {
   userId: number
+  quickCheckInRequested?: boolean
 }
 
 const WEEKDAY_OPTIONS = [
@@ -50,7 +51,7 @@ function daysSummary(days: number[]): string {
     .join(', ')
 }
 
-export default function Habits({ userId }: HabitsProps) {
+export default function Habits({ userId, quickCheckInRequested = false }: HabitsProps) {
   const { navigate } = useAppRouter()
   const [habits, setHabits] = useState<Habit[]>([])
   const [name, setName] = useState('')
@@ -99,6 +100,17 @@ export default function Habits({ userId }: HabitsProps) {
   const nextHabit = orderedHabits.find(
     habit => configuredDays(habit).includes(todayWeekday) && !habit.check_ins.includes(today),
   )
+
+  useEffect(() => {
+    if (!quickCheckInRequested || loading) return
+
+    const control = nextHabit
+      ? document.querySelector<HTMLElement>(`[data-quick-habit-id="${nextHabit.id}"]`)
+      : null
+    control?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    control?.focus({ preventScroll: true })
+    navigate('/habits', { replace: true })
+  }, [loading, navigate, nextHabit, quickCheckInRequested])
 
   function toggleActiveDay(day: number, editing = false) {
     const current = editing ? editActiveDays : activeDays
@@ -484,6 +496,7 @@ export default function Habits({ userId }: HabitsProps) {
                         type="button"
                         onClick={() => void toggleCheckIn(habit)}
                         disabled={busyKey !== null || !isScheduledToday}
+                        data-quick-habit-id={habit.id}
                         aria-label={isScheduledToday
                           ? `${isDone ? 'Desmarcar' : 'Marcar'} ${habit.name} hoje`
                           : `${habit.name} não está planejado para hoje`}

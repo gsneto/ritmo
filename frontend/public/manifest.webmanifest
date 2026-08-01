@@ -35,21 +35,17 @@
   ],
   "shortcuts": [
     {
-      "name": "Meu dia",
-      "short_name": "Hoje",
-      "url": "/today",
+      "name": "Check-in de hábito",
+      "short_name": "Check-in",
+      "description": "Abrir os hábitos e marcar o próximo check-in.",
+      "url": "/?action=quick-habit",
       "icons": [{ "src": "/ritmo-icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Nova tarefa",
-      "short_name": "Tarefa",
-      "url": "/tasks?create=1",
-      "icons": [{ "src": "/ritmo-icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Compras",
-      "short_name": "Compras",
-      "url": "/shopping",
+      "name": "Nova compra",
+      "short_name": "Comprar",
+      "description": "Criar rapidamente uma nova lista de compras.",
+      "url": "/?action=new-shopping",
       "icons": [{ "src": "/ritmo-icon-192.png", "sizes": "192x192" }]
     }
   ]

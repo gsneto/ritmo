@@ -138,6 +138,22 @@ describe('shopping assistant flow', () => {
     vi.restoreAllMocks()
   })
 
+  it('opens the create form requested by a PWA shortcut', async () => {
+    mockInitialData()
+    const handled = vi.fn()
+
+    render(
+      <Shopping
+        userId={1}
+        createRequested
+        onCreateRequestHandled={handled}
+      />,
+    )
+
+    expect(await screen.findByRole('heading', { name: 'Nova compra ou gasto' })).toBeTruthy()
+    expect(handled).toHaveBeenCalledOnce()
+  })
+
   it('checks an item with a price and records it in monthly history', async () => {
     mockInitialData()
     const checkedItem = {
