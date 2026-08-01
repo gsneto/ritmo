@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
 } from 'react'
@@ -45,6 +46,12 @@ function readLocation(): RouterLocation {
 
 export function RouterProvider({ children }: RouterProviderProps) {
   const [location, setLocation] = useState<RouterLocation>(readLocation)
+
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
+  }, [location.pathname])
 
   useEffect(() => {
     function handlePopState() {
