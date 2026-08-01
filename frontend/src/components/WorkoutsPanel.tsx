@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   CheckCircle2,
   Clock3,
+  Download,
   Dumbbell,
   History,
   Home,
@@ -17,6 +18,7 @@ import {
   Video,
   X,
 } from 'lucide-react'
+import { toPng } from 'html-to-image'
 import {
   workoutSessionApi,
   type WorkoutExerciseProgress,
@@ -30,6 +32,7 @@ import {
 import { useWorkoutTimers } from '../hooks/useWorkoutTimers'
 import { getExerciseVideo } from '../utils/exerciseVideos'
 import WorkoutGuidedProgress from './WorkoutGuidedProgress'
+import WorkoutShareCard, { buildWorkoutShareSummary } from './WorkoutShareCard'
 import '../styles/workout-session.css'
 
 
@@ -306,7 +309,11 @@ export default function WorkoutsPanel({
   const [showExerciseVideo, setShowExerciseVideo] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [shareSessionLimit, setShareSessionLimit] = useState(8)
+  const [isExportingProgress, setIsExportingProgress] = useState(false)
+  const [shareMessage, setShareMessage] = useState('')
   const idempotencyKeys = useRef<Record<number, string>>({})
+  const shareCardRef = useRef<HTMLDivElement>(null)
   const {
     elapsedSeconds,
     seriesElapsedSeconds,
@@ -790,10 +797,35 @@ export default function WorkoutsPanel({
     }
   }
 
+  async function downloadProgressImage() {
+    if (!shareCardRef.current || isExportingProgress) return
+    setIsExportingProgress(true)
+    setShareMessage('')
+    try {
+      const dataUrl = await toPng(shareCardRef.current, {
+        backgroundColor: '#11100e',
+        cacheBust: true,
+        pixelRatio: 2,
+      })
+      const anchor = document.createElement('a')
+      anchor.href = dataUrl
+      anchor.download = `ritmo-treino-${new Date().toISOString().slice(0, 10)}.png`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      setShareMessage('Imagem do progresso baixada.')
+    } catch {
+      setShareMessage('Não foi possível gerar a imagem neste navegador.')
+    } finally {
+      setIsExportingProgress(false)
+    }
+  }
+
   if (!isOpen) return null
 
   const todayDay = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][new Date().getDay()]
   const exerciseProgress = historyData.exercise_progress ?? []
+  const shareSummary = buildWorkoutShareSummary(historyData, shareSessionLimit)
   const progressByExercise = new Map(
     exerciseProgress.map(progress => [exerciseKey(progress.exercise_name), progress]),
   )
@@ -1517,6 +1549,32 @@ export default function WorkoutsPanel({
               <strong>{historyData.total_minutes}</strong>
               {historyData.total_minutes === 1 ? ' minuto' : ' minutos'}
             </span>
+          </div>
+          <div className="workout-share-area">
+            <WorkoutShareCard ref={shareCardRef} summary={shareSummary} />
+            <div className="workout-share-actions">
+              <label>
+                Período do resumo
+                <select
+                  value={shareSessionLimit}
+                  onChange={event => setShareSessionLimit(Number(event.target.value))}
+                >
+                  <option value={4}>Últimas 4 sessões</option>
+                  <option value={8}>Últimas 8 sessões</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => void downloadProgressImage()}
+                disabled={isExportingProgress}
+              >
+                <Download size={17} aria-hidden="true" />
+                {isExportingProgress ? 'Gerando imagem…' : 'Baixar resumo em PNG'}
+              </button>
+            </div>
+            {shareMessage && (
+              <p className="workout-share-message" role="status">{shareMessage}</p>
+            )}
           </div>
           <div className="workout-history-list">
             {historyData.sessions.map(session => (

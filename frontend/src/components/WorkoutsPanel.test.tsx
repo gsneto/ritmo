@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('html-to-image', () => ({
+  toPng: vi.fn(),
+}))
+
 vi.mock('../services/workoutSessionApi', async importOriginal => {
   const actual = await importOriginal<typeof import('../services/workoutSessionApi')>()
   return {
@@ -34,6 +38,7 @@ import {
   type WorkoutTemplate,
 } from '../services/workoutSessionApi'
 import { getExerciseVideo } from '../utils/exerciseVideos'
+import { toPng } from 'html-to-image'
 
 const workout: WorkoutTemplate = {
   id: 2,
@@ -122,6 +127,7 @@ describe('guided home workout helpers', () => {
       sessionWithCompletedSets(1),
     )
     vi.mocked(workoutSessionApi.discardSession).mockResolvedValue(undefined)
+    vi.mocked(toPng).mockResolvedValue('data:image/png;base64,ritmo')
   })
 
   it('formats elapsed and rest timers', () => {
@@ -351,5 +357,32 @@ describe('guided home workout helpers', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Seus treinos com halteres' })).toBeTruthy()
     })
+  })
+
+  it('downloads a PNG with the selected workout history', async () => {
+    const completedSession: WorkoutSession = {
+      ...sessionWithCompletedSets(1, '2026-07-29T10:00:00-03:00'),
+      status: 'completed',
+      completed_at: '2026-07-29T10:30:00-03:00',
+      duration_seconds: 1_800,
+    }
+    vi.mocked(workoutSessionApi.getHistory).mockResolvedValueOnce({
+      total_sessions: 1,
+      total_minutes: 30,
+      completed_sets: 1,
+      total_volume_kg: '85.00',
+      sessions: [completedSession],
+      exercise_progress: [],
+    })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    render(<WorkoutsPanel userId={1} isOpen />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Baixar resumo em PNG' }))
+
+    await waitFor(() => expect(toPng).toHaveBeenCalledOnce())
+    expect(click).toHaveBeenCalledOnce()
+    expect(screen.getByRole('status').textContent).toContain('Imagem do progresso baixada')
+    click.mockRestore()
   })
 })
