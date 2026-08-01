@@ -1,13 +1,20 @@
 import re
+import secrets
 from calendar import monthrange
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
-from models.shopping import ShoppingItem, ShoppingList, ShoppingMonthlyBudget
+from models.shopping import (
+    ShoppingItem,
+    ShoppingList,
+    ShoppingMonthlyBudget,
+    ShoppingPair,
+)
 from models.user import User
 from schemas.shopping import (
     CategoryExpenseSummary,
@@ -23,10 +30,86 @@ from schemas.shopping import (
     ShoppingMonthlyBudgetResponse,
     ShoppingPriceHistory,
     ShoppingPriceHistoryEntry,
+    ShoppingShareCode,
+    ShoppingSharePartner,
+    ShoppingShareStatus,
 )
 from time_utils import app_now, app_today
 
 router = APIRouter(prefix="/api", tags=["shopping"])
+INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def _get_user(user_id: int, db: Session) -> User:
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+def _get_shopping_pair(user_id: int, db: Session) -> ShoppingPair | None:
+    return (
+        db.query(ShoppingPair)
+        .filter(
+            or_(
+                ShoppingPair.owner_user_id == user_id,
+                ShoppingPair.partner_user_id == user_id,
+            )
+        )
+        .first()
+    )
+
+
+def _shopping_user_ids(user_id: int, db: Session) -> tuple[int, ...]:
+    pair = _get_shopping_pair(user_id, db)
+    if pair is None or pair.partner_user_id is None:
+        return (user_id,)
+    return (pair.owner_user_id, pair.partner_user_id)
+
+
+def _serialize_share_status(
+    user_id: int,
+    pair: ShoppingPair | None,
+    db: Session,
+) -> ShoppingShareStatus:
+    if pair is None:
+        return ShoppingShareStatus(paired=False)
+    if pair.partner_user_id is None:
+        return ShoppingShareStatus(
+            paired=False,
+            invite_code=pair.invite_code,
+        )
+
+    partner_id = (
+        pair.partner_user_id
+        if pair.owner_user_id == user_id
+        else pair.owner_user_id
+    )
+    partner = db.get(User, partner_id)
+    if partner is None:
+        return ShoppingShareStatus(paired=False)
+    return ShoppingShareStatus(
+        paired=True,
+        partner=ShoppingSharePartner(
+            id=partner.id,
+            name=partner.name,
+            initials=partner.initials,
+        ),
+    )
+
+
+def _new_invite_code(db: Session) -> str:
+    for _ in range(12):
+        code = "".join(secrets.choice(INVITE_ALPHABET) for _ in range(8))
+        exists = db.query(ShoppingPair.id).filter(
+            ShoppingPair.invite_code == code
+        ).first()
+        if exists is None:
+            return code
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Could not create a shopping invite",
+    )
 
 
 def _add_months(value: date, months: int) -> date:
@@ -164,6 +247,120 @@ def _create_next_shopping_list(
 
 
 @router.get(
+    "/users/{user_id}/shopping-share",
+    response_model=ShoppingShareStatus,
+)
+def get_shopping_share_status(
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    _get_user(user_id, db)
+    return _serialize_share_status(user_id, _get_shopping_pair(user_id, db), db)
+
+
+@router.post(
+    "/users/{user_id}/shopping-share/invite",
+    response_model=ShoppingShareStatus,
+)
+def create_shopping_share_invite(
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    _get_user(user_id, db)
+    existing = _get_shopping_pair(user_id, db)
+    if existing is not None:
+        return _serialize_share_status(user_id, existing, db)
+
+    pair = ShoppingPair(
+        owner_user_id=user_id,
+        invite_code=_new_invite_code(db),
+        created_at=app_now(),
+    )
+    db.add(pair)
+    try:
+        db.commit()
+        db.refresh(pair)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This profile already has a shopping invite",
+        ) from exc
+    return _serialize_share_status(user_id, pair, db)
+
+
+@router.post(
+    "/users/{user_id}/shopping-share/redeem",
+    response_model=ShoppingShareStatus,
+)
+def redeem_shopping_share_invite(
+    user_id: int,
+    data: ShoppingShareCode,
+    db: Session = Depends(get_db),
+):
+    _get_user(user_id, db)
+    if _get_shopping_pair(user_id, db) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This profile already has a shopping share",
+        )
+
+    pair = db.query(ShoppingPair).filter(
+        ShoppingPair.invite_code == data.code,
+        ShoppingPair.partner_user_id.is_(None),
+    ).first()
+    if pair is None:
+        raise HTTPException(status_code=404, detail="Shopping invite not found")
+    if pair.owner_user_id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A profile cannot redeem its own invite",
+        )
+
+    try:
+        claimed = db.execute(
+            update(ShoppingPair)
+            .where(
+                ShoppingPair.id == pair.id,
+                ShoppingPair.partner_user_id.is_(None),
+            )
+            .values(partner_user_id=user_id, paired_at=app_now())
+            .execution_options(synchronize_session=False)
+        )
+        if claimed.rowcount != 1:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This shopping invite is no longer available",
+            )
+        db.commit()
+        db.refresh(pair)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This shopping invite is no longer available",
+        ) from exc
+    return _serialize_share_status(user_id, pair, db)
+
+
+@router.delete(
+    "/users/{user_id}/shopping-share",
+    response_model=ShoppingShareStatus,
+)
+def delete_shopping_share(
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    _get_user(user_id, db)
+    pair = _get_shopping_pair(user_id, db)
+    if pair is not None:
+        db.delete(pair)
+        db.commit()
+    return ShoppingShareStatus(paired=False)
+
+
+@router.get(
     "/users/{user_id}/shopping-lists",
     response_model=list[ShoppingListResponse],
 )
@@ -172,10 +369,11 @@ def list_shopping_lists(
     completed: bool | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
+    visible_user_ids = _shopping_user_ids(user_id, db)
     query = (
         db.query(ShoppingList)
         .options(selectinload(ShoppingList.items))
-        .filter(ShoppingList.user_id == user_id)
+        .filter(ShoppingList.user_id.in_(visible_user_ids))
     )
     if completed is True:
         query = query.filter(ShoppingList.completed_at.is_not(None))
@@ -433,12 +631,13 @@ def get_monthly_shopping_history(
     user_exists = db.query(User.id).filter(User.id == user_id).first()
     if user_exists is None:
         raise HTTPException(status_code=404, detail="User not found")
+    visible_user_ids = _shopping_user_ids(user_id, db)
 
     completed_lists = (
         db.query(ShoppingList)
         .options(selectinload(ShoppingList.items))
         .filter(
-            ShoppingList.user_id == user_id,
+            ShoppingList.user_id.in_(visible_user_ids),
             ShoppingList.completed_on >= first_day,
             ShoppingList.completed_on <= last_day,
         )
@@ -458,7 +657,7 @@ def get_monthly_shopping_history(
     planned_lists_cents = (
         db.query(func.coalesce(func.sum(ShoppingList.budget_cents), 0))
         .filter(
-            ShoppingList.user_id == user_id,
+            ShoppingList.user_id.in_(visible_user_ids),
             ShoppingList.planned_date >= first_day,
             ShoppingList.planned_date <= last_day,
         )
@@ -476,7 +675,7 @@ def get_monthly_shopping_history(
     previous_month_total_cents = (
         db.query(func.coalesce(func.sum(ShoppingList.total_cents), 0))
         .filter(
-            ShoppingList.user_id == user_id,
+            ShoppingList.user_id.in_(visible_user_ids),
             ShoppingList.completed_on >= previous_first,
             ShoppingList.completed_on <= previous_last,
         )
@@ -584,12 +783,13 @@ def get_shopping_price_history(
     user_exists = db.query(User.id).filter(User.id == user_id).first()
     if user_exists is None:
         raise HTTPException(status_code=404, detail="User not found")
+    visible_user_ids = _shopping_user_ids(user_id, db)
 
     rows = (
         db.query(ShoppingItem, ShoppingList)
         .join(ShoppingList, ShoppingList.id == ShoppingItem.shopping_list_id)
         .filter(
-            ShoppingList.user_id == user_id,
+            ShoppingList.user_id.in_(visible_user_ids),
             ShoppingList.completed_on.is_not(None),
             ShoppingItem.checked_at.is_not(None),
             func.lower(func.trim(ShoppingItem.name)) == normalized_name.lower(),

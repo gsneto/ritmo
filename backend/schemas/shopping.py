@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import Field, StrictBool, StrictInt, model_validator
+from pydantic import Field, StrictBool, StrictInt, field_validator, model_validator
 
 from schemas.common import ApiSchema, IsoDate, Name200
 
@@ -148,3 +148,26 @@ class ShoppingPriceHistoryEntry(ApiSchema):
 class ShoppingPriceHistory(ApiSchema):
     item_name: str
     entries: list[ShoppingPriceHistoryEntry] = Field(default_factory=list)
+
+
+class ShoppingShareCode(ApiSchema):
+    code: str = Field(min_length=8, max_length=9, pattern=r"^[A-Z2-9-]+$")
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def normalize_code(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        return value.strip().upper().replace("-", "")
+
+
+class ShoppingSharePartner(ApiSchema):
+    id: int
+    name: str
+    initials: str
+
+
+class ShoppingShareStatus(ApiSchema):
+    paired: bool
+    invite_code: str | None = None
+    partner: ShoppingSharePartner | None = None

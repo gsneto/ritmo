@@ -111,3 +111,34 @@ class ShoppingMonthlyBudget(Base):
     budget_cents = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class ShoppingPair(Base):
+    """A two-profile visibility link limited to the shopping domain."""
+
+    __tablename__ = "shopping_pairs"
+    __table_args__ = (
+        CheckConstraint(
+            "partner_user_id IS NULL OR partner_user_id != owner_user_id",
+            name="ck_shopping_pairs_distinct_users",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    owner_user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    partner_user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+    invite_code = Column(String(12), nullable=False, unique=True, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    paired_at = Column(DateTime(timezone=True), nullable=True)

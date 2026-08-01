@@ -124,6 +124,16 @@ export interface ShoppingPriceHistory {
   entries: ShoppingPriceHistoryEntry[]
 }
 
+export interface ShoppingShareStatus {
+  paired: boolean
+  invite_code: string | null
+  partner: {
+    id: number
+    name: string
+    initials: string
+  } | null
+}
+
 export interface Exercise {
   id: number
   name: string
@@ -449,6 +459,14 @@ export const apiRoutes = {
     api.get<ShoppingPriceHistory>(`/users/${userId}/shopping-price-history`, {
       params: { item_name: itemName, limit },
     }),
+  getShoppingShare: (userId: number) =>
+    api.get<ShoppingShareStatus>(`/users/${userId}/shopping-share`),
+  createShoppingShareInvite: (userId: number) =>
+    api.post<ShoppingShareStatus>(`/users/${userId}/shopping-share/invite`),
+  redeemShoppingShareInvite: (userId: number, code: string) =>
+    api.post<ShoppingShareStatus>(`/users/${userId}/shopping-share/redeem`, { code }),
+  deleteShoppingShare: (userId: number) =>
+    api.delete<ShoppingShareStatus>(`/users/${userId}/shopping-share`),
 
   // Workouts
   getWorkouts: (userId: number) => api.get<Workout[]>(`/users/${userId}/workouts`),
