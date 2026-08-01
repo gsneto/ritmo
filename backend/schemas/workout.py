@@ -6,7 +6,6 @@ from pydantic import Field, StringConstraints, model_validator
 
 from schemas.common import ApiSchema, Name100, Name200, OptionalNote, OptionalShortText
 
-
 # Keep the legacy mojibake value temporarily because older seeded databases can
 # contain it. New clients should always send the correctly encoded "Sáb".
 WorkoutDay = Literal["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "SÃ¡b", "Dom"]

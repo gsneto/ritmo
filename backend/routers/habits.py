@@ -1,5 +1,4 @@
 from datetime import date
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
@@ -8,7 +7,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.habit import Habit, HabitCheckIn, decode_active_days
 from models.user import User
-from schemas.habit import HabitResponse, HabitCreate, HabitUpdate, CheckInRequest
+from schemas.habit import CheckInRequest, HabitCreate, HabitResponse, HabitUpdate
 from time_utils import app_today
 
 router = APIRouter(prefix="/api", tags=["habits"])
@@ -37,7 +36,7 @@ def serialize_habit(habit: Habit) -> dict:
     }
 
 
-@router.get("/users/{user_id}/habits", response_model=List[HabitResponse])
+@router.get("/users/{user_id}/habits", response_model=list[HabitResponse])
 def list_habits(user_id: int, db: Session = Depends(get_db)):
     """List all habits for a user."""
     habits = db.query(Habit).filter(Habit.user_id == user_id).all()

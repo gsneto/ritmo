@@ -1,15 +1,16 @@
 from sqlalchemy import (
     CheckConstraint,
     Column,
-    Integer,
-    String,
     Date,
-    Time,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
+    String,
+    Time,
 )
 from sqlalchemy.orm import relationship
+
 from database import Base
 
 

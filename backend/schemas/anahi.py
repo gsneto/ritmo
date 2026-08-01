@@ -4,7 +4,6 @@ from pydantic import StringConstraints
 
 from schemas.common import ApiSchema, IsoDate
 
-
 QuestionText = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=1, max_length=1_000),

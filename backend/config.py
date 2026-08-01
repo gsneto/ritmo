@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 ENV_FILE = Path(__file__).with_name(".env")
 LOCAL_CORS_ORIGINS = (
     "http://localhost:5173,http://localhost:3000,"
@@ -179,7 +178,7 @@ class Settings(BaseSettings):
             raise ValueError(f"Unknown TIMEZONE: {self.TIMEZONE}") from exc
 
         # Evaluate the property during startup so invalid origins fail fast.
-        self.cors_origins
+        _ = self.cors_origins
         return self
 
     @property
@@ -278,6 +277,6 @@ class Settings(BaseSettings):
         return normalized
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     return Settings()

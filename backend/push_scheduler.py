@@ -14,7 +14,6 @@ from models.push import PushDelivery, PushSubscription
 from models.shopping import ShoppingList
 from models.task import Task
 
-
 logger = logging.getLogger(__name__)
 REMINDER_GRACE = timedelta(minutes=12)
 

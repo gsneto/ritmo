@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from models.user import User
 from models.workout import Exercise, Workout
 
-
 DEFAULT_USERS = (
     {"profile_id": "antonio", "name": "Antonio", "initials": "A", "theme": "light"},
     {"profile_id": "itayna", "name": "Itayna", "initials": "I", "theme": "light"},

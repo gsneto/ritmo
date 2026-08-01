@@ -91,7 +91,11 @@ def get_monthly_stats(user_id: int, db: Session = Depends(get_db)):
         if year == current.year and month == current.month:
             last_day = current
         else:
-            last_day = date(year, month + 1, 1) - timedelta(days=1) if month < 12 else date(year + 1, 1, 1) - timedelta(days=1)
+            last_day = (
+                date(year, month + 1, 1) - timedelta(days=1)
+                if month < 12
+                else date(year + 1, 1, 1) - timedelta(days=1)
+            )
 
         habits = db.query(Habit).filter(
             Habit.user_id == user_id,

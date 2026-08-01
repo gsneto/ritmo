@@ -13,7 +13,6 @@ from urllib.request import Request, urlopen
 
 from config import Settings
 
-
 GEMINI_GENERATE_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     "{model}:generateContent"
@@ -135,7 +134,7 @@ def generate_anahi_answer(
     try:
         with urlopen(request, timeout=settings.GEMINI_TIMEOUT_SECONDS) as response:
             response_body = response.read(MAX_RESPONSE_BYTES + 1)
-    except (TimeoutError, SocketTimeout) as exc:
+    except TimeoutError as exc:
         raise AnahiTimeoutError from exc
     except HTTPError as exc:
         # Do not expose Gemini's body: it can contain account or policy details.

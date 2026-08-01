@@ -15,17 +15,16 @@ from schemas.shopping import (
     ShoppingBudgetUpdate,
     ShoppingItemCheck,
     ShoppingItemCreate,
-    ShoppingMonthlyBudgetResponse,
-    ShoppingPriceHistory,
-    ShoppingPriceHistoryEntry,
     ShoppingItemResponse,
     ShoppingItemUpdate,
     ShoppingListCreate,
     ShoppingListResponse,
     ShoppingListUpdate,
+    ShoppingMonthlyBudgetResponse,
+    ShoppingPriceHistory,
+    ShoppingPriceHistoryEntry,
 )
 from time_utils import app_now, app_today
-
 
 router = APIRouter(prefix="/api", tags=["shopping"])
 

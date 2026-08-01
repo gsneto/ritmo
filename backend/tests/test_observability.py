@@ -1,6 +1,6 @@
+import main as main_module
 from config import Settings
 from main import configure_sentry
-import main as main_module
 
 
 def test_sentry_is_disabled_without_a_dsn(monkeypatch):

@@ -21,7 +21,6 @@ from schemas.push import (
 )
 from time_utils import app_now
 
-
 router = APIRouter(prefix="/api/users", tags=["push"])
 logger = logging.getLogger(__name__)
 

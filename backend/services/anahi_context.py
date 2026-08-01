@@ -1,8 +1,8 @@
 """Build a small, read-only snapshot of one Ritmo profile for ANAHÍ."""
 
+import unicodedata
 from calendar import monthrange
 from datetime import date, timedelta
-import unicodedata
 
 from sqlalchemy import Float, cast, func
 from sqlalchemy.orm import Session, selectinload
@@ -14,7 +14,6 @@ from models.task import Task
 from models.user import User
 from models.workout import Workout, WorkoutSession
 from time_utils import app_today
-
 
 CONTEXT_SCOPE_ORDER = ("habits", "tasks", "reading", "shopping", "workouts")
 READING_CONTEXT_BOOK_LIMIT = 5

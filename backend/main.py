@@ -3,14 +3,15 @@ import logging
 from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
 
+import sentry_sdk
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.responses import Response
 
 from config import Settings, get_settings
 from database import SessionLocal, get_db, init_db
@@ -20,7 +21,6 @@ from routers import anahi, backup, habits, push, reading, shopping, stats, tasks
 from security import require_api_key
 from seed import seed_default_data
 from time_utils import app_today
-
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,12 @@ def configure_sentry(settings: Settings) -> None:
         send_default_pii=False,
         traces_sample_rate=0.0,
     )
+
+
+def rate_limit_exceeded_handler(request: Request, exc: Exception) -> Response:
+    if not isinstance(exc, RateLimitExceeded):
+        raise exc
+    return _rate_limit_exceeded_handler(request, exc)
 
 
 def create_app(
@@ -87,7 +93,7 @@ def create_app(
     application.state.limiter = limiter
     application.add_exception_handler(
         RateLimitExceeded,
-        _rate_limit_exceeded_handler,
+        rate_limit_exceeded_handler,
     )
 
     application.add_middleware(

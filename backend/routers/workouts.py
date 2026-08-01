@@ -20,7 +20,6 @@ from models.workout import (
     WorkoutSetLog,
 )
 from schemas.workout import (
-    WorkoutCreate,
     WorkoutExercisePreferenceUpdate,
     WorkoutExerciseProgressResponse,
     WorkoutHistoryResponse,
@@ -31,7 +30,6 @@ from schemas.workout import (
     WorkoutsUpdateRequest,
 )
 from time_utils import app_now
-
 
 router = APIRouter(prefix="/api", tags=["workouts"])
 ZERO_WEIGHT = Decimal("0.00")

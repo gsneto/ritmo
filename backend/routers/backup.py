@@ -18,7 +18,6 @@ from models.workout import (
 from schemas.backup import BackupRestoreResponse, RitmoBackup
 from time_utils import app_now
 
-
 router = APIRouter(prefix="/api/users", tags=["backup"])
 
 

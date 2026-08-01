@@ -19,7 +19,6 @@ from schemas.reading import (
 )
 from time_utils import app_now, app_today
 
-
 router = APIRouter(prefix="/api", tags=["reading"])
 
 

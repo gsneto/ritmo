@@ -1,10 +1,9 @@
+from typing import Annotated
 from urllib.parse import urlsplit
 
 from pydantic import Field, StringConstraints, field_validator
-from typing import Annotated
 
 from schemas.common import ApiSchema
-
 
 PushEndpoint = Annotated[
     str,

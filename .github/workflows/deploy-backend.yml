@@ -54,6 +54,15 @@ jobs:
       - name: Audit dependencies
         run: python -m pip_audit -r requirements-dev.txt
 
+      - name: Lint Python sources
+        run: python -m ruff check .
+
+      - name: Type-check Python sources
+        run: >-
+          python -m mypy
+          config.py main.py rate_limit.py security.py time_utils.py
+          services/anahi.py schemas
+
       - name: Compile Python sources
         run: python -m compileall -q .
 

@@ -1,18 +1,18 @@
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 
 from database import get_db
 from models.shopping import ShoppingMonthlyBudget
 from models.user import User
 from models.workout import WorkoutExercisePreference
-from schemas.user import UserResponse, UserUpdate, ThemeUpdate
+from schemas.user import ThemeUpdate, UserResponse, UserUpdate
 from seed import create_default_workouts
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
-@router.get("", response_model=List[UserResponse])
+@router.get("", response_model=list[UserResponse])
 def list_users(db: Session = Depends(get_db)):
     """List all user profiles."""
     users = db.query(User).all()

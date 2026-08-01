@@ -17,7 +17,6 @@ from services.anahi_context import (
     select_anahi_scopes,
 )
 
-
 router = APIRouter(prefix="/api", tags=["anahi"])
 
 

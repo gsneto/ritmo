@@ -5,7 +5,6 @@ from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_vali
 
 from schemas.common import ApiSchema, IsoDate, Name200
 
-
 ReadingStatus = Literal["quero_ler", "lendo", "concluido"]
 ReadingSessionSource = Literal["manual", "focus"]
 PageNumber = Annotated[StrictInt, Field(ge=0, le=100_000)]

@@ -5,7 +5,6 @@ from pydantic import Field, StrictBool, StrictInt, model_validator
 
 from schemas.common import ApiSchema, IsoDate, Name200
 
-
 ShoppingKind = Literal["monthly", "weekly", "one_time"]
 ShoppingCategory = Literal[
     "groceries",

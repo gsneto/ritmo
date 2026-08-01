@@ -1,6 +1,5 @@
 import calendar
 from datetime import date, timedelta
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -8,7 +7,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.task import Task
 from models.user import User
-from schemas.task import TaskResponse, TaskCreate, TaskUpdate
+from schemas.task import TaskCreate, TaskResponse, TaskUpdate
 from time_utils import app_now, app_today
 
 router = APIRouter(prefix="/api", tags=["tasks"])
@@ -32,7 +31,7 @@ def next_recurrence_date(
     return current
 
 
-@router.get("/users/{user_id}/tasks", response_model=List[TaskResponse])
+@router.get("/users/{user_id}/tasks", response_model=list[TaskResponse])
 def list_tasks(user_id: int, db: Session = Depends(get_db)):
     """List all tasks for a user."""
     tasks = db.query(Task).filter(Task.user_id == user_id).order_by(Task.date, Task.time).all()

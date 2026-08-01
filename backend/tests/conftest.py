@@ -10,7 +10,6 @@ from config import Settings
 from database import Base, create_database_engine, get_db, init_db
 from main import create_app
 
-
 ACCESS_KEY = "test-ritmo-key"
 
 

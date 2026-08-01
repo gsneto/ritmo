@@ -3,7 +3,6 @@ from typing import Literal
 
 from schemas.common import ApiSchema, Initials, Name50, Name100
 
-
 Theme = Literal["light", "dark"]
 
 
