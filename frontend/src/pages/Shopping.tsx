@@ -34,6 +34,7 @@ import type {
 import { toLocalDateValue } from '../utils/date'
 import { useShoppingCreateForm } from '../hooks/useShoppingCreateForm'
 import ShoppingDateOptions from '../components/ShoppingDateOptions'
+import ShoppingShareCard from '../components/ShoppingShareCard'
 import VoiceInputButton from '../components/VoiceInputButton'
 import '../styles/finance-upgrade.css'
 
@@ -527,6 +528,12 @@ export default function Shopping({
     setCreateFormRevealRequest(current => current + 1)
   }
 
+  function refreshAfterShareChange() {
+    const requestId = ++initialRequestIdRef.current
+    historyRequestIdRef.current += 1
+    void loadInitialData(requestId)
+  }
+
   async function deleteList(shoppingList: ShoppingList) {
     if (!window.confirm(`Excluir a lista "${shoppingList.name}"?`)) return
     if (saving || itemOperationRef.current !== null || finalizing) return
@@ -868,6 +875,11 @@ export default function Shopping({
           </div>
         </div>
       </section>
+
+      <ShoppingShareCard
+        userId={userId}
+        onShareChanged={refreshAfterShareChange}
+      />
 
       <div className="shopping-view-switch" role="tablist" aria-label="Seções de compras">
         <button

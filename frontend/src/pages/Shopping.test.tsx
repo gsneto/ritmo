@@ -22,6 +22,10 @@ vi.mock('../services/api', () => ({
     finishShoppingList: vi.fn(),
     setShoppingBudget: vi.fn(),
     getShoppingPriceHistory: vi.fn(),
+    getShoppingShare: vi.fn(),
+    createShoppingShareInvite: vi.fn(),
+    redeemShoppingShareInvite: vi.fn(),
+    deleteShoppingShare: vi.fn(),
   },
 }))
 
@@ -130,6 +134,9 @@ describe('shopping assistant flow', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date(2026, 6, 29, 12, 0, 0))
     vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(apiRoutes.getShoppingShare).mockResolvedValue({
+      data: { paired: false, invite_code: null, partner: null },
+    } as never)
   })
 
   afterEach(() => {
