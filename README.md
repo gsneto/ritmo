@@ -19,7 +19,12 @@
 - Treinos guiados com séries, cargas, cronômetros e descanso.
 - Biblioteca pessoal com progresso de leitura, anotações e Pomodoro.
 - Assistente ANAHÍ, capaz de responder sobre informações registradas no app.
-- Tema claro/escuro, PWA instalável, funcionamento offline e notificações.
+- Briefing matinal opcional da ANAHÍ por notificação push.
+- Selos de sequência e insights determinísticos após histórico suficiente.
+- Exportação de calendário `.ics` e cartão de progresso de treino em PNG.
+- Entrada por voz opcional em tarefas e itens de compra, quando o navegador suporta.
+- Compras compartilhadas entre dois perfis por código de convite.
+- Tema claro/escuro, PWA instalável, atalhos rápidos, funcionamento offline e notificações.
 - Backup e restauração por perfil.
 
 ## Tecnologias
@@ -100,4 +105,7 @@ npm run build
 
 Os dados do Ritmo pertencem ao perfil que os criou. A ANAHÍ recebe apenas o
 contexto necessário para responder à pergunta; chaves e dados sensíveis ficam
-no servidor e não são versionados.
+no servidor e não são versionados. Quando dois perfis ativam o compartilhamento
+de compras, somente listas, itens e histórico desse domínio passam a aparecer
+para ambos; hábitos, tarefas, treinos e leitura continuam isolados. O orçamento
+mensal geral permanece configurado por perfil.

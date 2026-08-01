@@ -1,6 +1,45 @@
 # Estado do Ritmo
 
-Atualizado em 29 de julho de 2026.
+Atualizado em 1º de agosto de 2026.
+
+## Novas features — 1º de agosto de 2026
+
+As oito features estão consolidadas na branch `feat/product-suite-2026-08`.
+Elas foram implementadas e validadas localmente, mas **não foram publicadas** na
+Vercel ou no Railway. A seção de produção abaixo descreve a versão pública
+anterior e não comprova que estas mudanças já estejam online.
+
+| Feature | Implementação e teste | Limitação confirmada |
+| --- | --- | --- |
+| Selos de streak | Marcos de 7, 30, 100 e 365 dias, com cálculo puro e testes de limiar e agenda do hábito. | O maior streak histórico não ganhou coluna própria; o selo representa a sequência atual. |
+| Atalhos do PWA | Manifest com check-in rápido e nova compra, roteamento inicial e testes das duas ações. | O manifest foi validado, mas a instalação real no Chrome/Android não foi testada; Safari/iOS não oferece esses atalhos. |
+| Calendário `.ics` | Hábitos recorrentes e tarefas pendentes exportados com `icalendar`, horário e `RRULE`; teste reabre e interpreta o arquivo. | Ainda não houve importação manual no Google Calendar, Apple Calendar ou Outlook. |
+| Progresso de treino | Card com período, sessões, séries, minutos, volume, carga máxima e sequência, baixado como PNG; helper, UI e download testados. | O MVP não inclui PDF; o compartilhamento usa o arquivo baixado, não a share sheet nativa. |
+| Briefing da ANAHÍ | Configuração por perfil, migração, geração curta e segura, no máximo uma tentativa diária e falha não crítica no scheduler. | Gemini e entrega push reais não foram acionados nesta validação local. |
+| Insights cruzados | Três cálculos determinísticos com piso de 14 dias: treino x hábitos, melhor dia de tarefas e manhã x leitura. | São associações descritivas, não causalidade; cards sem amostra suficiente ficam ocultos. |
+| Entrada por voz | Web Speech API em `pt-BR`, feature detection, preenchimento editável e sem envio automático; suporte e transcrição cobertos por mocks. | Microfone real e PWA instalado no iPhone não foram testados; no iOS o suporte permanece parcial. |
+| Compras compartilhadas | Código curto pareia dois perfis; listas antigas e novas, itens, histórico e preços ficam visíveis para ambos, com migração reversível e teste de isolamento dos demais domínios. | Atualizações feitas no outro aparelho aparecem ao recarregar; não há sincronização em tempo real. O orçamento mensal geral continua por perfil. |
+
+### Validação desta branch
+
+- Backend: `70 passed`; Ruff e mypy sem erros; cobertura total de 86%.
+- Frontend: `117 passed`; build Vite aprovado; cobertura de statements de
+  66,53%. O lint terminou sem erros e manteve 12 avisos já conhecidos de hooks.
+- Dependências: `pip-audit` e `npm audit` sem vulnerabilidades conhecidas.
+- Banco: `alembic upgrade head`, `alembic check`, downgrade da nova migração e
+  novo upgrade aprovados sobre SQLite vazio.
+- Manifest: exatamente dois atalhos, com URLs de check-in e nova compra.
+
+### Validação manual ainda necessária
+
+- Instalar a nova versão no Chrome/Android e conferir os atalhos do ícone.
+- Importar o `.ics` no Google Calendar, Apple Calendar e Outlook.
+- Gerar um PNG em navegador real e conferir o arquivo baixado.
+- Enviar um briefing real com Gemini + Web Push no ambiente controlado.
+- Testar ditado no Chrome com microfone e, separadamente, no PWA de um iPhone
+  físico; o campo de texto continua sendo o caminho garantido.
+- Exercitar o pareamento em dois aparelhos/perfis e confirmar o fluxo após
+  recarregar.
 
 ## Auditoria em andamento — 1º de agosto de 2026
 
