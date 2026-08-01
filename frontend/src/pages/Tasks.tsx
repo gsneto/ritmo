@@ -19,6 +19,7 @@ import { apiRoutes } from '../services/api'
 import type { Task, TaskRecurrence } from '../services/api'
 import { toLocalDateValue } from '../utils/date'
 import { useAppSearchParams } from '../router'
+import VoiceInputButton from '../components/VoiceInputButton'
 import '../styles/routine-upgrade.css'
 
 interface TasksProps {
@@ -413,17 +414,25 @@ export default function Tasks({ userId }: TasksProps) {
           </div>
 
           <form id="new-task-form" className="routine-create-form routine-task-form" onSubmit={createTask}>
-            <label className="routine-task-name-field">
-              Nome da tarefa
-              <input
-                type="text"
-                value={newName}
-                onChange={event => setNewName(event.target.value)}
-                maxLength={60}
-                required
-                placeholder="Ex: Pagar a conta de luz"
-              />
-            </label>
+            <div className="routine-task-name-field">
+              <label htmlFor="new-task-name">Nome da tarefa</label>
+              <div className="voice-input-field">
+                <input
+                  id="new-task-name"
+                  type="text"
+                  value={newName}
+                  onChange={event => setNewName(event.target.value)}
+                  maxLength={60}
+                  required
+                  placeholder="Ex: Pagar a conta de luz"
+                />
+                <VoiceInputButton
+                  label="nome da tarefa"
+                  onTranscript={setNewName}
+                  disabled={busyKey === 'create'}
+                />
+              </div>
+            </div>
             <fieldset className="routine-date-schedule">
               <legend>Data planejada</legend>
               <div className="routine-date-options">

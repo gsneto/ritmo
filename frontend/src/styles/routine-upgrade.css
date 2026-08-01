@@ -548,6 +548,12 @@ html[data-theme="dark"] .routine-task-hero {
   grid-column: 1 / -1;
 }
 
+.routine-task-name-field {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
 .routine-create-form label,
 .routine-inline-editor label {
   display: grid;
