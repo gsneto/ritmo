@@ -64,6 +64,16 @@ class Settings(BaseSettings):
         ge=1,
         le=86_400,
     )
+    SENTRY_DSN: str | None = Field(
+        default=None,
+        validation_alias="SENTRY_DSN",
+    )
+    SENTRY_ENVIRONMENT: str = Field(
+        default="development",
+        validation_alias="SENTRY_ENVIRONMENT",
+        min_length=1,
+        max_length=64,
+    )
     VAPID_PUBLIC_KEY: str | None = Field(
         default=None,
         validation_alias="VAPID_PUBLIC_KEY",
@@ -127,6 +137,16 @@ class Settings(BaseSettings):
             value = value.get_secret_value()
         if not isinstance(value, str):
             raise ValueError("GEMINI_API_KEY must be a string")
+        value = value.strip()
+        return value or None
+
+    @field_validator("SENTRY_DSN", mode="before")
+    @classmethod
+    def normalize_sentry_dsn(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("SENTRY_DSN must be a string")
         value = value.strip()
         return value or None
 

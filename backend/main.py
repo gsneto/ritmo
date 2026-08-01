@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager, suppress
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
@@ -23,6 +25,19 @@ from time_utils import app_today
 logger = logging.getLogger(__name__)
 
 
+def configure_sentry(settings: Settings) -> None:
+    if settings.SENTRY_DSN is None:
+        return
+
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.SENTRY_ENVIRONMENT,
+        integrations=[FastApiIntegration()],
+        send_default_pii=False,
+        traces_sample_rate=0.0,
+    )
+
+
 def create_app(
     app_settings: Settings | None = None,
     *,
@@ -30,6 +45,7 @@ def create_app(
     session_factory: sessionmaker | None = None,
 ) -> FastAPI:
     settings = app_settings or get_settings()
+    configure_sentry(settings)
     initialize_database = database_initializer or init_db
     make_session = session_factory or SessionLocal
 
