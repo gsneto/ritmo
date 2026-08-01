@@ -5,6 +5,7 @@ sqlalchemy==2.0.51
 pymysql==1.2.0
 psycopg[binary]==3.3.4
 cryptography==50.0.0
+icalendar==7.2.2
 pywebpush==2.3.0
 pydantic==2.13.4
 pydantic-settings==2.14.2

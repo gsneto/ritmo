@@ -283,6 +283,8 @@ export const apiRoutes = {
   resetUserData: (id: number) => api.delete(`/users/${id}/data`),
   getUserBackup: (id: number) =>
     api.get<RitmoBackup>(`/users/${id}/backup`),
+  getCalendarExport: (id: number) =>
+    api.get<Blob>(`/users/${id}/export/calendar.ics`, { responseType: 'blob' }),
   restoreUserBackup: (id: number, backup: RitmoBackup) =>
     api.put<BackupRestoreResponse>(`/users/${id}/backup`, backup),
   getPushConfig: (id: number) =>
