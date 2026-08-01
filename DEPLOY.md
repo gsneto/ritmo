@@ -144,6 +144,8 @@ Antes de publicar:
   efêmero não é adequado para produção;
 - use `RITMO_DEBUG=false`;
 - configure uma chave forte em `APP_ACCESS_TOKEN`;
+- configure `SENTRY_DSN` e `SENTRY_ENVIRONMENT=production` se o projeto de
+  monitoramento do backend já existir;
 - configure `CORS_ORIGINS` apenas com as origens reais do preview e da produção,
   separadas por vírgula e sem caminhos;
 - mantenha `TIMEZONE=America/Sao_Paulo`, salvo decisão explícita em contrário;
@@ -183,9 +185,11 @@ configure:
 | Secret | `VERCEL_ORG_ID` | ID da conta ou equipe |
 | Secret | `VERCEL_PROJECT_ID` | ID do projeto existente |
 | Variable | `VITE_API_URL` | URL HTTPS completa da API, terminando em `/api` |
+| Variable | `VITE_SENTRY_DSN` | DSN público opcional do projeto Sentry frontend |
 
-Configure `VITE_API_URL` também nos ambientes Preview e Production do projeto
-na Vercel. Não use `localhost` em builds remotos.
+Configure `VITE_API_URL` e, quando usado, `VITE_SENTRY_DSN` também nos ambientes
+Preview e Production do projeto na Vercel. Não use `localhost` em builds
+remotos.
 
 No projeto Vercel, mantenha **Root Directory** na raiz do repositório. O
 `vercel.json` já executa instalação e build dentro de `frontend/`; configurar

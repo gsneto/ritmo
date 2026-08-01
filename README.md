@@ -55,6 +55,19 @@ Abra `http://localhost:5173` no navegador. A API local fica em
 Para usar a ANAHÍ localmente, defina `GEMINI_API_KEY` somente em
 `backend/.env`. Nunca exponha chaves em variáveis `VITE_*` ou no repositório.
 
+## Monitoramento de erros
+
+O Sentry é opcional e permanece desativado quando o DSN correspondente está
+vazio. Use projetos separados para não misturar erros da API e do navegador:
+
+- backend: configure `SENTRY_DSN` e `SENTRY_ENVIRONMENT` no Railway;
+- frontend: configure `VITE_SENTRY_DSN` nos ambientes Preview e Production da
+  Vercel. O prefixo `VITE_` é necessário para disponibilizar o DSN público ao
+  bundle do navegador.
+
+As integrações não enviam PII por padrão. DSNs, tokens de upload de sourcemap e
+outras credenciais nunca devem ser commitados em `.env`.
+
 ## Testes
 
 ```powershell
