@@ -110,6 +110,34 @@ Crie o ambiente protegido `backend-production` no GitHub e configure:
 No provedor, configure o diretório raiz do serviço como `/backend` e selecione
 `/backend/railway.toml` como arquivo de configuração quando necessário.
 
+### Ambiente de staging do backend
+
+Crie esse ambiente manualmente no Railway antes de testar qualquer migração de
+schema em produção:
+
+1. no mesmo projeto Railway, crie o ambiente `staging` sem copiar referências
+   de banco da produção;
+2. adicione uma instância PostgreSQL exclusiva e confirme que a
+   `DATABASE_URL` do serviço de staging aponta somente para ela;
+3. crie um serviço de API e domínio próprios, mantendo `/backend` como raiz e
+   `backend/railway.toml` como configuração;
+4. configure `RITMO_DEBUG=false`, uma `APP_ACCESS_TOKEN` exclusiva,
+   `SENTRY_ENVIRONMENT=staging` e `CORS_ORIGINS` apenas com o preview do
+   frontend; use chaves VAPID separadas ou mantenha push desativado;
+5. crie no GitHub o ambiente protegido `backend-staging`, com os mesmos nomes
+   de secret e variable de `backend-production`, mas todos apontando para os
+   recursos de staging;
+6. publique primeiro no serviço de staging, aplique as migrações versionadas e
+   execute `/health`, `/api`, um CRUD descartável e um reinício com conferência
+   de persistência;
+7. aponte um preview da Vercel para a URL `/api` de staging e valide os fluxos
+   principais antes de repetir a migração em produção.
+
+O workflow atual continua promovendo somente o ambiente
+`backend-production`. Habilitar a seleção de `backend-staging` no workflow deve
+ser feito apenas depois que o ambiente, o banco isolado e as proteções do
+GitHub existirem de fato.
+
 Antes de publicar:
 
 - use um banco persistente e configure a `DATABASE_URL`; SQLite em disco
