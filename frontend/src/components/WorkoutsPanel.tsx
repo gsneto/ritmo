@@ -28,6 +28,7 @@ import {
   type WorkoutSessionSet,
   type WorkoutTemplate,
 } from '../services/workoutSessionApi'
+import { useWorkoutTimers } from '../hooks/useWorkoutTimers'
 import { getExerciseVideo } from '../utils/exerciseVideos'
 import '../styles/workout-session.css'
 
@@ -49,11 +50,6 @@ interface WorkoutData {
   title: string
   note: string
   exercises: ExerciseData[]
-}
-
-interface RestTimer {
-  remaining: number
-  running: boolean
 }
 
 type GuidedStep = 'weight' | 'ready' | 'series' | 'rest' | 'complete'
@@ -303,13 +299,6 @@ export default function WorkoutsPanel({
   const [preparedReps, setPreparedReps] = useState('')
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [editData, setEditData] = useState<WorkoutData | null>(null)
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const [seriesElapsedSeconds, setSeriesElapsedSeconds] = useState(0)
-  const [setStartedAt, setSetStartedAt] = useState<number | null>(null)
-  const [restTimer, setRestTimer] = useState<RestTimer>({
-    remaining: 0,
-    running: false,
-  })
   const [weightInputs, setWeightInputs] = useState<Record<number, string>>({})
   const [repInputs, setRepInputs] = useState<Record<number, string>>({})
   const [startingWorkoutId, setStartingWorkoutId] = useState<number | null>(null)
@@ -325,6 +314,14 @@ export default function WorkoutsPanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const idempotencyKeys = useRef<Record<number, string>>({})
+  const {
+    elapsedSeconds,
+    seriesElapsedSeconds,
+    setSeriesElapsedSeconds,
+    setSetStartedAt,
+    restTimer,
+    setRestTimer,
+  } = useWorkoutTimers(activeSession, guidedStep)
 
   useEffect(() => {
     if (!isOpen) return
@@ -354,46 +351,6 @@ export default function WorkoutsPanel({
       setShowExerciseVideo(false)
     }
   }, [guidedStep])
-
-  useEffect(() => {
-    if (!activeSession) {
-      setElapsedSeconds(0)
-      return
-    }
-    const updateElapsed = () => {
-      const startMs = new Date(activeSession.started_at).getTime()
-      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startMs) / 1000)))
-    }
-    updateElapsed()
-    const interval = window.setInterval(updateElapsed, 1000)
-    return () => window.clearInterval(interval)
-  }, [activeSession?.id, activeSession?.started_at])
-
-  useEffect(() => {
-    if (guidedStep !== 'series' || setStartedAt === null) {
-      setSeriesElapsedSeconds(0)
-      return
-    }
-    const updateSetElapsed = () => {
-      setSeriesElapsedSeconds(Math.max(0, Math.floor((Date.now() - setStartedAt) / 1000)))
-    }
-    updateSetElapsed()
-    const interval = window.setInterval(updateSetElapsed, 1000)
-    return () => window.clearInterval(interval)
-  }, [guidedStep, setStartedAt])
-
-  useEffect(() => {
-    if (!restTimer.running || restTimer.remaining <= 0) return
-    const interval = window.setInterval(() => {
-      setRestTimer(current => {
-        if (!current.running || current.remaining <= 1) {
-          return { remaining: 0, running: false }
-        }
-        return { ...current, remaining: current.remaining - 1 }
-      })
-    }, 1000)
-    return () => window.clearInterval(interval)
-  }, [restTimer.running])
 
   useEffect(() => {
     if (

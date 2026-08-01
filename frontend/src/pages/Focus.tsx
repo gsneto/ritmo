@@ -17,14 +17,9 @@ import {
   Trash2,
   TrendingUp,
 } from 'lucide-react'
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type FormEvent,
-} from 'react'
+import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
 import { notify } from '../hooks/useNotifications'
+import { usePomodoroTimer } from '../hooks/usePomodoroTimer'
 import { useAppSearchParams } from '../router'
 import { apiRoutes, type Habit } from '../services/api'
 import {
@@ -131,11 +126,17 @@ export default function Reading({ userId }: ReadingProps) {
   const [searchParams, setSearchParams] = useAppSearchParams()
   const [readingHabits, setReadingHabits] = useState<Habit[]>([])
   const [selectedHabitId, setSelectedHabitId] = useState<number | null>(null)
-  const [phase, setPhase] = useState<'focus' | 'break'>('focus')
-  const [remaining, setRemaining] = useState(25 * 60)
-  const [cycles, setCycles] = useState(0)
-  const [isRunning, setIsRunning] = useState(false)
-  const intervalRef = useRef<number | null>(null)
+  const pomodoro = usePomodoroTimer()
+  const {
+    phase,
+    remaining,
+    cycles,
+    isRunning,
+    start: startPomodoro,
+    stop: stopPomodoro,
+    reset: resetPomodoro,
+    advancePhase,
+  } = pomodoro
 
   const [books, setBooks] = useState<ReadingBook[]>([])
   const [sessions, setSessions] = useState<ReadingSession[]>([])
@@ -168,21 +169,12 @@ export default function Reading({ userId }: ReadingProps) {
   const selectedHabit = readingHabits.find(habit => habit.id === selectedHabitId)
 
   useEffect(() => {
-    stopTimer()
-    setPhase('focus')
-    setRemaining(25 * 60)
-    setCycles(0)
+    resetPomodoro(true)
     setSelectedBookId(null)
     setIsAddingBook(false)
     void loadHabits()
     void refreshReading()
-    return () => {
-      if (intervalRef.current !== null) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-    }
-  }, [userId])
+  }, [resetPomodoro, userId])
 
   useEffect(() => {
     if (readingHabits.length === 0) {
@@ -273,48 +265,24 @@ export default function Reading({ userId }: ReadingProps) {
   }
 
   function handleHabitChange(id: number) {
-    stopTimer()
+    resetPomodoro(true)
     setSelectedHabitId(id)
     setSearchParams({ habit: String(id) }, { replace: true })
-    setPhase('focus')
-    setRemaining(25 * 60)
-    setCycles(0)
-  }
-
-  function startTimer() {
-    if ((!selectedHabitId && !activeBook) || intervalRef.current !== null) return
-    setIsRunning(true)
-    intervalRef.current = window.setInterval(() => {
-      setRemaining(previous => Math.max(0, previous - 1))
-    }, 1000)
-  }
-
-  function stopTimer() {
-    setIsRunning(false)
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
   }
 
   function toggleTimer() {
-    if (isRunning) stopTimer()
-    else startTimer()
-  }
-
-  function resetTimer() {
-    stopTimer()
-    setPhase('focus')
-    setRemaining(25 * 60)
+    if (isRunning) {
+      stopPomodoro()
+    } else if (selectedHabitId || activeBook) {
+      startPomodoro()
+    }
   }
 
   async function finishPhase() {
-    stopTimer()
+    stopPomodoro()
     notify.pomodoroComplete(phase)
 
     if (phase === 'focus') {
-      const completedCycles = cycles + 1
-      setCycles(completedCycles)
       if (selectedHabitId) {
         try {
           await apiRoutes.checkinHabit(selectedHabitId, toLocalDateValue())
@@ -339,12 +307,8 @@ export default function Reading({ userId }: ReadingProps) {
           setReadingError('O Pomodoro terminou, mas não foi possível salvar a sessão no diário.')
         }
       }
-      setPhase('break')
-      setRemaining(completedCycles % 4 === 0 ? 15 * 60 : 5 * 60)
-    } else {
-      setPhase('focus')
-      setRemaining(25 * 60)
     }
+    advancePhase()
   }
 
   useEffect(() => {
@@ -667,7 +631,7 @@ export default function Reading({ userId }: ReadingProps) {
           <div className="focus-timer-actions">
             <button
               className="focus-reset-button"
-              onClick={resetTimer}
+              onClick={() => resetPomodoro()}
               type="button"
               aria-label="Reiniciar"
             >

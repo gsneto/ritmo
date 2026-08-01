@@ -32,6 +32,7 @@ import type {
   ShoppingPriceHistory,
 } from '../services/api'
 import { toLocalDateValue } from '../utils/date'
+import { useShoppingCreateForm } from '../hooks/useShoppingCreateForm'
 import '../styles/finance-upgrade.css'
 
 
@@ -40,8 +41,6 @@ interface ShoppingProps {
 }
 
 type ShoppingView = 'active' | 'history'
-type ShoppingDateChoice = 'today' | 'tomorrow' | 'other'
-
 const KIND_LABELS: Record<ShoppingKind, string> = {
   monthly: 'Mensal',
   weekly: 'Semanal',
@@ -208,19 +207,31 @@ export default function Shopping({ userId }: ShoppingProps) {
     useState<MonthlyExpenseSummary | null>(null)
   const [selectedListId, setSelectedListId] = useState<number | null>(null)
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
-  const [showCreateForm, setShowCreateForm] = useState(false)
-  const [createFormRevealRequest, setCreateFormRevealRequest] = useState(0)
-  const [newListName, setNewListName] = useState('')
-  const [newListDate, setNewListDate] = useState(toLocalDateValue())
-  const [newListDateChoice, setNewListDateChoice] =
-    useState<ShoppingDateChoice>('today')
-  const [newListKind, setNewListKind] = useState<ShoppingKind>('monthly')
-  const [newListCategory, setNewListCategory] =
-    useState<ShoppingCategory>('groceries')
-  const [newListBudget, setNewListBudget] = useState('')
-  const [newListRepeat, setNewListRepeat] = useState(true)
-  const [newItemName, setNewItemName] = useState('')
-  const [newItemQuantity, setNewItemQuantity] = useState('1')
+  const {
+    showCreateForm,
+    setShowCreateForm,
+    createFormRevealRequest,
+    setCreateFormRevealRequest,
+    newListName,
+    setNewListName,
+    newListDate,
+    setNewListDate,
+    newListDateChoice,
+    setNewListDateChoice,
+    newListKind,
+    setNewListKind,
+    newListCategory,
+    setNewListCategory,
+    newListBudget,
+    setNewListBudget,
+    newListRepeat,
+    setNewListRepeat,
+    newItemName,
+    setNewItemName,
+    newItemQuantity,
+    setNewItemQuantity,
+    reset: resetCreateForm,
+  } = useShoppingCreateForm()
   const [priceItemId, setPriceItemId] = useState<number | null>(null)
   const [priceDraft, setPriceDraft] = useState('')
   const [priceQuantityDraft, setPriceQuantityDraft] = useState('1')
@@ -260,7 +271,7 @@ export default function Shopping({ userId }: ShoppingProps) {
     setCurrentMonthSummary(null)
     setSelectedListId(null)
     setSelectedMonth(currentMonth)
-    setShowCreateForm(false)
+    resetCreateForm()
     setPriceItemId(null)
     setPriceDraft('')
     setPriceQuantityDraft('1')
