@@ -34,6 +34,7 @@ from schemas.shopping import (
     ShoppingSharePartner,
     ShoppingShareStatus,
 )
+from services.shopping_scope import shopping_household_user_ids
 from time_utils import app_now, app_today
 
 router = APIRouter(prefix="/api", tags=["shopping"])
@@ -58,13 +59,6 @@ def _get_shopping_pair(user_id: int, db: Session) -> ShoppingPair | None:
         )
         .first()
     )
-
-
-def _shopping_user_ids(user_id: int, db: Session) -> tuple[int, ...]:
-    pair = _get_shopping_pair(user_id, db)
-    if pair is None or pair.partner_user_id is None:
-        return (user_id,)
-    return (pair.owner_user_id, pair.partner_user_id)
 
 
 def _serialize_share_status(
@@ -369,7 +363,7 @@ def list_shopping_lists(
     completed: bool | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    visible_user_ids = _shopping_user_ids(user_id, db)
+    visible_user_ids = shopping_household_user_ids(db, user_id)
     query = (
         db.query(ShoppingList)
         .options(selectinload(ShoppingList.items))
@@ -631,7 +625,7 @@ def get_monthly_shopping_history(
     user_exists = db.query(User.id).filter(User.id == user_id).first()
     if user_exists is None:
         raise HTTPException(status_code=404, detail="User not found")
-    visible_user_ids = _shopping_user_ids(user_id, db)
+    visible_user_ids = shopping_household_user_ids(db, user_id)
 
     completed_lists = (
         db.query(ShoppingList)
@@ -783,7 +777,7 @@ def get_shopping_price_history(
     user_exists = db.query(User.id).filter(User.id == user_id).first()
     if user_exists is None:
         raise HTTPException(status_code=404, detail="User not found")
-    visible_user_ids = _shopping_user_ids(user_id, db)
+    visible_user_ids = shopping_household_user_ids(db, user_id)
 
     rows = (
         db.query(ShoppingItem, ShoppingList)

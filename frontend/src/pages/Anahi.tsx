@@ -223,7 +223,7 @@ export default function Anahi({ userId }: AnahiProps) {
           </div>
           <div className="anahi-composer-note">
             <span>
-              <ShieldCheck aria-hidden="true" /> O Ritmo não grava este chat. Ao enviar, sua pergunta e apenas os dados relacionados do perfil ativo são processados pela IA.
+              <ShieldCheck aria-hidden="true" /> O Ritmo não salva este chat. Cada pergunta é processada pelo Google Gemini e, conforme o que você perguntar, pode enviar dados do perfil ativo sobre hábitos, tarefas, compras, treinos e leitura.
             </span>
             <span>{question.length}/{MAX_QUESTION_LENGTH}</span>
           </div>

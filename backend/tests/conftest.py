@@ -1,16 +1,23 @@
+from __future__ import annotations
+
+import os
 from dataclasses import dataclass
 from functools import partial
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from config import Settings
-from database import Base, create_database_engine, get_db, init_db
-from main import create_app
+if TYPE_CHECKING:
+    from config import Settings
 
 ACCESS_KEY = "test-ritmo-key"
+
+
+def pytest_configure() -> None:
+    os.environ.setdefault("APP_ACCESS_TOKEN", ACCESS_KEY)
 
 
 @dataclass
@@ -22,6 +29,8 @@ class TestContext:
 
 @pytest.fixture()
 def settings(tmp_path) -> Settings:
+    from config import Settings
+
     return Settings(
         _env_file=None,
         DEBUG=True,
@@ -34,6 +43,9 @@ def settings(tmp_path) -> Settings:
 
 @pytest.fixture()
 def context(settings) -> TestContext:
+    from database import Base, create_database_engine, get_db, init_db
+    from main import create_app
+
     test_engine = create_database_engine(settings.database_url)
     testing_session = sessionmaker(
         autocommit=False,

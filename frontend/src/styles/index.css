@@ -1414,6 +1414,11 @@ label { display: grid; gap: 7px; color: var(--text); font-size: 0.88rem; font-we
 .history { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .history-card { padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); }
 .history-card strong { display: block; margin-top: 8px; font-size: 1.5rem; }
+.progress-glossary { margin: 0; }
+.progress-glossary dt { font-weight: 800; }
+.progress-glossary dd { margin: 7px 0 0; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+.progress-state { min-height: 220px; place-content: center; justify-items: center; text-align: center; }
+.progress-state p { color: var(--muted); line-height: 1.5; }
 .insights-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .insight-card { padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
 .insight-card h3 { margin: 0 0 8px; font-size: 1rem; }

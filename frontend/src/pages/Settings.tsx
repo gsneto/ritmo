@@ -67,6 +67,7 @@ export default function Settings({
   const [briefingLoading, setBriefingLoading] = useState(true)
   const [briefingMessage, setBriefingMessage] = useState('')
   const backupInputRef = useRef<HTMLInputElement>(null)
+  const formattedLastCycle = push.lastCycleAt?.toLocaleString('pt-BR') ?? null
 
   useEffect(() => {
     let active = true
@@ -92,17 +93,24 @@ export default function Settings({
   }, [user.id])
 
   async function handleReset() {
-    if (!confirm(`Limpar TODOS os dados de ${user.name}?\n\nIsso remove:\n- Todos os hábitos\n- Todas as tarefas\n- O plano e o histórico de treinos\n- O livro e suas anotações\n- Todas as listas de compras\n- Todo o histórico de gastos\n\nEsta ação não pode ser desfeita.`)) return
+    if (!confirm(
+      `Reiniciar o conteúdo de ${user.name}?\n\n`
+      + 'Isso remove hábitos e check-ins, tarefas, listas e gastos próprios, '
+      + 'livros e anotações, além do plano, histórico e preferências de treino.\n\n'
+      + 'Nome, iniciais e tema, pareamento de compras, vínculo push e configuração '
+      + 'do briefing serão preservados. Os treinos padrão serão recriados.\n\n'
+      + 'Esta ação não pode ser desfeita.',
+    )) return
 
     setIsResetting(true)
     try {
       await apiRoutes.resetUserData(user.id)
       setIsResetting(false)
-      alert('Dados limpos com sucesso!')
+      alert('Conteúdo do perfil reiniciado com sucesso!')
       if (onDataReset) onDataReset()
     } catch (error) {
       console.error('Failed to reset data:', error)
-      alert('Erro ao limpar dados. Tente novamente.')
+      alert('Erro ao reiniciar o conteúdo do perfil. Tente novamente.')
       setIsResetting(false)
     }
   }
@@ -257,7 +265,7 @@ export default function Settings({
         typeof parsed !== 'object'
         || parsed === null
         || !('version' in parsed)
-        || parsed.version !== 1
+        || (parsed.version !== 1 && parsed.version !== 2)
         || !('app' in parsed)
         || parsed.app !== 'Ritmo'
       ) {
@@ -293,6 +301,10 @@ export default function Settings({
         <div className="panel-head">
           <div><p className="section-label">Perfis</p><h2>Quem está usando?</h2></div>
         </div>
+        <p className="settings-copy">
+          O código da casa permite acessar os dois perfis. Eles separam rotina,
+          preferências e progresso para manter a organização do casal.
+        </p>
         <div className="profile-cards">
           {users.map((u) => (
             <article
@@ -406,12 +418,50 @@ export default function Settings({
                 <span>Este navegador não oferece notificações para o Ritmo. Tente Safari no iPhone ou Chrome no Android.</span>
               </div>
             </>
-          ) : push.isSubscribed ? (
+          ) : push.isSubscribed && push.deliveryStatus === 'ready' ? (
             <>
               <Bell size={20} style={{ color: 'var(--green)' }} />
               <div>
                 <strong>Lembretes em segundo plano ativados</strong>
-                <span>Hábitos, tarefas e compras podem avisar mesmo com o Ritmo fechado.</span>
+                <span>
+                  Hábitos, tarefas e compras podem avisar mesmo com o Ritmo fechado.
+                  {formattedLastCycle && ` Última execução: ${formattedLastCycle}.`}
+                </span>
+              </div>
+              <div className="settings-notification-actions">
+                <button
+                  className="ghost-button"
+                  type="button"
+                  disabled={push.isLoading}
+                  onClick={() => void handleNotificationTest()}
+                >
+                  Testar agora
+                </button>
+                <button
+                  className="ghost-button"
+                  type="button"
+                  disabled={push.isLoading}
+                  onClick={() => void push.unsubscribe()}
+                >
+                  Desativar
+                </button>
+              </div>
+            </>
+          ) : push.isSubscribed ? (
+            <>
+              <BellOff size={20} style={{ color: 'var(--red)' }} />
+              <div>
+                <strong>Segundo plano não está processando</strong>
+                <span>
+                  A inscrição existe, mas o processador está
+                  {' '}{push.deliveryStatus === 'starting'
+                    ? 'iniciando'
+                    : push.deliveryStatus === 'external'
+                      ? 'em modo externo sem confirmação pela API'
+                      : 'indisponível'}.
+                  {' '}Avisos locais dependem de o Ritmo estar aberto.
+                  {formattedLastCycle && ` Última execução: ${formattedLastCycle}.`}
+                </span>
               </div>
               <div className="settings-notification-actions">
                 <button
@@ -541,12 +591,15 @@ export default function Settings({
 
       <section className="panel settings-panel">
         <div className="panel-head">
-          <div><p className="section-label">Segurança</p><h2>Código pessoal</h2></div>
+          <div><p className="section-label">Segurança</p><h2>Código da casa</h2></div>
         </div>
-        <p className="settings-copy">Troque o código usado para acessar seus dados neste navegador.</p>
+        <p className="settings-copy">
+          Esta ação remove o código somente deste aparelho. Ela não altera a
+          chave configurada no servidor nem desconecta outros aparelhos.
+        </p>
         <button className="ghost-button settings-action" type="button" onClick={onChangeAccessCode}>
           <KeyRound size={17} aria-hidden="true" />
-          <span>Trocar código de acesso</span>
+          <span>Esquecer código neste aparelho</span>
         </button>
       </section>
 
@@ -617,8 +670,13 @@ export default function Settings({
 
       <section className="panel data-panel">
         <div className="panel-head">
-          <div><p className="section-label">Dados</p><h2>Dados de {user.name}</h2></div>
+          <div><p className="section-label">Dados</p><h2>Conteúdo de {user.name}</h2></div>
         </div>
+        <p className="settings-copy">
+          Remove hábitos e check-ins, tarefas, listas e gastos próprios, leitura e
+          dados de treino. Preserva nome, iniciais e tema, pareamento de compras,
+          vínculo push e configuração do briefing. Ao final, recria os treinos padrão.
+        </p>
         <button
           className="danger-action"
           onClick={handleReset}
@@ -626,7 +684,7 @@ export default function Settings({
           type="button"
         >
           <Trash2 size={17} aria-hidden="true" />
-          <span>{isResetting ? 'Limpando...' : 'Limpar dados deste perfil'}</span>
+          <span>{isResetting ? 'Reiniciando...' : 'Reiniciar conteúdo do perfil'}</span>
         </button>
       </section>
     </div>

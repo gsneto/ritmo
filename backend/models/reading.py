@@ -5,9 +5,11 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -33,6 +35,13 @@ class ReadingBook(Base):
             "status IN ('quero_ler', 'lendo', 'concluido')",
             name="ck_reading_books_status",
         ),
+        Index(
+            "uq_reading_books_active_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("is_active"),
+            sqlite_where=text("is_active = 1"),
+        ).ddl_if(dialect=("postgresql", "sqlite")),
     )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)

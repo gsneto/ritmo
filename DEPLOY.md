@@ -5,14 +5,20 @@ Netlify, MySQL e URLs presumidas não se aplicam a esta migração.
 
 ## Produção atual
 
-Em 29 de julho de 2026, o fluxo abaixo foi concluído com:
+Em 1º de agosto de 2026, a última produção confirmada usava:
 
 - frontend: `https://habitos-base.vercel.app`;
 - backend: `https://supportive-warmth-production-dd70.up.railway.app`;
 - banco: PostgreSQL gerenciado no Railway;
-- frontend Vercel: deployment `dpl_Au6mrpnStvhKN5aAdTzxd3FHVuzE`, estado
+- frontend Vercel: deployment `dpl_CrRMC1Wo3B8TrFiUYV9aVAsanCRw`, estado
   `Ready`;
-- aplicação: commit `cf209eb`.
+- backend Railway: deployment `3e4557c0-9ac2-4e7c-93a1-5acf02c458d6`, estado
+  `SUCCESS`;
+- aplicação: commit `3d9d7b3`.
+
+As mudanças de estabilização descritas em `STATUS.md` ainda precisam passar por
+staging antes de substituir essa versão. Não confunda validação local com código
+publicado.
 
 Os segredos permanecem somente nos provedores. O teste em viewport mobile foi
 aprovado; instalação e notificação em um iPhone físico ainda precisam ser
@@ -34,6 +40,73 @@ Os workflows não publicam em `push`. A publicação acontece apenas por
 > destes workflows. Antes de enviar esta branch para `main`, confirme no painel
 > que a produção não será atualizada automaticamente.
 
+## Proteção e recuperação dos dados
+
+O workflow `Daily PostgreSQL backup` executa todos os dias, cria um dump do
+PostgreSQL de produção, restaura esse dump em um PostgreSQL efêmero e só então
+publica o arquivo criptografado como artefato privado por 30 dias.
+
+Crie o ambiente GitHub `database-backups`, sem aprovação manual para execuções
+agendadas, e adicione estes secrets:
+
+| Secret | Conteúdo |
+| --- | --- |
+| `DATABASE_BACKUP_URL` | URL pública de conexão ao PostgreSQL de produção, exclusiva para backup quando o provedor permitir |
+| `BACKUP_AGE_RECIPIENT` | Chave pública `age` usada para criptografar o dump antes do upload |
+
+A chave privada `age` correspondente deve ficar fora do GitHub, em local
+seguro e acessível aos responsáveis pela recuperação. Sem ela, o artefato não
+pode ser restaurado. Depois de cadastrar os secrets, execute manualmente
+**Actions > Daily PostgreSQL backup > Run workflow** e confirme que as etapas
+de dump, restauração isolada, criptografia e upload foram aprovadas.
+
+Para exportar também os documentos JSON portáteis dos dois perfis:
+
+```powershell
+$env:RITMO_API_URL = "https://<host-real-da-api>/api"
+$env:RITMO_ACCESS_TOKEN = "<chave-configurada-no-backend>"
+python backend/scripts/export_profile_backups.py
+Remove-Item Env:RITMO_ACCESS_TOKEN
+```
+
+Os arquivos são gravados em `.ritmo-backups/`, que é ignorado pelo Git. Eles
+contêm dados pessoais e devem ser movidos para armazenamento criptografado.
+
+Para validar esses JSONs em uma API local ou staging isolado, use o diretório
+que contém `manifest.json`; destinos remotos exigem também `--allow-remote`:
+
+```powershell
+$env:RITMO_API_URL = "http://127.0.0.1:8001/api"
+$env:RITMO_ACCESS_TOKEN = "<chave-do-ambiente-isolado>"
+python backend/scripts/restore_profile_backups.py ".ritmo-backups\<data>" --confirm-profile-replacement
+Remove-Item Env:RITMO_ACCESS_TOKEN
+```
+
+Para uma recuperação manual, baixe o artefato mais recente, valide o arquivo
+`.sha256`, descriptografe o `.age` com a chave privada e restaure o dump em um
+banco PostgreSQL vazio. Nunca teste restauração apontando para produção:
+
+```powershell
+age --decrypt --identity "<arquivo-da-chave-privada>" --output ritmo.dump ritmo.dump.age
+createdb --host "<host-de-staging>" --username "<usuario>" ritmo_restore_test
+pg_restore --host "<host-de-staging>" --username "<usuario>" --dbname ritmo_restore_test --exit-on-error --no-owner --no-acl ritmo.dump
+```
+
+O workflow `Production health monitor` consulta o diagnóstico `/health` a cada
+15 minutos, abre uma issue quando API, banco ou notificações não estão saudáveis
+e a fecha após a recuperação. O Railway e o smoke de publicação usam `/ready`,
+que retorna HTTP 503 enquanto o banco estiver indisponível ou o scheduler
+embutido ainda não estiver pronto.
+Defina a variável de repositório `HEALTHCHECK_URL` apenas se a URL canônica
+mudar. O workflow `Monthly restore reminder` abre no primeiro dia de cada mês
+uma issue com o checklist de recuperação.
+
+O Sentry já está integrado no código. Para ativá-lo, crie projetos separados e
+configure `SENTRY_DSN` e `SENTRY_ENVIRONMENT=production` no Railway, além de
+`VITE_SENTRY_DSN` nos ambientes Preview e Production da Vercel. Depois force um
+erro controlado em cada ambiente e confirme o recebimento antes de considerar
+o monitoramento concluído.
+
 ## 1. Validação local
 
 ### Backend
@@ -48,15 +121,21 @@ Copy-Item .env.example .env
 .\.venv\Scripts\python.exe -m compileall -q .
 .\.venv\Scripts\alembic.exe upgrade head
 .\.venv\Scripts\python.exe -m ruff check .
-.\.venv\Scripts\python.exe -m mypy config.py main.py rate_limit.py security.py time_utils.py services/anahi.py schemas
+.\.venv\Scripts\python.exe -m mypy config.py main.py push_worker.py rate_limit.py security.py time_utils.py services/anahi.py schemas
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m uvicorn main:app --reload
 ```
+
+Esse `alembic upgrade head` pressupõe banco novo ou já versionado. Se um SQLite
+local antigo tiver tabelas e não tiver revisão Alembic, não use `stamp head`
+sem validar o schema. Exporte os JSONs dos perfis e teste a restauração em um
+banco novo antes de substituir ou arquivar o arquivo legado.
 
 Em outro terminal, faça pelo menos estes smoke tests:
 
 ```powershell
 Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod http://localhost:8000/ready
 Invoke-RestMethod http://localhost:8000/api/users
 ```
 
@@ -102,7 +181,8 @@ O workflow oferece publicação manual no Railway porque o repositório já cont
 um Dockerfile do backend. Isso não significa que um projeto, serviço, domínio,
 banco ou credencial já exista.
 
-Crie o ambiente protegido `backend-production` no GitHub e configure:
+Crie os ambientes protegidos `backend-staging` e `backend-production` no
+GitHub. Configure em cada um os valores do ambiente Railway correspondente:
 
 | Tipo | Nome | Conteúdo |
 | --- | --- | --- |
@@ -144,15 +224,43 @@ schema em produção:
    de secret e variable de `backend-production`, mas todos apontando para os
    recursos de staging;
 6. publique primeiro no serviço de staging, aplique as migrações versionadas e
-   execute `/health`, `/api`, um CRUD descartável e um reinício com conferência
-   de persistência;
+   execute `/health`, `/ready`, `/api`, um CRUD descartável e um reinício com
+   conferência de persistência;
 7. aponte um preview da Vercel para a URL `/api` de staging e valide os fluxos
    principais antes de repetir a migração em produção.
 
-O workflow atual continua promovendo somente o ambiente
-`backend-production`. Habilitar a seleção de `backend-staging` no workflow deve
-ser feito apenas depois que o ambiente, o banco isolado e as proteções do
-GitHub existirem de fato.
+O workflow permite selecionar `backend-staging` ou `backend-production`.
+Produção exige a confirmação literal `PRODUCTION`. Não selecione staging antes
+que o ambiente, o banco isolado e as proteções do GitHub existam de fato.
+
+### Processador durável de lembretes
+
+O modo padrão usa uma única réplica da API com `PUSH_SCHEDULER_IN_API=true`. Se
+as duas chaves VAPID estiverem configuradas, o lifespan inicia imediatamente o
+scheduler em uma thread. A outbox `push_deliveries`, seus estados `pending`,
+`sent` e `failed` e os retries persistidos continuam sendo a fonte de verdade.
+Sem VAPID, a API inicia normalmente e informa notificações desativadas em
+`/health` e `/ready`.
+
+O workflow padrão publica somente a API e não exige `RAILWAY_WORKER_SERVICE`.
+Depois da publicação, ele aguarda `/ready` responder HTTP 200 com estado
+`healthy`. Um scheduler embutido sem primeiro ciclo recente deixa `/health`
+`degraded` e faz `/ready` responder HTTP 503; falha de banco também retorna 503.
+
+O worker desativa apenas a inscrição que receber rejeição permanente HTTP 400,
+401, 403, 404, 410 ou 413. Entregas usam um header `Topic` determinístico e o
+shutdown aguarda até 30 segundos pela chamada Web Push atual, sem iniciar a
+próxima. No frontend, limpar o `localStorage` não invalida uma inscrição: a chave
+VAPID real do navegador é comparada primeiro e o storage é reconstruído quando
+ela coincide.
+
+`backend/railway.worker.toml` existe apenas para o modo avançado com serviço
+externo. Para adotá-lo, configure `PUSH_SCHEDULER_IN_API=false` na API, crie
+manualmente um segundo serviço com esse TOML, compartilhe `DATABASE_URL`,
+`TIMEZONE` e VAPID e não exponha domínio HTTP para o worker. Nesse modo a API
+informa `delivery_status=external`, pois não possui heartbeat do outro processo;
+opere e publique esse serviço fora do workflow padrão. Valide antes com
+`python -m push_worker --once` e consulte a outbox.
 
 Antes de publicar:
 
@@ -167,12 +275,20 @@ Antes de publicar:
 - mantenha `TIMEZONE=America/Sao_Paulo`, salvo decisão explícita em contrário;
 - gere um par VAPID exclusivo e configure `VAPID_PUBLIC_KEY`,
   `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` para lembretes com a PWA fechada;
+- mantenha `PUSH_SCHEDULER_IN_API=true` quando houver uma única réplica da API;
 - não salve segredos em `.env` versionado;
 - mantenha uma forma de restaurar ou exportar os dados.
 
 Para publicar, abra **Actions > Backend CI and manual release > Run workflow**.
-Primeiro execute com `publish = false`. Use `publish = true` apenas depois de
-aprovar o job de testes e revisar o ambiente `backend-production`.
+Primeiro execute com `publish = false`. Depois publique em `backend-staging`.
+Use `backend-production` somente após validar staging e informar `PRODUCTION`
+no campo de confirmação.
+
+Antes de uma publicação em `backend-production`, o workflow exporta os dois
+perfis da API ainda ativa, valida os documentos e cria o artefato privado
+`predeploy-profile-backup-<run-id>` com retenção de 30 dias. O conteúdo é
+criptografado com AES-256/PBKDF2 usando `APP_ACCESS_TOKEN` como senha. Se a
+exportação, validação, criptografia ou upload falhar, a publicação é abortada.
 
 Após a publicação, copie a URL real fornecida pelo provedor e valide:
 
@@ -180,14 +296,15 @@ Após a publicação, copie a URL real fornecida pelo provedor e valide:
 $env:RITMO_API_URL = "https://<host-real-da-api>"
 $env:RITMO_ACCESS_TOKEN = "<chave-configurada-no-backend>"
 Invoke-RestMethod "$env:RITMO_API_URL/health"
+Invoke-RestMethod "$env:RITMO_API_URL/ready"
 Invoke-RestMethod `
   -Uri "$env:RITMO_API_URL/api/users" `
   -Headers @{ "X-Ritmo-Key" = $env:RITMO_ACCESS_TOKEN }
 ```
 
-O workflow repete automaticamente as duas primeiras verificações após o
-`railway up` e falha se `/health` não informar estado saudável ou se `/api`
-não aceitar a chave. Use o roteiro manual acima também para conferir a
+O workflow aguarda `/ready` e repete automaticamente a verificação autenticada
+após o `railway up`; ele falha se o backend não ficar saudável ou se `/api` não
+aceitar a chave. Use o roteiro manual acima também para conferir a
 persistência antes da promoção. Não continue se qualquer verificação falhar.
 
 ## 4. Preview do frontend

@@ -195,7 +195,7 @@ export interface CrossDomainInsights {
 }
 
 export interface RitmoBackup {
-  version: 1
+  version: 1 | 2
   app: 'Ritmo'
   exported_at: string
   profile: {
@@ -221,6 +221,9 @@ export interface BackupRestoreResponse {
 export interface PushConfig {
   enabled: boolean
   public_key: string | null
+  delivery_status: 'ready' | 'starting' | 'unavailable' | 'external' | 'disabled'
+  delivery_mode: 'embedded' | 'external' | 'disabled'
+  last_cycle_at: string | null
 }
 
 export interface BriefingSettings {
@@ -340,8 +343,8 @@ export const apiRoutes = {
       `/users/${id}/push-subscription`,
       { data: { endpoint } },
     ),
-  sendPushTest: (id: number) =>
-    api.post<PushTestResult>(`/users/${id}/push-test`),
+  sendPushTest: (id: number, endpoint: string) =>
+    api.post<PushTestResult>(`/users/${id}/push-test`, { endpoint }),
 
   // Habits
   getHabits: (userId: number) => api.get<Habit[]>(`/users/${userId}/habits`),

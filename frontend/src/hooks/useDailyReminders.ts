@@ -8,6 +8,10 @@ import {
 } from '../services/api'
 import { toLocalDateValue } from '../utils/date'
 import { notify } from './useNotifications'
+import {
+  subscriptionVapidKeyMatch,
+  VAPID_PUBLIC_KEY_STORAGE_KEY,
+} from './usePushNotifications'
 
 const MAX_DELAY_MS = 36 * 60 * 60 * 1000
 const MAX_PAST_DUE_MS = 10 * 60 * 1000
@@ -41,9 +45,19 @@ function schedule(
 
   const delay = Math.max(2_000, due - now)
   timers.push(window.setTimeout(() => {
-    if (Notification.permission !== 'granted') return
-    notify.reminder(title, body, url, key)
-    markReminded(key)
+    void (async () => {
+      const callbackNow = new Date()
+      const callbackDelay = callbackNow.getTime() - due
+      if (callbackDelay > MAX_PAST_DUE_MS) return
+      if (toLocalDateValue(when) < toLocalDateValue(callbackNow)) return
+      if (wasReminded(key) || Notification.permission !== 'granted') return
+      try {
+        const shown = await notify.reminder(title, body, url, key)
+        if (shown) markReminded(key)
+      } catch {
+        // A later refresh may schedule another attempt if displaying failed.
+      }
+    })()
   }, delay))
 }
 
@@ -98,16 +112,33 @@ async function hasActiveBackgroundPush(userId: number): Promise<boolean> {
 
   try {
     const config = await apiRoutes.getPushConfig(userId)
-    if (!config.data.enabled) return false
+    if (
+      !config.data.enabled
+      || !config.data.public_key
+      || config.data.delivery_status !== 'ready'
+    ) return false
     const registration = await navigator.serviceWorker.getRegistration()
     if (!registration) return false
     const subscription = await registration.pushManager.getSubscription()
     if (!subscription) return false
+    const keyMatch = subscriptionVapidKeyMatch(
+      subscription,
+      config.data.public_key,
+      window.localStorage.getItem(VAPID_PUBLIC_KEY_STORAGE_KEY),
+    )
+    if (keyMatch === 'mismatch') return false
     const status = await apiRoutes.getPushSubscriptionStatus(
       userId,
       subscription.endpoint,
     )
-    return status.data.active
+    const active = status.data.active && !status.data.linked_to_other_profile
+    if (active && keyMatch === 'unknown') {
+      window.localStorage.setItem(
+        VAPID_PUBLIC_KEY_STORAGE_KEY,
+        config.data.public_key,
+      )
+    }
+    return active
   } catch {
     return false
   }

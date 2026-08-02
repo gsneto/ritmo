@@ -1,3 +1,12 @@
+import hashlib
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+from models.push import PushDelivery, PushSubscription
+from models.shopping import ShoppingList
+from models.user import User
+
+
 def test_backup_round_trip_preserves_all_main_modules(
     client,
     auth_headers,
@@ -125,7 +134,7 @@ def test_backup_round_trip_preserves_all_main_modules(
     )
     assert exported_response.status_code == 200
     exported = exported_response.json()
-    assert exported["version"] == 1
+    assert exported["version"] == 2
     assert exported["app"] == "Ritmo"
     assert exported["habits"][0]["active_days"] == [0, 2, 4]
     assert exported["shopping_lists"][0]["items"][0]["price_cents"] == 2580
@@ -200,7 +209,7 @@ def test_invalid_or_unauthorized_backup_does_not_replace_data(
         f"/api/users/{user_id}/backup",
         headers=auth_headers,
     ).json()
-    exported["version"] = 2
+    exported["version"] = 3
     invalid = client.put(
         f"/api/users/{user_id}/backup",
         headers=auth_headers,
@@ -213,3 +222,198 @@ def test_invalid_or_unauthorized_backup_does_not_replace_data(
         headers=auth_headers,
     ).json()
     assert [item["name"] for item in habits] == ["Persistir"]
+
+
+def test_backup_exports_shared_lists_without_restoring_their_ownership(
+    context,
+    auth_headers,
+):
+    client = context.client
+    users = client.get("/api/users", headers=auth_headers).json()
+    owner_id = users[0]["id"]
+    partner_id = users[1]["id"]
+    owner_list = client.post(
+        f"/api/users/{owner_id}/shopping-lists",
+        headers=auth_headers,
+        json={
+            "name": "Lista do perfil exportado",
+            "kind": "weekly",
+            "planned_date": "2026-08-03",
+        },
+    ).json()
+    partner_list = client.post(
+        f"/api/users/{partner_id}/shopping-lists",
+        headers=auth_headers,
+        json={
+            "name": "Lista compartilhada do par",
+            "kind": "one_time",
+            "planned_date": "2026-08-04",
+        },
+    ).json()
+    invite = client.post(
+        f"/api/users/{owner_id}/shopping-share/invite",
+        headers=auth_headers,
+    ).json()
+    assert client.post(
+        f"/api/users/{partner_id}/shopping-share/redeem",
+        headers=auth_headers,
+        json={"code": invite["invite_code"]},
+    ).status_code == 200
+
+    exported = client.get(
+        f"/api/users/{owner_id}/backup",
+        headers=auth_headers,
+    ).json()
+    exported_lists = {
+        item["source_id"]: item["ownership"]
+        for item in exported["shopping_lists"]
+    }
+    assert exported["version"] == 2
+    assert exported_lists == {
+        owner_list["id"]: "profile",
+        partner_list["id"]: "shared",
+    }
+    partner_exported = client.get(
+        f"/api/users/{partner_id}/backup",
+        headers=auth_headers,
+    ).json()
+    assert {
+        item["source_id"]: item["ownership"]
+        for item in partner_exported["shopping_lists"]
+    } == {
+        owner_list["id"]: "shared",
+        partner_list["id"]: "profile",
+    }
+
+    db = context.session_factory()
+    try:
+        archive_profile = User(
+            profile_id="backup-archive",
+            name="Arquivo",
+            initials="AR",
+            theme="light",
+        )
+        db.add(archive_profile)
+        db.commit()
+        db.refresh(archive_profile)
+        archive_profile_id = archive_profile.id
+    finally:
+        db.close()
+
+    restored = client.put(
+        f"/api/users/{archive_profile_id}/backup",
+        headers=auth_headers,
+        json=exported,
+    )
+    assert restored.status_code == 200
+    assert restored.json()["restored"]["shopping_lists"] == 1
+
+    db = context.session_factory()
+    try:
+        restored_lists = (
+            db.query(ShoppingList)
+            .filter(ShoppingList.user_id == archive_profile_id)
+            .all()
+        )
+        assert [item.name for item in restored_lists] == [
+            "Lista do perfil exportado",
+        ]
+        assert db.query(ShoppingList).filter(
+            ShoppingList.id == partner_list["id"],
+            ShoppingList.user_id == partner_id,
+        ).count() == 1
+    finally:
+        db.close()
+
+
+def test_restore_and_reset_cancel_profile_pending_pushes(
+    context,
+    auth_headers,
+    user_id,
+):
+    now = datetime(2026, 8, 1, 15, 0, tzinfo=ZoneInfo("America/Sao_Paulo"))
+    exported = context.client.get(
+        f"/api/users/{user_id}/backup",
+        headers=auth_headers,
+    ).json()
+    db = context.session_factory()
+    try:
+        subscription = PushSubscription(
+            user_id=user_id,
+            endpoint="https://fcm.googleapis.com/fcm/send/content-change",
+            endpoint_hash=hashlib.sha256(b"content-change").hexdigest(),
+            p256dh="abcdefgh",
+            auth="abcdefgh",
+            enabled=True,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(subscription)
+        db.flush()
+        subscription_id = subscription.id
+        db.add(
+            PushDelivery(
+                user_id=user_id,
+                subscription_id=subscription_id,
+                reminder_key="before-restore",
+                status="pending",
+                payload="{}",
+                attempts=0,
+                next_retry_at=now,
+                scheduled_for=now,
+                expires_at=now + timedelta(hours=1),
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    restored = context.client.put(
+        f"/api/users/{user_id}/backup",
+        headers=auth_headers,
+        json=exported,
+    )
+    assert restored.status_code == 200
+
+    db = context.session_factory()
+    try:
+        restored_delivery = db.query(PushDelivery).filter_by(
+            reminder_key="before-restore",
+        ).one()
+        assert restored_delivery.status == "failed"
+        assert restored_delivery.last_error == "Profile backup restored"
+        db.add(
+            PushDelivery(
+                user_id=user_id,
+                subscription_id=subscription_id,
+                reminder_key="before-reset",
+                status="pending",
+                payload="{}",
+                attempts=0,
+                next_retry_at=now,
+                scheduled_for=now,
+                expires_at=now + timedelta(hours=1),
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    reset = context.client.delete(
+        f"/api/users/{user_id}/data",
+        headers=auth_headers,
+    )
+    assert reset.status_code == 200
+    db = context.session_factory()
+    try:
+        reset_delivery = db.query(PushDelivery).filter_by(
+            reminder_key="before-reset",
+        ).one()
+        assert reset_delivery.status == "failed"
+        assert reset_delivery.last_error == "Profile content reset"
+    finally:
+        db.close()

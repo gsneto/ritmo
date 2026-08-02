@@ -7,7 +7,7 @@ describe('AccessCodeGate', () => {
     const onSubmit = vi.fn(async () => undefined)
     render(<AccessCodeGate onSubmit={onSubmit} />)
 
-    fireEvent.change(screen.getByLabelText('Código pessoal'), {
+    fireEvent.change(screen.getByLabelText('Código da casa'), {
       target: { value: '  meu-segredo  ' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))

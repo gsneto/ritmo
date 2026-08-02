@@ -7,6 +7,14 @@ import { workoutSessionApi } from '../services/workoutSessionApi'
 import { toLocalDateValue } from '../utils/date'
 import Today from './Today'
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>(complete => {
+    resolve = complete
+  })
+  return { promise, resolve }
+}
+
 vi.mock('../services/api', () => ({
   apiRoutes: {
     getTodayStats: vi.fn(),
@@ -166,6 +174,40 @@ describe('Today intelligent assistant', () => {
     expect(await screen.findAllByText('Beber água')).not.toHaveLength(0)
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Marcar agora/ })).toBeTruthy()
+    })
+  })
+
+  it('ignores a slow response after the profile boundary is remounted', async () => {
+    const slowProfile = deferred<Awaited<ReturnType<typeof apiRoutes.getTodayStats>>>()
+    vi.mocked(apiRoutes.getTodayStats)
+      .mockReturnValueOnce(slowProfile.promise)
+      .mockResolvedValueOnce({
+        data: {
+          today_progress: '0%',
+          checked_count: '0 de 1 feitos',
+          habits_today: [
+            { id: 22, name: 'Hábito do perfil atual', time: '00:00', done: false },
+          ],
+        },
+      } as never)
+
+    const { rerender } = render(<Today key="profile-1" userId={1} />)
+    rerender(<Today key="profile-2" userId={2} />)
+
+    expect(await screen.findAllByText('Hábito do perfil atual')).not.toHaveLength(0)
+
+    slowProfile.resolve({
+      data: {
+        today_progress: '0%',
+        checked_count: '0 de 1 feitos',
+        habits_today: [
+          { id: 11, name: 'Hábito atrasado do perfil anterior', time: '00:00', done: false },
+        ],
+      },
+    } as never)
+
+    await waitFor(() => {
+      expect(screen.queryByText('Hábito atrasado do perfil anterior')).toBeNull()
     })
   })
 

@@ -136,7 +136,7 @@ describe('ANAHÍ assistant', () => {
     )
   })
 
-  it('offers questions about profile data and explains what is sent', () => {
+  it('identifies Gemini and explains which profile data may be sent', () => {
     render(<Anahi userId={1} />)
 
     expect(screen.getByRole('button', {
@@ -145,8 +145,11 @@ describe('ANAHÍ assistant', () => {
     expect(screen.getByRole('button', {
       name: 'Quanto gastei nas compras do m\u00eas passado?',
     })).toBeTruthy()
-    expect(screen.getByText(
-      /sua pergunta e apenas os dados relacionados do perfil ativo s\u00e3o processados pela IA/,
-    )).toBeTruthy()
+    const privacyNote = screen.getByText(/Google Gemini/)
+    expect(privacyNote.textContent).toContain('O Ritmo não salva este chat.')
+    expect(privacyNote.textContent).toContain('conforme o que você perguntar')
+    expect(privacyNote.textContent).toContain(
+      'hábitos, tarefas, compras, treinos e leitura',
+    )
   })
 })

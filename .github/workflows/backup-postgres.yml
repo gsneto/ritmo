@@ -1,0 +1,123 @@
+name: Daily PostgreSQL backup
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup-and-restore-check:
+    name: Backup and isolated restore check
+    runs-on: ubuntu-latest
+    environment:
+      name: database-backups
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: restore-check
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_BACKUP_URL: ${{ secrets.DATABASE_BACKUP_URL }}
+      BACKUP_AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+      PGPASSWORD: restore-check
+    steps:
+      - name: Check backup configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${DATABASE_BACKUP_URL:-}" ]]; then
+            echo "::error::DATABASE_BACKUP_URL is missing from the database-backups environment."
+            exit 1
+          fi
+          if [[ "$DATABASE_BACKUP_URL" != postgres://* && "$DATABASE_BACKUP_URL" != postgresql://* ]]; then
+            echo "::error::DATABASE_BACKUP_URL must be a PostgreSQL connection URL."
+            exit 1
+          fi
+          if [[ -z "${BACKUP_AGE_RECIPIENT:-}" ]]; then
+            echo "::error::BACKUP_AGE_RECIPIENT is missing from the database-backups environment."
+            exit 1
+          fi
+
+      - name: Install backup tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes age postgresql-client
+
+      - name: Create production backup
+        id: backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          stamp="$(date -u +'%Y-%m-%dT%H-%M-%SZ')"
+          mkdir -p backup
+          backup_file="backup/ritmo-postgres-${stamp}.dump"
+          pg_dump \
+            --dbname="$DATABASE_BACKUP_URL" \
+            --format=custom \
+            --compress=9 \
+            --no-owner \
+            --no-acl \
+            --file="$backup_file"
+          pg_restore --list "$backup_file" >/dev/null
+          echo "file=$backup_file" >> "$GITHUB_OUTPUT"
+
+      - name: Restore into isolated PostgreSQL
+        shell: bash
+        env:
+          BACKUP_FILE: ${{ steps.backup.outputs.file }}
+        run: |
+          set -euo pipefail
+          createdb --host=localhost --username=postgres ritmo_restore_check
+          pg_restore \
+            --host=localhost \
+            --username=postgres \
+            --dbname=ritmo_restore_check \
+            --exit-on-error \
+            --no-owner \
+            --no-acl \
+            "$BACKUP_FILE"
+          test "$(psql --host=localhost --username=postgres --dbname=ritmo_restore_check --tuples-only --no-align --command="SELECT to_regclass('public.users') IS NOT NULL;")" = "t"
+
+      - name: Encrypt verified backup
+        shell: bash
+        env:
+          BACKUP_FILE: ${{ steps.backup.outputs.file }}
+        run: |
+          set -euo pipefail
+          age \
+            --recipient "$BACKUP_AGE_RECIPIENT" \
+            --output "${BACKUP_FILE}.age" \
+            "$BACKUP_FILE"
+          backup_dir="$(dirname "$BACKUP_FILE")"
+          encrypted_name="$(basename "${BACKUP_FILE}.age")"
+          (
+            cd "$backup_dir"
+            sha256sum "$encrypted_name" > "${encrypted_name}.sha256"
+            sha256sum --check "${encrypted_name}.sha256"
+          )
+          rm "$BACKUP_FILE"
+
+      - name: Upload verified backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: ritmo-postgres-${{ github.run_id }}
+          path: backup/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

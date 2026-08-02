@@ -83,6 +83,7 @@ class BackupShoppingItem(ApiSchema):
 
 class BackupShoppingList(ApiSchema):
     source_id: int = Field(ge=1)
+    ownership: Literal["profile", "shared"] = "profile"
     name: Name200
     kind: ShoppingKind
     category: ShoppingCategory = "other"
@@ -203,7 +204,7 @@ class BackupReadingBook(ApiSchema):
 
 
 class RitmoBackup(ApiSchema):
-    version: Literal[1] = 1
+    version: Literal[1, 2] = 2
     app: Literal["Ritmo"] = "Ritmo"
     exported_at: datetime
     profile: BackupProfile

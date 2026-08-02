@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import event
 
 from models.reading import ReadingBook
-from models.shopping import ShoppingList
+from models.shopping import ShoppingList, ShoppingMonthlyBudget, ShoppingPair
 from models.user import User
 from services.anahi_context import (
     READING_CONTEXT_BOOK_LIMIT,
@@ -203,6 +203,10 @@ def test_context_uses_only_selected_profile_and_requested_sources(
         "total_cents": 12_345,
         "total_brl": "R$ 123,45",
         "purchase_count": 1,
+        "budget_cents": 0,
+        "budget_brl": "R$ 0,00",
+        "balance_cents": -12_345,
+        "balance_brl": "R$ -123,45",
     }
     assert shopping_context["shopping"]["current_month"]["total_cents"] == 5_000
     serialized_shopping = json.dumps(shopping_context, ensure_ascii=False)
@@ -275,6 +279,113 @@ def test_reading_context_caps_lendo_books_and_keeps_closest(context, user_id):
     assert "Livro quero ler" not in serialized_reading
     assert "Livro concluido" not in serialized_reading
     assert "nota privada" not in serialized_reading
+
+
+def test_shopping_context_shares_lists_but_keeps_each_profile_budget(
+    context,
+    user_id,
+):
+    selected_day = date(2026, 7, 31)
+    now = datetime(2026, 7, 31, 12, tzinfo=ZoneInfo("America/Sao_Paulo"))
+    db = context.session_factory()
+    try:
+        partner = (
+            db.query(User)
+            .filter(User.id != user_id)
+            .order_by(User.id)
+            .first()
+        )
+        assert partner is not None
+        db.add(
+            ShoppingPair(
+                owner_user_id=user_id,
+                partner_user_id=partner.id,
+                invite_code="ANAHI3B",
+                created_at=now,
+                paired_at=now,
+            )
+        )
+        db.add_all(
+            [
+                _purchase(
+                    user_id=user_id,
+                    name="Mercado do primeiro perfil",
+                    completed_on=date(2026, 7, 10),
+                    total_cents=10_000,
+                    now=now,
+                ),
+                _purchase(
+                    user_id=partner.id,
+                    name="Farmácia do segundo perfil",
+                    completed_on=date(2026, 7, 20),
+                    total_cents=2_500,
+                    now=now,
+                ),
+                _purchase(
+                    user_id=user_id,
+                    name="Lista aberta do primeiro perfil",
+                    completed_on=None,
+                    total_cents=0,
+                    now=now,
+                ),
+                _purchase(
+                    user_id=partner.id,
+                    name="Lista aberta do segundo perfil",
+                    completed_on=None,
+                    total_cents=0,
+                    now=now,
+                ),
+                ShoppingMonthlyBudget(
+                    user_id=user_id,
+                    month="2026-07",
+                    budget_cents=80_000,
+                    created_at=now,
+                    updated_at=now,
+                ),
+                ShoppingMonthlyBudget(
+                    user_id=partner.id,
+                    month="2026-07",
+                    budget_cents=120_000,
+                    created_at=now,
+                    updated_at=now,
+                ),
+            ]
+        )
+        db.commit()
+
+        first_context = build_anahi_context(
+            db,
+            user_id,
+            today=selected_day,
+            scopes={"shopping"},
+        )
+        second_context = build_anahi_context(
+            db,
+            partner.id,
+            today=selected_day,
+            scopes={"shopping"},
+        )
+    finally:
+        db.close()
+
+    assert first_context is not None
+    assert second_context is not None
+    first_shopping = first_context["shopping"]
+    second_shopping = second_context["shopping"]
+    assert first_shopping["current_month"]["total_cents"] == 12_500
+    assert second_shopping["current_month"]["total_cents"] == 12_500
+    assert first_shopping["current_month"]["budget_cents"] == 80_000
+    assert second_shopping["current_month"]["budget_cents"] == 120_000
+    expected_pending = {
+        "Lista aberta do primeiro perfil",
+        "Lista aberta do segundo perfil",
+    }
+    assert {
+        item["name"] for item in first_shopping["pending_lists"]
+    } == expected_pending
+    assert {
+        item["name"] for item in second_shopping["pending_lists"]
+    } == expected_pending
 
 
 def test_context_only_queries_requested_scopes(context, user_id):
@@ -363,12 +474,20 @@ def test_shopping_context_handles_previous_year_and_empty_month(context, user_id
         "total_cents": 4_321,
         "total_brl": "R$ 43,21",
         "purchase_count": 1,
+        "budget_cents": 0,
+        "budget_brl": "R$ 0,00",
+        "balance_cents": -4_321,
+        "balance_brl": "R$ -43,21",
     }
     assert shopping_context["shopping"]["current_month"] == {
         "month": "2026-01",
         "total_cents": 0,
         "total_brl": "R$ 0,00",
         "purchase_count": 0,
+        "budget_cents": 0,
+        "budget_brl": "R$ 0,00",
+        "balance_cents": 0,
+        "balance_brl": "R$ 0,00",
     }
 
 

@@ -1,0 +1,42 @@
+name: Monthly restore reminder
+
+on:
+  schedule:
+    - cron: "10 12 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create restore verification issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '[Backup] Validar restauração mensal do Ritmo'
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            })
+            if (!issues.some(issue => issue.title === title)) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body: [
+                  'Validação mensal de recuperação dos dados.',
+                  '',
+                  '- [ ] Confirmar que o workflow Daily PostgreSQL backup executou nas últimas 24 horas',
+                  '- [ ] Baixar e conferir o checksum do artefato mais recente',
+                  '- [ ] Confirmar que a restauração isolada do workflow foi aprovada',
+                  '- [ ] Exportar o backup JSON dos dois perfis',
+                  '- [ ] Registrar data, responsável e resultado antes de fechar esta issue',
+                ].join('\n'),
+              })
+            }

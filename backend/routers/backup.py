@@ -1,7 +1,7 @@
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from config import Settings, get_settings
 from database import get_db
@@ -20,6 +20,8 @@ from models.workout import (
 )
 from schemas.backup import BackupRestoreResponse, RitmoBackup
 from services.calendar_export import build_user_calendar
+from services.push_deliveries import cancel_pending_push_deliveries
+from services.shopping_scope import shopping_household_user_ids
 from time_utils import app_now
 
 router = APIRouter(prefix="/api/users", tags=["backup"])
@@ -65,10 +67,21 @@ def export_user_backup(user_id: int, db: Session = Depends(get_db)):
         .order_by(WorkoutExercisePreference.exercise_key)
         .all()
     )
+    shopping_lists = (
+        db.query(ShoppingList)
+        .options(selectinload(ShoppingList.items))
+        .filter(
+            ShoppingList.user_id.in_(
+                shopping_household_user_ids(db, user.id),
+            )
+        )
+        .order_by(ShoppingList.id)
+        .all()
+    )
 
     return RitmoBackup.model_validate(
         {
-            "version": 1,
+            "version": 2,
             "app": "Ritmo",
             "exported_at": app_now(),
             "profile": {
@@ -104,6 +117,11 @@ def export_user_backup(user_id: int, db: Session = Depends(get_db)):
             "shopping_lists": [
                 {
                     "source_id": shopping_list.id,
+                    "ownership": (
+                        "profile"
+                        if shopping_list.user_id == user.id
+                        else "shared"
+                    ),
                     "name": shopping_list.name,
                     "kind": shopping_list.kind,
                     "category": shopping_list.category,
@@ -129,7 +147,7 @@ def export_user_backup(user_id: int, db: Session = Depends(get_db)):
                         for item in shopping_list.items
                     ],
                 }
-                for shopping_list in user.shopping_lists
+                for shopping_list in shopping_lists
             ],
             "shopping_budgets": [
                 {
@@ -274,6 +292,12 @@ def restore_user_backup(
     user = _get_user(user_id, db)
 
     try:
+        cancel_pending_push_deliveries(
+            db,
+            user_id=user.id,
+            reason="Profile backup restored",
+            now=app_now(),
+        )
         _delete_current_user_data(user, db)
         user.name = backup.profile.name
         user.initials = backup.profile.initials
@@ -316,6 +340,8 @@ def restore_user_backup(
 
         shopping_map: dict[int, ShoppingList] = {}
         for source in backup.shopping_lists:
+            if source.ownership == "shared":
+                continue
             shopping_list = ShoppingList(
                 user_id=user.id,
                 name=source.name,
@@ -345,7 +371,10 @@ def restore_user_backup(
             db.flush()
             shopping_map[source.source_id] = shopping_list
         for source in backup.shopping_lists:
-            if source.next_list_source_id is not None:
+            if (
+                source.source_id in shopping_map
+                and source.next_list_source_id in shopping_map
+            ):
                 shopping_map[source.source_id].next_list_id = (
                     shopping_map[source.next_list_source_id].id
                 )
@@ -488,7 +517,7 @@ def restore_user_backup(
         restored={
             "habits": len(backup.habits),
             "tasks": len(backup.tasks),
-            "shopping_lists": len(backup.shopping_lists),
+            "shopping_lists": len(shopping_map),
             "workouts": len(backup.workouts),
             "workout_sessions": len(backup.workout_sessions),
             "reading_books": len(backup.reading_books),

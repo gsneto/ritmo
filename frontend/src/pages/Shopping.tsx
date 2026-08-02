@@ -262,8 +262,14 @@ export default function Shopping({
   const initialRequestIdRef = useRef(0)
   const historyRequestIdRef = useRef(0)
   const itemOperationRef = useRef<number | null>(null)
+  const mutationActiveRef = useRef(false)
+  const queuedRefreshRef = useRef(false)
+  const selectedMonthRef = useRef(selectedMonth)
+  const userIdRef = useRef(userId)
   const finishDialogRef = useRef<HTMLElement | null>(null)
   const createPanelRef = useRef<HTMLElement | null>(null)
+  selectedMonthRef.current = selectedMonth
+  userIdRef.current = userId
 
   const selectedList = useMemo(
     () => lists.find(item => item.id === selectedListId) || null,
@@ -271,9 +277,9 @@ export default function Shopping({
   )
 
   useEffect(() => {
-    const requestId = ++initialRequestIdRef.current
-    historyRequestIdRef.current += 1
     itemOperationRef.current = null
+    mutationActiveRef.current = false
+    queuedRefreshRef.current = false
     setView('active')
     setLists([])
     setHistory(null)
@@ -298,8 +304,27 @@ export default function Shopping({
     setFinishError('')
     setHistoryLoading(false)
     setError('')
-    void loadInitialData(requestId)
+    refreshShoppingData(currentMonth)
   }, [userId])
+
+  useEffect(() => {
+    function handleWindowFocus() {
+      refreshShoppingData()
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        refreshShoppingData()
+      }
+    }
+
+    window.addEventListener('focus', handleWindowFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [userId, selectedMonth])
 
   useEffect(() => {
     if (view === 'history') {
@@ -386,20 +411,62 @@ export default function Shopping({
     }
   }, [confirmingFinish, finalizing])
 
-  async function loadInitialData(requestId: number) {
+  function refreshShoppingData(historyMonth = selectedMonthRef.current) {
+    if (mutationActiveRef.current) {
+      queuedRefreshRef.current = true
+      return
+    }
+    const requestId = ++initialRequestIdRef.current
+    historyRequestIdRef.current += 1
+    void loadInitialData(requestId, historyMonth, userIdRef.current)
+  }
+
+  function beginShoppingMutation(): boolean {
+    if (mutationActiveRef.current) return false
+    mutationActiveRef.current = true
+    initialRequestIdRef.current += 1
+    historyRequestIdRef.current += 1
+    setLoading(false)
+    setHistoryLoading(false)
+    return true
+  }
+
+  function endShoppingMutation() {
+    mutationActiveRef.current = false
+    if (!queuedRefreshRef.current) return
+    queuedRefreshRef.current = false
+    refreshShoppingData()
+  }
+
+  async function loadInitialData(
+    requestId: number,
+    historyMonth: string,
+    requestedUserId: number,
+  ) {
     setLoading(true)
     setError('')
     try {
-      const [activeResponse, historyResponse] = await Promise.all([
-        apiRoutes.getShoppingLists(userId, false),
-        apiRoutes.getShoppingHistory(userId, currentMonth),
+      const currentHistoryRequest = apiRoutes.getShoppingHistory(
+        requestedUserId,
+        currentMonth,
+      )
+      const selectedHistoryRequest = historyMonth === currentMonth
+        ? currentHistoryRequest
+        : apiRoutes.getShoppingHistory(requestedUserId, historyMonth)
+      const [activeResponse, currentHistoryResponse, historyResponse] = await Promise.all([
+        apiRoutes.getShoppingLists(requestedUserId, false),
+        currentHistoryRequest,
+        selectedHistoryRequest,
       ])
       if (requestId !== initialRequestIdRef.current) return
       const normalizedLists = activeResponse.data.map(normalizeShoppingList)
+      const normalizedCurrentHistory = normalizeMonthlySummary(
+        currentHistoryResponse.data,
+      )
       const normalizedHistory = normalizeMonthlySummary(historyResponse.data)
       setLists(normalizedLists)
       setHistory(normalizedHistory)
-      setCurrentMonthSummary(normalizedHistory)
+      setCurrentMonthSummary(normalizedCurrentHistory)
       setBudgetDraft(
         normalizedHistory.budget_cents > 0
           ? (normalizedHistory.budget_cents / 100).toFixed(2).replace('.', ',')
@@ -479,7 +546,7 @@ export default function Shopping({
   async function createList(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!newListName.trim()) return
-    if (saving || itemOperationRef.current !== null || finalizing) return
+    if (mutationActiveRef.current) return
     const plannedDate = newListDateChoice === 'today'
       ? localDateWithOffset(0)
       : newListDateChoice === 'tomorrow'
@@ -492,6 +559,7 @@ export default function Shopping({
       setError('Digite um orçamento válido para esta compra.')
       return
     }
+    if (!beginShoppingMutation()) return
 
     setSaving(true)
     setError('')
@@ -519,6 +587,7 @@ export default function Shopping({
       setError('Não foi possível criar esta compra.')
     } finally {
       setSaving(false)
+      endShoppingMutation()
     }
   }
 
@@ -529,14 +598,12 @@ export default function Shopping({
   }
 
   function refreshAfterShareChange() {
-    const requestId = ++initialRequestIdRef.current
-    historyRequestIdRef.current += 1
-    void loadInitialData(requestId)
+    refreshShoppingData()
   }
 
   async function deleteList(shoppingList: ShoppingList) {
     if (!window.confirm(`Excluir a lista "${shoppingList.name}"?`)) return
-    if (saving || itemOperationRef.current !== null || finalizing) return
+    if (!beginShoppingMutation()) return
     setSaving(true)
     try {
       await apiRoutes.deleteShoppingList(shoppingList.id)
@@ -546,18 +613,20 @@ export default function Shopping({
       setError('Não foi possível excluir esta lista.')
     } finally {
       setSaving(false)
+      endShoppingMutation()
     }
   }
 
   async function addItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selectedList || !newItemName.trim()) return
-    if (saving || itemOperationRef.current !== null || finalizing) return
+    if (mutationActiveRef.current) return
     const quantity = Number(newItemQuantity)
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999) {
       setError('A quantidade deve ser um número entre 1 e 999.')
       return
     }
+    if (!beginShoppingMutation()) return
 
     setSaving(true)
     setError('')
@@ -585,11 +654,12 @@ export default function Shopping({
       setError('Não foi possível adicionar este item.')
     } finally {
       setSaving(false)
+      endShoppingMutation()
     }
   }
 
   function startPriceEntry(item: ShoppingItem) {
-    if (itemOperationRef.current !== null || saving || finalizing) return
+    if (mutationActiveRef.current) return
     setPriceItemId(item.id)
     setPriceDraft(
       item.unit_price_cents === null
@@ -602,7 +672,7 @@ export default function Shopping({
 
   async function saveItemPrice(event: FormEvent<HTMLFormElement>, item: ShoppingItem) {
     event.preventDefault()
-    if (itemOperationRef.current !== null || saving || finalizing) return
+    if (mutationActiveRef.current) return
     const priceCents = parsePriceToCents(priceDraft)
     if (priceCents === null) {
       setPriceError('Digite um preço válido, por exemplo 12,90.')
@@ -613,6 +683,7 @@ export default function Shopping({
       setPriceError('A quantidade deve ficar entre 1 e 999.')
       return
     }
+    if (!beginShoppingMutation()) return
 
     itemOperationRef.current = item.id
     setBusyItemId(item.id)
@@ -637,11 +708,12 @@ export default function Shopping({
         itemOperationRef.current = null
         setBusyItemId(null)
       }
+      endShoppingMutation()
     }
   }
 
   async function uncheckItem(item: ShoppingItem) {
-    if (itemOperationRef.current !== null || saving || finalizing) return
+    if (!beginShoppingMutation()) return
     itemOperationRef.current = item.id
     setBusyItemId(item.id)
     setError('')
@@ -658,12 +730,13 @@ export default function Shopping({
         itemOperationRef.current = null
         setBusyItemId(null)
       }
+      endShoppingMutation()
     }
   }
 
   async function deleteItem(item: ShoppingItem) {
     if (!selectedList || !window.confirm(`Remover "${item.name}" da lista?`)) return
-    if (itemOperationRef.current !== null || saving || finalizing) return
+    if (!beginShoppingMutation()) return
     itemOperationRef.current = item.id
     setBusyItemId(item.id)
     try {
@@ -684,6 +757,7 @@ export default function Shopping({
         itemOperationRef.current = null
         setBusyItemId(null)
       }
+      endShoppingMutation()
     }
   }
 
@@ -694,6 +768,7 @@ export default function Shopping({
       setError('Digite um orçamento mensal válido.')
       return
     }
+    if (!beginShoppingMutation()) return
     setBudgetSaving(true)
     setError('')
     try {
@@ -704,6 +779,7 @@ export default function Shopping({
       setError('Não foi possível salvar o orçamento deste mês.')
     } finally {
       setBudgetSaving(false)
+      endShoppingMutation()
     }
   }
 
@@ -738,7 +814,7 @@ export default function Shopping({
 
   function requestFinish() {
     if (!selectedList) return
-    if (saving || busyItemId !== null || priceItemId !== null) {
+    if (mutationActiveRef.current || busyItemId !== null || priceItemId !== null) {
       setError('Conclua a alteração em andamento antes de finalizar.')
       return
     }
@@ -752,7 +828,8 @@ export default function Shopping({
   }
 
   async function finishList() {
-    if (!selectedList || saving || busyItemId !== null || priceItemId !== null) return
+    if (!selectedList || busyItemId !== null || priceItemId !== null) return
+    if (!beginShoppingMutation()) return
     setFinalizing(true)
     setError('')
     setFinishError('')
@@ -783,11 +860,12 @@ export default function Shopping({
       setFinishError('Não foi possível registrar este gasto. Tente novamente.')
     } finally {
       setFinalizing(false)
+      endShoppingMutation()
     }
   }
 
   async function reopenList(shoppingList: ShoppingList) {
-    if (reopeningListId !== null) return
+    if (!beginShoppingMutation()) return
     setReopeningListId(shoppingList.id)
     setError('')
     try {
@@ -803,6 +881,7 @@ export default function Shopping({
       setError('Não foi possível reabrir esta compra para correção.')
     } finally {
       setReopeningListId(null)
+      endShoppingMutation()
     }
   }
 
@@ -840,15 +919,26 @@ export default function Shopping({
             Monte sua lista antes de sair. No mercado, marque cada item com o
             preço e acompanhe o total em tempo real.
           </p>
-          <button
-            className="shopping-hero-action"
-            type="button"
-            disabled={hasPendingMutation}
-            onClick={openCreateForm}
-          >
-            <Plus size={18} aria-hidden="true" />
-            Nova compra
-          </button>
+          <div className="shopping-hero-actions">
+            <button
+              className="shopping-hero-action"
+              type="button"
+              disabled={hasPendingMutation}
+              onClick={openCreateForm}
+            >
+              <Plus size={18} aria-hidden="true" />
+              Nova compra
+            </button>
+            <button
+              className="shopping-hero-action shopping-refresh-action"
+              type="button"
+              disabled={hasPendingMutation}
+              onClick={() => refreshShoppingData()}
+            >
+              <RotateCcw size={18} aria-hidden="true" />
+              Atualizar
+            </button>
+          </div>
         </div>
         <div className="shopping-finance-snapshot">
           <article className="shopping-month-total">

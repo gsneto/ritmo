@@ -9,10 +9,11 @@ from sqlalchemy.orm import Session, selectinload
 
 from models.habit import Habit, HabitCheckIn, habit_is_scheduled
 from models.reading import ReadingBook, ReadingSession
-from models.shopping import ShoppingList
+from models.shopping import ShoppingList, ShoppingMonthlyBudget
 from models.task import Task
 from models.user import User
 from models.workout import Workout, WorkoutSession
+from services.shopping_scope import shopping_household_user_ids
 from time_utils import app_today
 
 CONTEXT_SCOPE_ORDER = ("habits", "tasks", "reading", "shopping", "workouts")
@@ -66,7 +67,12 @@ def _format_brl(cents: int) -> str:
     return f"R$ {value}"
 
 
-def _shopping_month(db: Session, user_id: int, anchor: date) -> dict:
+def _shopping_month(
+    db: Session,
+    user_id: int,
+    visible_user_ids: tuple[int, ...],
+    anchor: date,
+) -> dict:
     first, last = _month_bounds(anchor)
     total_cents, purchase_count = (
         db.query(
@@ -74,18 +80,32 @@ def _shopping_month(db: Session, user_id: int, anchor: date) -> dict:
             func.count(ShoppingList.id),
         )
         .filter(
-            ShoppingList.user_id == user_id,
+            ShoppingList.user_id.in_(visible_user_ids),
             ShoppingList.completed_on >= first,
             ShoppingList.completed_on <= last,
         )
         .one()
     )
     total = int(total_cents or 0)
+    monthly_budget = (
+        db.query(ShoppingMonthlyBudget)
+        .filter(
+            ShoppingMonthlyBudget.user_id == user_id,
+            ShoppingMonthlyBudget.month == first.strftime("%Y-%m"),
+        )
+        .first()
+    )
+    budget = monthly_budget.budget_cents if monthly_budget is not None else 0
+    balance = budget - total
     return {
         "month": first.strftime("%Y-%m"),
         "total_cents": total,
         "total_brl": _format_brl(total),
         "purchase_count": int(purchase_count or 0),
+        "budget_cents": budget,
+        "budget_brl": _format_brl(budget),
+        "balance_cents": balance,
+        "balance_brl": _format_brl(balance),
     }
 
 
@@ -173,10 +193,11 @@ def build_anahi_context(
             },
         }
     if "shopping" in selected_scopes:
+        visible_user_ids = shopping_household_user_ids(db, user_id)
         pending_shopping = (
             db.query(ShoppingList)
             .filter(
-                ShoppingList.user_id == user_id,
+                ShoppingList.user_id.in_(visible_user_ids),
                 ShoppingList.completed_at.is_(None),
             )
             .order_by(ShoppingList.planned_date, ShoppingList.id)
@@ -184,10 +205,16 @@ def build_anahi_context(
             .all()
         )
         context["shopping"] = {
-            "current_month": _shopping_month(db, user_id, selected_day),
+            "current_month": _shopping_month(
+                db,
+                user_id,
+                visible_user_ids,
+                selected_day,
+            ),
             "previous_month": _shopping_month(
                 db,
                 user_id,
+                visible_user_ids,
                 _previous_month(selected_day),
             ),
             "pending_lists": [

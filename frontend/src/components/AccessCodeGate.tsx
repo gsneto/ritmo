@@ -31,13 +31,13 @@ export default function AccessCodeGate({ message, onSubmit }: AccessCodeGateProp
           <Activity size={24} />
         </span>
         <div className="access-copy">
-          <p className="section-label">Ritmo pessoal</p>
-          <h1 id="access-title">Digite seu código de acesso</h1>
-          <p>Este código protege os dados do seu app. Não é necessário criar uma conta.</p>
+          <p className="section-label">Ritmo da casa</p>
+          <h1 id="access-title">Digite o código da casa</h1>
+          <p>Um único código protege o ambiente familiar. Depois de entrar, escolha o perfil em uso.</p>
         </div>
         <form className="entry-form" onSubmit={handleSubmit}>
           <label htmlFor="personal-access-code">
-            Código pessoal
+            Código da casa
             <input
               id="personal-access-code"
               type="password"

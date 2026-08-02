@@ -382,6 +382,141 @@ def _ensure_push_subscription_schema(bind: Engine) -> None:
             )
 
 
+def _ensure_push_delivery_schema(bind: Engine) -> None:
+    """Keep unversioned local SQLite outboxes compatible with the worker."""
+    if bind.dialect.name != "sqlite":
+        return
+    inspector = inspect(bind)
+    if "push_deliveries" not in set(inspector.get_table_names()):
+        return
+
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("push_deliveries")
+    }
+    migrations = {
+        "user_id": "ALTER TABLE push_deliveries ADD COLUMN user_id INTEGER",
+        "status": (
+            "ALTER TABLE push_deliveries ADD COLUMN status "
+            "VARCHAR(16) NOT NULL DEFAULT 'sent'"
+        ),
+        "payload": (
+            "ALTER TABLE push_deliveries ADD COLUMN payload "
+            "TEXT NOT NULL DEFAULT '{}'"
+        ),
+        "attempts": (
+            "ALTER TABLE push_deliveries ADD COLUMN attempts "
+            "INTEGER NOT NULL DEFAULT 1"
+        ),
+        "next_retry_at": (
+            "ALTER TABLE push_deliveries ADD COLUMN next_retry_at DATETIME"
+        ),
+        "last_error": (
+            "ALTER TABLE push_deliveries ADD COLUMN last_error VARCHAR(255)"
+        ),
+        "scheduled_for": (
+            "ALTER TABLE push_deliveries ADD COLUMN scheduled_for DATETIME"
+        ),
+        "expires_at": (
+            "ALTER TABLE push_deliveries ADD COLUMN expires_at DATETIME"
+        ),
+        "sent_at": "ALTER TABLE push_deliveries ADD COLUMN sent_at DATETIME",
+        "updated_at": (
+            "ALTER TABLE push_deliveries ADD COLUMN updated_at DATETIME"
+        ),
+    }
+    with bind.begin() as connection:
+        for column_name, statement in migrations.items():
+            if column_name not in columns:
+                connection.execute(text(statement))
+        connection.execute(
+            text(
+                "UPDATE push_deliveries SET user_id = ("
+                "SELECT push_subscriptions.user_id FROM push_subscriptions "
+                "WHERE push_subscriptions.id = push_deliveries.subscription_id"
+                ") WHERE user_id IS NULL OR user_id = 0"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE push_deliveries SET "
+                "attempts = CASE WHEN attempts = 0 THEN 1 ELSE attempts END, "
+                "scheduled_for = COALESCE(scheduled_for, created_at), "
+                "expires_at = COALESCE(expires_at, created_at), "
+                "sent_at = COALESCE(sent_at, created_at), "
+                "updated_at = COALESCE(updated_at, created_at) "
+                "WHERE status = 'sent'"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_push_deliveries_user_id "
+                "ON push_deliveries (user_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_push_deliveries_pending_retry "
+                "ON push_deliveries (next_retry_at, id) WHERE status = 'pending'"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE TRIGGER IF NOT EXISTS trg_push_deliveries_fill_user_id "
+                "AFTER INSERT ON push_deliveries "
+                "WHEN NEW.user_id IS NULL OR NEW.user_id = 0 BEGIN "
+                "UPDATE push_deliveries SET "
+                "user_id = (SELECT user_id FROM push_subscriptions "
+                "WHERE id = NEW.subscription_id), "
+                "attempts = CASE WHEN NEW.status = 'sent' AND NEW.attempts = 0 "
+                "THEN 1 ELSE NEW.attempts END, "
+                "scheduled_for = COALESCE(NEW.scheduled_for, NEW.created_at), "
+                "expires_at = COALESCE(NEW.expires_at, NEW.created_at), "
+                "sent_at = CASE WHEN NEW.status = 'sent' "
+                "THEN COALESCE(NEW.sent_at, NEW.created_at) ELSE NEW.sent_at END, "
+                "updated_at = COALESCE(NEW.updated_at, NEW.created_at) "
+                "WHERE id = NEW.id; END"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE TRIGGER IF NOT EXISTS trg_push_deliveries_immutable_user_id "
+                "BEFORE UPDATE OF user_id ON push_deliveries "
+                "WHEN OLD.user_id IS NOT NULL AND OLD.user_id <> 0 "
+                "AND NEW.user_id <> OLD.user_id BEGIN "
+                "SELECT RAISE(ABORT, 'push delivery user_id is immutable'); END"
+            )
+        )
+
+
+def _ensure_active_workout_uniqueness(bind: Engine) -> None:
+    """Enforce one active workout in unversioned local SQLite databases."""
+    if bind.dialect.name != "sqlite":
+        return
+    inspector = inspect(bind)
+    if "workout_sessions" not in set(inspector.get_table_names()):
+        return
+    with bind.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE workout_sessions SET status = 'completed', "
+                "completed_at = COALESCE(completed_at, started_at), "
+                "duration_seconds = COALESCE(duration_seconds, 0) "
+                "WHERE status = 'active' AND id NOT IN ("
+                "SELECT MAX(id) FROM workout_sessions "
+                "WHERE status = 'active' GROUP BY user_id"
+                ")"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "uq_workout_sessions_active_user "
+                "ON workout_sessions (user_id) WHERE status = 'active'"
+            )
+        )
+
+
 def _ensure_user_briefing_schema(bind: Engine) -> None:
     """Keep pre-Alembic local databases usable after briefing settings ship."""
     inspector = inspect(bind)
@@ -412,14 +547,17 @@ def init_db(
 ) -> None:
     """Create missing tables for local/test bootstrap.
 
-    Production applies versioned schema changes with ``alembic upgrade head``
-    from the container entrypoint. The compatibility checks below remain only
-    for unversioned SQLite databases created by older Ritmo releases and can
-    be removed after those databases have been baselined.
+    Non-SQLite databases apply versioned schema changes exclusively with
+    ``alembic upgrade head``. The compatibility checks below remain only for
+    unversioned SQLite databases created by older Ritmo releases and can be
+    removed after those databases have been baselined.
     """
+    selected_engine = bind or engine
+    if selected_engine.dialect.name != "sqlite":
+        return
+
     from models import habit, push, reading, shopping, task, user, workout  # noqa
 
-    selected_engine = bind or engine
     selected_session_factory = session_factory or SessionLocal
     _ensure_reading_library_schema(selected_engine)
     Base.metadata.create_all(bind=selected_engine)
@@ -428,4 +566,6 @@ def init_db(
     _ensure_routine_recurrence_schema(selected_engine)
     _ensure_user_briefing_schema(selected_engine)
     _ensure_push_subscription_schema(selected_engine)
+    _ensure_push_delivery_schema(selected_engine)
+    _ensure_active_workout_uniqueness(selected_engine)
     _ensure_checkin_uniqueness(selected_engine, selected_session_factory)

@@ -140,6 +140,7 @@ describe('shopping assistant flow', () => {
   })
 
   afterEach(() => {
+    Reflect.deleteProperty(document, 'visibilityState')
     vi.useRealTimers()
     vi.clearAllMocks()
     vi.restoreAllMocks()
@@ -159,6 +160,105 @@ describe('shopping assistant flow', () => {
 
     expect(await screen.findByRole('heading', { name: 'Nova compra ou gasto' })).toBeTruthy()
     expect(handled).toHaveBeenCalledOnce()
+  })
+
+  it('refreshes from the visible control and ignores stale responses', async () => {
+    mockInitialData()
+    render(<Shopping userId={1} />)
+    await screen.findByRole('heading', { name: 'Compra mensal' })
+
+    let resolveStaleLists: ((value: unknown) => void) | undefined
+    let resolveStaleHistory: ((value: unknown) => void) | undefined
+    const staleLists = new Promise(resolve => { resolveStaleLists = resolve })
+    const staleHistory = new Promise(resolve => { resolveStaleHistory = resolve })
+    vi.mocked(apiRoutes.getShoppingLists)
+      .mockReturnValueOnce(staleLists as never)
+      .mockResolvedValueOnce({
+        data: [{ ...activeList, name: 'Lista mais recente' }],
+      } as never)
+    vi.mocked(apiRoutes.getShoppingHistory)
+      .mockReturnValueOnce(staleHistory as never)
+      .mockResolvedValueOnce({ data: emptyHistory } as never)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }))
+    fireEvent.focus(window)
+
+    expect(await screen.findByRole('heading', { name: 'Lista mais recente' })).toBeTruthy()
+    resolveStaleLists?.({
+      data: [{ ...activeList, name: 'Lista obsoleta' }],
+    })
+    resolveStaleHistory?.({ data: emptyHistory })
+    await Promise.resolve()
+
+    expect(screen.queryByRole('heading', { name: 'Lista obsoleta' })).toBeNull()
+    expect(apiRoutes.getShoppingLists).toHaveBeenCalledTimes(3)
+  })
+
+  it('refreshes when the page becomes visible again', async () => {
+    mockInitialData()
+    render(<Shopping userId={1} />)
+    await screen.findByRole('heading', { name: 'Compra mensal' })
+    vi.mocked(apiRoutes.getShoppingLists).mockClear()
+    vi.mocked(apiRoutes.getShoppingHistory).mockClear()
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'hidden',
+    })
+    fireEvent(document, new Event('visibilitychange'))
+    expect(apiRoutes.getShoppingLists).not.toHaveBeenCalled()
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    })
+    fireEvent(document, new Event('visibilitychange'))
+
+    await waitFor(() => {
+      expect(apiRoutes.getShoppingLists).toHaveBeenCalledWith(1, false)
+      expect(apiRoutes.getShoppingHistory).toHaveBeenCalledWith(1, '2026-07')
+    })
+  })
+
+  it('defers focus refresh until an active mutation finishes', async () => {
+    mockInitialData()
+    let resolveMutation: ((value: unknown) => void) | undefined
+    const mutationResponse = new Promise(resolve => { resolveMutation = resolve })
+    vi.mocked(apiRoutes.checkShoppingItem).mockReturnValue(mutationResponse as never)
+
+    render(<Shopping userId={1} />)
+    await screen.findByRole('heading', { name: 'Compra mensal' })
+    fireEvent.click(screen.getByRole('button', { name: 'Peguei' }))
+    fireEvent.change(screen.getByLabelText('Preço de Arroz 5 kg'), {
+      target: { value: '29,90' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }))
+    await waitFor(() => expect(apiRoutes.checkShoppingItem).toHaveBeenCalledOnce())
+
+    vi.mocked(apiRoutes.getShoppingLists).mockClear()
+    vi.mocked(apiRoutes.getShoppingHistory).mockClear()
+    const checkedItem = {
+      ...uncheckedItem,
+      checked_at: '2026-07-29T12:05:00',
+      unit_price_cents: 2990,
+      price_cents: 2990,
+    }
+    vi.mocked(apiRoutes.getShoppingLists).mockResolvedValue({
+      data: [{ ...activeList, items: [checkedItem] }],
+    } as never)
+    vi.mocked(apiRoutes.getShoppingHistory).mockResolvedValue({
+      data: emptyHistory,
+    } as never)
+
+    fireEvent.focus(window)
+    expect(apiRoutes.getShoppingLists).not.toHaveBeenCalled()
+    expect(apiRoutes.getShoppingHistory).not.toHaveBeenCalled()
+
+    resolveMutation?.({ data: checkedItem })
+    await waitFor(() => {
+      expect(apiRoutes.getShoppingLists).toHaveBeenCalledOnce()
+      expect(screen.getByText('1 × R$ 29,90 = R$ 29,90')).toBeTruthy()
+    })
   })
 
   it('checks an item with a price and records it in monthly history', async () => {

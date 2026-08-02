@@ -25,6 +25,7 @@ __pycache__/
 *.db-*
 *.sqlite
 *.sqlite3
+.ritmo-backups/
 
 # Node / Vite
 node_modules/

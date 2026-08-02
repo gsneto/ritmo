@@ -638,7 +638,7 @@ def start_workout_session(
     db.add(session)
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
         repeated = (
             db.query(WorkoutSession)
@@ -647,8 +647,29 @@ def start_workout_session(
             .first()
         )
         if repeated is not None:
+            if repeated.user_id != user_id or repeated.workout_id != workout_id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Idempotency key already belongs to another workout",
+                ) from exc
             return _serialize_session_with_progress(repeated, db)
-        raise
+        active = (
+            db.query(WorkoutSession.id)
+            .filter(
+                WorkoutSession.user_id == user_id,
+                WorkoutSession.status == "active",
+            )
+            .first()
+        )
+        detail = (
+            f"Finish active workout session {active.id} first"
+            if active is not None
+            else "Another workout session was started concurrently"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=detail,
+        ) from exc
     db.refresh(session)
     return _serialize_session_with_progress(_get_session(session.id, db), db)
 

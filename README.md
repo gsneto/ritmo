@@ -24,7 +24,7 @@
 - Exportação de calendário `.ics` e cartão de progresso de treino em PNG.
 - Entrada por voz opcional em tarefas e itens de compra, quando o navegador suporta.
 - Compras compartilhadas entre dois perfis por código de convite.
-- Tema claro/escuro, PWA instalável, atalhos rápidos, funcionamento offline e notificações.
+- Tema claro/escuro, PWA instalável, atalhos rápidos, tela de indisponibilidade offline e notificações.
 - Backup e restauração por perfil.
 
 ## Tecnologias
@@ -33,6 +33,8 @@
 - Backend: FastAPI e SQLAlchemy.
 - Banco de dados: SQLite no desenvolvimento e PostgreSQL em produção.
 - Hospedagem: Vercel (app) e Railway (API).
+- Notificações: outbox durável processada pela única réplica da API por padrão;
+  o worker CLI separado é um modo operacional opcional.
 
 ## Executar localmente
 
@@ -79,7 +81,7 @@ outras credenciais nunca devem ser commitados em `.env`.
 Set-Location backend
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m ruff check .
-.\.venv\Scripts\python.exe -m mypy config.py main.py rate_limit.py security.py time_utils.py services/anahi.py schemas
+.\.venv\Scripts\python.exe -m mypy config.py main.py push_worker.py rate_limit.py security.py time_utils.py services/anahi.py schemas
 
 Set-Location ..\frontend
 npm test
@@ -101,11 +103,26 @@ npm run build
   testes passaram, mas o lint não passou porque `typescript-eslint` ainda não
   suporta TS 7. A branch principal permanece em TypeScript 6.
 
-## Privacidade
+## Modelo doméstico e privacidade
 
-Os dados do Ritmo pertencem ao perfil que os criou. A ANAHÍ recebe apenas o
-contexto necessário para responder à pergunta; chaves e dados sensíveis ficam
-no servidor e não são versionados. Quando dois perfis ativam o compartilhamento
-de compras, somente listas, itens e histórico desse domínio passam a aparecer
-para ambos; hábitos, tarefas, treinos e leitura continuam isolados. O orçamento
-mensal geral permanece configurado por perfil.
+O Ritmo foi criado para uma casa confiável com dois perfis. Uma única chave dá
+acesso ao ambiente familiar e qualquer pessoa com essa chave pode alternar entre
+os perfis. Os perfis separam rotina, preferências e progresso para organização;
+eles não são uma barreira de confidencialidade entre o casal.
+
+Quando o compartilhamento de compras está ativo, listas, itens e histórico
+aparecem juntos nos dois perfis. Hábitos, tarefas, treinos, leitura e orçamento
+mensal continuam armazenados separadamente por perfil.
+
+A ANAHÍ usa o Google Gemini. Conforme a pergunta, são enviados a pergunta e o
+contexto relacionado de hábitos, tarefas, compras, treinos ou leitura do perfil
+ativo. O chat não é armazenado pelo Ritmo. As chaves de serviço ficam no backend
+e não são versionadas. O acesso de qualquer aparelho pode ser revogado pela
+rotação de `APP_ACCESS_TOKEN` no servidor.
+
+O PWA mantém apenas a interface de indisponibilidade quando não há conexão. A
+consulta e a atualização dos dados exigem internet; não existe sincronização
+offline de dados.
+
+Consulte `STATUS.md` para o estado operacional atual e `CHANGELOG.md` para o
+histórico de entregas.

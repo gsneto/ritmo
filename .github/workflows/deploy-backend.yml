@@ -18,6 +18,19 @@ on:
         required: true
         default: false
         type: boolean
+      target_environment:
+        description: "Ambiente GitHub/Railway de destino"
+        required: true
+        default: backend-staging
+        type: choice
+        options:
+          - backend-staging
+          - backend-production
+      production_confirmation:
+        description: "Para produção, digite exatamente PRODUCTION"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -30,6 +43,20 @@ jobs:
   test:
     name: Test backend
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ritmo_ci
+          POSTGRES_USER: ritmo
+          POSTGRES_PASSWORD: ritmo-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ritmo -d ritmo_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: backend
@@ -60,17 +87,18 @@ jobs:
       - name: Type-check Python sources
         run: >-
           python -m mypy
-          config.py main.py rate_limit.py security.py time_utils.py
+          config.py main.py push_worker.py rate_limit.py security.py time_utils.py
           services/anahi.py schemas
 
       - name: Compile Python sources
         run: python -m compileall -q .
 
       - name: Validate Alembic migrations
-        shell: bash
+        env:
+          APP_ACCESS_TOKEN: alembic-ci-access-token
+          DATABASE_URL: postgresql+psycopg://ritmo:ritmo-ci-password@127.0.0.1:5432/ritmo_ci
+          RITMO_DEBUG: "false"
         run: |
-          set -euo pipefail
-          export DATABASE_URL="sqlite:///./alembic-ci.db"
           alembic upgrade head
           alembic check
 
@@ -84,13 +112,31 @@ jobs:
       - name: Build backend image
         run: docker build --tag ritmo-backend:ci .
 
-  publish:
-    name: Publish backend
+  release-gate:
+    name: Confirm manual release
     if: github.event_name == 'workflow_dispatch' && inputs.publish
     needs: test
     runs-on: ubuntu-latest
+    env:
+      TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+      PRODUCTION_CONFIRMATION: ${{ inputs.production_confirmation }}
+    steps:
+      - name: Validate release confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$TARGET_ENVIRONMENT" == "backend-production" && "$PRODUCTION_CONFIRMATION" != "PRODUCTION" ]]; then
+            echo "::error::Publicação em produção exige a confirmação literal PRODUCTION."
+            exit 1
+          fi
+
+  publish:
+    name: Publish backend
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: release-gate
+    runs-on: ubuntu-latest
     environment:
-      name: backend-production
+      name: ${{ inputs.target_environment }}
     defaults:
       run:
         working-directory: backend
@@ -101,6 +147,7 @@ jobs:
       RAILWAY_SERVICE: ${{ vars.RAILWAY_SERVICE }}
       BACKEND_BASE_URL: ${{ vars.BACKEND_BASE_URL }}
       APP_ACCESS_TOKEN: ${{ secrets.APP_ACCESS_TOKEN }}
+      TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -116,7 +163,7 @@ jobs:
           set -euo pipefail
           for name in RAILWAY_TOKEN RAILWAY_PROJECT_ID RAILWAY_ENVIRONMENT RAILWAY_SERVICE BACKEND_BASE_URL APP_ACCESS_TOKEN; do
             if [[ -z "${!name:-}" ]]; then
-              echo "::error::$name não foi configurado no ambiente backend-production."
+              echo "::error::$name não foi configurado no ambiente $TARGET_ENVIRONMENT."
               exit 1
             fi
           done
@@ -125,6 +172,61 @@ jobs:
             echo "::error::BACKEND_BASE_URL must be the public HTTPS API origin."
             exit 1
           fi
+
+      - name: Create encrypted pre-deploy profile backup
+        if: inputs.target_environment == 'backend-production'
+        shell: bash
+        env:
+          BACKUP_PASSWORD: ${{ secrets.APP_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          base_url="${BACKEND_BASE_URL%/}"
+          backup_dir="predeploy-profile-backup"
+          mkdir -p "$backup_dir"
+
+          curl \
+            --fail --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            --header "X-Ritmo-Key: $APP_ACCESS_TOKEN" \
+            "$base_url/api/users" > "$backup_dir/users.json"
+          jq -e 'type == "array" and length > 0' "$backup_dir/users.json" >/dev/null
+
+          exported=0
+          while IFS= read -r user_id; do
+            backup_file="$backup_dir/profile-${user_id}.json"
+            curl \
+              --fail --silent --show-error \
+              --connect-timeout 10 --max-time 60 \
+              --header "X-Ritmo-Key: $APP_ACCESS_TOKEN" \
+              "$base_url/api/users/${user_id}/backup" > "$backup_file"
+            jq -e '.app == "Ritmo" and (.version == 1 or .version == 2)' "$backup_file" >/dev/null
+            exported=$((exported + 1))
+          done < <(jq -r '.[].id' "$backup_dir/users.json")
+
+          if [[ "$exported" -lt 2 ]]; then
+            echo "::error::Esperados dois perfis no backup de produção; exportados: $exported."
+            exit 1
+          fi
+
+          tar --create --gzip --directory "$backup_dir" . \
+            | openssl enc -aes-256-cbc -salt -pbkdf2 \
+              -pass env:BACKUP_PASSWORD \
+              -out predeploy-profile-backup.tar.gz.enc
+          sha256sum predeploy-profile-backup.tar.gz.enc \
+            > predeploy-profile-backup.tar.gz.enc.sha256
+          rm -rf "$backup_dir"
+
+      - name: Retain encrypted pre-deploy backup
+        if: inputs.target_environment == 'backend-production'
+        uses: actions/upload-artifact@v4
+        with:
+          name: predeploy-profile-backup-${{ github.run_id }}
+          path: |
+            backend/predeploy-profile-backup.tar.gz.enc
+            backend/predeploy-profile-backup.tar.gz.enc.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
 
       - name: Publish tested backend
         run: >-
@@ -141,19 +243,47 @@ jobs:
           set -euo pipefail
           base_url="${BACKEND_BASE_URL%/}"
 
-          health_json="$(
-            curl --fail --silent --show-error \
-              --retry 12 --retry-all-errors --retry-delay 5 \
-              --connect-timeout 10 --max-time 20 \
-              "$base_url/health"
-          )"
-          jq -e '.status == "healthy"' <<<"$health_json" >/dev/null
+          health_json=""
+          ready=false
+          for attempt in {1..12}; do
+            if health_json="$(
+              curl --fail --silent --show-error \
+                --retry 2 --retry-all-errors --retry-delay 2 \
+                --connect-timeout 10 --max-time 20 \
+                "$base_url/ready"
+            )" && jq -e '.status == "healthy"' <<<"$health_json" >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$ready" != true ]]; then
+            echo "::error::O backend não ficou ready após 12 tentativas."
+            exit 1
+          fi
 
-          protected_json="$(
-            curl --fail --silent --show-error \
-              --retry 5 --retry-all-errors --retry-delay 2 \
-              --connect-timeout 10 --max-time 20 \
-              --header "X-Ritmo-Key: $APP_ACCESS_TOKEN" \
-              "$base_url/api"
-          )"
-          jq -e '.message and .version' <<<"$protected_json" >/dev/null
+          response_file="$RUNNER_TEMP/backend-smoke-response"
+          assert_status() {
+            expected_status="$1"
+            shift
+            actual_status="$(
+              curl --silent --show-error \
+                --connect-timeout 10 --max-time 20 \
+                --output "$response_file" \
+                --write-out '%{http_code}' \
+                "$@"
+            )"
+            if [[ "$actual_status" != "$expected_status" ]]; then
+              echo "::error::Esperado HTTP $expected_status, recebido HTTP $actual_status em ${*: -1}."
+              cat "$response_file"
+              exit 1
+            fi
+          }
+
+          wrong_key="${APP_ACCESS_TOKEN}-invalid"
+          assert_status 401 "$base_url/api"
+          assert_status 401 --header "X-Ritmo-Key: $wrong_key" "$base_url/api"
+          assert_status 200 --header "X-Ritmo-Key: $APP_ACCESS_TOKEN" "$base_url/api"
+          jq -e '.message and .version' <"$response_file" >/dev/null
+          assert_status 404 "$base_url/docs"
+          assert_status 404 "$base_url/openapi.json"

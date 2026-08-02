@@ -109,8 +109,8 @@ export default function ShoppingShareCard({
         </h2>
         <p>
           {share?.paired
-            ? 'Os dois perfis veem e editam as mesmas listas. Os outros dados continuam privados.'
-            : 'Conecte dois perfis com um código. Somente listas, itens e histórico de compras serão compartilhados.'}
+            ? 'As compras aparecem juntas nos dois perfis. Os demais dados continuam organizados separadamente.'
+            : 'Conecte os perfis para mostrar listas, itens e histórico no mesmo espaço de compras.'}
         </p>
       </div>
 

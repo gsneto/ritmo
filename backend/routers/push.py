@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pywebpush import WebPushException, webpush
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from config import Settings, get_settings
 from database import get_db
 from models.push import PushSubscription
 from models.user import User
+from push_worker import notification_runtime
 from schemas.push import (
     BriefingSettingsResponse,
     BriefingSettingsUpdate,
@@ -19,7 +20,12 @@ from schemas.push import (
     PushSubscriptionStatusRequest,
     PushSubscriptionStatusResponse,
     PushSubscriptionUpsert,
+    PushTestRequest,
     PushTestResponse,
+)
+from services.push_deliveries import (
+    WEB_PUSH_SUBSCRIPTION_FAILURE_STATUSES,
+    cancel_pending_push_deliveries,
 )
 from time_utils import app_now
 
@@ -75,10 +81,15 @@ def update_briefing_settings(
 @router.get("/{user_id}/push-config", response_model=PushConfigResponse)
 def get_push_config(
     user_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
     _ensure_user(user_id, db)
+    runtime = notification_runtime(
+        settings,
+        request.app.state.push_worker_state,
+    )
     return PushConfigResponse(
         enabled=settings.push_enabled,
         public_key=(
@@ -86,6 +97,9 @@ def get_push_config(
             if settings.push_enabled and settings.VAPID_PUBLIC_KEY
             else None
         ),
+        delivery_status=runtime["status"],
+        delivery_mode=runtime["mode"],
+        last_cycle_at=runtime["last_cycle_at"],
     )
 
 
@@ -135,6 +149,14 @@ def save_push_subscription(
                     "This browser is linked to another profile. "
                     "Confirm transfer before replacing that link."
                 ),
+            )
+        if subscription.user_id != user_id:
+            cancel_pending_push_deliveries(
+                db,
+                user_id=subscription.user_id,
+                subscription_id=subscription.id,
+                reason="Subscription transferred",
+                now=now,
             )
         # This is intentionally an explicit action from the "Ativar neste
         # perfil" control. Refresh/status checks must never move ownership.
@@ -209,6 +231,7 @@ def delete_push_subscription(
 )
 def send_push_test(
     user_id: int,
+    data: PushTestRequest,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
@@ -232,6 +255,8 @@ def send_push_test(
         db.query(PushSubscription)
         .filter(
             PushSubscription.user_id == user_id,
+            PushSubscription.endpoint_hash == _endpoint_hash(data.endpoint),
+            PushSubscription.endpoint == data.endpoint,
             PushSubscription.enabled.is_(True),
         )
         .all()
@@ -258,7 +283,7 @@ def send_push_test(
             sent += 1
         except WebPushException as exc:
             status_code = getattr(exc.response, "status_code", None)
-            if status_code in {404, 410}:
+            if status_code in WEB_PUSH_SUBSCRIPTION_FAILURE_STATUSES:
                 subscription.enabled = False
                 expired += 1
             else:

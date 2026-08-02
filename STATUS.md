@@ -1,156 +1,108 @@
 # Estado do Ritmo
 
-Atualizado em 1º de agosto de 2026.
+Atualizado em 2 de agosto de 2026.
 
-## Novas features — 1º de agosto de 2026
+## Resumo atual
 
-As oito features foram consolidadas na branch `feat/product-suite-2026-08`,
-promovidas para `main` no commit `3d9d7b3` e publicadas em produção no Railway
-e na Vercel.
+O Ritmo continua online na versão de produção do commit `3d9d7b3`. A
+estabilização descrita abaixo está implementada no working tree, mas ainda não
+foi publicada. Ela deve passar por staging antes de chegar à produção.
 
-| Feature | Implementação e teste | Limitação confirmada |
-| --- | --- | --- |
-| Selos de streak | Marcos de 7, 30, 100 e 365 dias, com cálculo puro e testes de limiar e agenda do hábito. | O maior streak histórico não ganhou coluna própria; o selo representa a sequência atual. |
-| Atalhos do PWA | Manifest com check-in rápido e nova compra, roteamento inicial e testes das duas ações. | O manifest foi validado, mas a instalação real no Chrome/Android não foi testada; Safari/iOS não oferece esses atalhos. |
-| Calendário `.ics` | Hábitos recorrentes e tarefas pendentes exportados com `icalendar`, horário e `RRULE`; teste reabre e interpreta o arquivo. | Ainda não houve importação manual no Google Calendar, Apple Calendar ou Outlook. |
-| Progresso de treino | Card com período, sessões, séries, minutos, volume, carga máxima e sequência, baixado como PNG; helper, UI e download testados. | O MVP não inclui PDF; o compartilhamento usa o arquivo baixado, não a share sheet nativa. |
-| Briefing da ANAHÍ | Configuração por perfil, migração, geração curta e segura, no máximo uma tentativa diária e falha não crítica no scheduler. | Gemini e entrega push reais não foram acionados nesta validação local. |
-| Insights cruzados | Três cálculos determinísticos com piso de 14 dias: treino x hábitos, melhor dia de tarefas e manhã x leitura. | São associações descritivas, não causalidade; cards sem amostra suficiente ficam ocultos. |
-| Entrada por voz | Web Speech API em `pt-BR`, feature detection, preenchimento editável e sem envio automático; suporte e transcrição cobertos por mocks. | Microfone real e PWA instalado no iPhone não foram testados; no iOS o suporte permanece parcial. |
-| Compras compartilhadas | Código curto pareia dois perfis; listas antigas e novas, itens, histórico e preços ficam visíveis para ambos, com migração reversível e teste de isolamento dos demais domínios. | Atualizações feitas no outro aparelho aparecem ao recarregar; não há sincronização em tempo real. O orçamento mensal geral continua por perfil. |
+| Componente | Estado atual |
+| --- | --- |
+| Frontend público | `https://habitos-base.vercel.app`, última implantação confirmada `dpl_CrRMC1Wo3B8TrFiUYV9aVAsanCRw` |
+| API pública | `https://supportive-warmth-production-dd70.up.railway.app`, última implantação confirmada `3e4557c0-9ac2-4e7c-93a1-5acf02c458d6` |
+| Banco de produção | PostgreSQL persistente, ainda sem backup automático confirmado |
+| Modelo doméstico | Casa confiável: uma chave familiar e dois perfis organizacionais |
+| Novas funcionalidades | Congeladas até 15 de agosto de 2026 para estabilização e uso real |
 
-### Validação automatizada
+## Implementado nesta estabilização
 
-- Backend: `70 passed`; Ruff e mypy sem erros; cobertura total de 86%.
-- Frontend: `117 passed`; build Vite aprovado; cobertura de statements de
-  66,53%. O lint terminou sem erros e manteve 12 avisos já conhecidos de hooks.
-- Dependências: `pip-audit` e `npm audit` sem vulnerabilidades conhecidas.
-- Banco: `alembic upgrade head`, `alembic check`, downgrade da nova migração e
-  novo upgrade aprovados sobre SQLite vazio.
-- Manifest: exatamente dois atalhos, com URLs de check-in e nova compra.
+- Backup PostgreSQL diário versionado, criptografado, retido por 30 dias e
+  restaurado automaticamente em PostgreSQL isolado antes do upload.
+- Exportador JSON dos dois perfis em `backend/scripts/export_profile_backups.py`.
+- Monitor de `/health` a cada 15 minutos e lembrete mensal de restauração via
+  GitHub Actions.
+- Comunicação alinhada ao modelo de casa confiável, sem promessa de privacidade
+  entre os dois perfis.
+- Troca de perfil com remontagem completa, impedindo respostas antigas de
+  atualizarem a árvore do perfil novo.
+- Escopo único de compras compartilhadas aplicado a listas, histórico, ANAHÍ,
+  push e backup v2.
+- Atualização manual das compras e recarga ao voltar para o app.
+- PostgreSQL protegido contra DDL de compatibilidade em runtime; produção usa
+  apenas migrações Alembic.
+- CI backend configurado com PostgreSQL 16 e release manual para staging ou
+  produção, incluindo smoke tests positivos e negativos de autenticação.
+- Fila de notificações durável com payload persistido, retries, recuperação de
+  24 horas e estados `pending`, `sent` e `failed`.
+- Corrigida a causa dos lembretes silenciosos: a aplicação dependia de um worker
+  Railway separado que não estava ativo e o frontend desligava o fallback local
+  apenas por encontrar uma inscrição. A única réplica da API agora executa o
+  scheduler por padrão, publica diagnóstico em `/health`, expõe readiness estrita
+  em `/ready` e mantém o fallback local quando o processador não está `ready`.
+- Rejeições Web Push permanentes desativam somente a inscrição afetada; shutdown
+  interrompe o lote depois da chamada atual e cada reminder usa um `Topic`
+  idempotente para reduzir duplicatas após reinícios.
+- A reconciliação VAPID usa a chave real exposta pelo navegador, preserva uma
+  inscrição válida quando o storage local foi limpo e recria endpoints apenas
+  quando há divergência ou inatividade confirmada.
+- Constraints de banco para um único livro ativo e um único treino ativo por
+  perfil.
+- Mensagens corrigidas para offline, reset, código da casa e Google Gemini.
+- Glossário de progresso e estados explícitos de carregamento e erro.
+- Histórico antigo movido para `CHANGELOG.md`; runbook vigente em `DEPLOY.md`.
 
-### Validação em produção
+## Validação local
 
-- PostgreSQL registrado no baseline Alembic `d755b1cfc868` e atualizado até
-  `b8c19d0a4e32`; `alembic check` não encontrou operações pendentes. As
-  contagens existentes foram preservadas durante a migração.
-- Backend Railway `3e4557c0-9ac2-4e7c-93a1-5acf02c458d6` com estado `SUCCESS`;
-  health, API autenticada, briefing, insights, compras compartilhadas e
-  calendário responderam HTTP 200.
-- Frontend Vercel `dpl_CrRMC1Wo3B8TrFiUYV9aVAsanCRw` com estado `Ready` e alias
-  canônico ativo. O bundle público contém as novas features e a URL correta da
-  API.
-- CORS aprovado entre o domínio canônico e o Railway; a política pública permite
-  microfone somente para o próprio site (`microphone=(self)`). Manifest, service
-  worker, tela offline e os dois atalhos PWA responderam HTTP 200.
+- Backend: `118 passed` (2 avisos de depreciação do Alembic).
+- Ruff: aprovado.
+- Mypy configurado: aprovado.
+- Migração `f4b7d2a91c03`: upgrade, check, downgrade e novo upgrade aprovados em
+  SQLite vazio isolado; SQL PostgreSQL compilado e PostgreSQL 16 configurado no CI.
+- Frontend: `139 passed` em 28 arquivos.
+- Cobertura frontend: 68,97% de statements, 70,35% de branches e 71,03% de linhas.
+- TypeScript e build Vite: aprovados.
+- ESLint: sem erros e com 12 avisos de hooks já conhecidos.
+- Workflows GitHub: 5 arquivos YAML validados localmente.
+- Backup JSON local: dois perfis exportados com checksums válidos e restaurados
+  com sucesso em banco SQLite isolado; backup de produção continua pendente.
+- Release de produção agora exige snapshot JSON criptografado dos dois perfis
+  antes da migração e aborta automaticamente se esse gate falhar.
 
-### Validação manual ainda necessária
+## Bloqueios externos
 
-- Instalar a nova versão no Chrome/Android e conferir os atalhos do ícone.
-- Importar o `.ics` no Google Calendar, Apple Calendar e Outlook.
-- Gerar um PNG em navegador real e conferir o arquivo baixado.
-- Enviar um briefing real com Gemini + Web Push no ambiente controlado.
-- Testar ditado no Chrome com microfone e, separadamente, no PWA de um iPhone
-  físico; o campo de texto continua sendo o caminho garantido.
-- Exercitar o pareamento em dois aparelhos/perfis e confirmar o fluxo após
-  recarregar.
+- [ ] Criar o ambiente GitHub `database-backups` e cadastrar
+  `DATABASE_BACKUP_URL` e `BACKUP_AGE_RECIPIENT`.
+- [ ] Executar `Daily PostgreSQL backup` e confirmar dump, restauração isolada,
+  criptografia e retenção do artefato.
+- [ ] Exportar o JSON atual dos perfis Antonio e Itayna com a chave de produção.
+- [ ] Criar projetos Sentry e configurar DSNs no Railway e na Vercel.
+- [ ] Publicar os workflows para ativar o monitor de saúde e o lembrete mensal.
+- [ ] Criar `backend-staging`, PostgreSQL isolado, preview Vercel e proteções no
+  GitHub.
+- [ ] Aplicar a migração em staging e validar backup, API, worker, retries e
+  constraints antes de produção.
+- [ ] Parear os perfis e validar troca, compras e push em dois aparelhos reais.
+- [ ] Instalar a PWA e testar microfone, atalhos e Web Push em Android e iPhone.
 
-## Auditoria incorporada — 1º de agosto de 2026
+O `backend/ritmo.db` local é anterior ao Alembic e continua atendido pela camada
+de compatibilidade SQLite. Ele não foi marcado como migrado porque
+`alembic check` detectou diferenças históricas; os dois perfis locais foram
+exportados e restaurados com sucesso antes dessa verificação.
 
-Esta entrega foi incorporada à suíte de produto e publicada em `main`. Ela
-acrescenta rate limit e lockout, Sentry opcional, Error Boundary, lint/cobertura
-no CI, React 19.2.8, Lucide compatível, dependências backend atualizadas, hooks
-de domínio e baseline Alembic.
+## Próxima prioridade
 
-- Backend: 61 testes, Ruff, mypy, pip-audit e `alembic check` aprovados; cobertura
-  de 86%.
-- Frontend: 94 testes, lint e build aprovados; cobertura de statements de 64,68%.
-- TypeScript 7 foi testado em branch isolada e não foi adotado por incompatibilidade
-  atual do `typescript-eslint`.
-- O baseline do banco Railway foi registrado e as migrações posteriores foram
-  aplicadas sem alterar as contagens existentes.
+1. Revisar estas alterações e executar o CI sem publicar.
+2. Ativar backup e Sentry antes de qualquer migração de produção.
+3. Criar staging com uma única réplica da API e scheduler embutido.
+4. Publicar em staging e executar o roteiro de aceitação de dois perfis.
+5. Promover para produção somente após backup restaurável e staging aprovados.
+6. Usar o app por duas semanas sem novas features e registrar somente defeitos.
 
-## Produção confirmada
+## Critério de conclusão
 
-- Frontend público: [https://habitos-base.vercel.app](https://habitos-base.vercel.app)
-- API: [health check público](https://supportive-warmth-production-dd70.up.railway.app/health)
-- Frontend publicado na Vercel com estado `Ready`, deployment
-  `dpl_CrRMC1Wo3B8TrFiUYV9aVAsanCRw`.
-- Backend FastAPI publicado no Railway com estado `SUCCESS`, deployment
-  `3e4557c0-9ac2-4e7c-93a1-5acf02c458d6`, e PostgreSQL persistente.
-- `RITMO_DEBUG=false`, chave de acesso forte, CORS limitado ao domínio público
-  e Web Push habilitado com um par VAPID exclusivo.
-- Código da aplicação publicado a partir de `3d9d7b3` na branch `main`.
-- A versão anterior permanece recuperável no histórico Git, no commit
-  `6cd2766`.
-
-## O que esta branch acrescenta
-
-- Assistente **Hoje** com próxima ação, agenda, compra, treino e leitura.
-- Hábitos por dias da semana e tarefas diárias, semanais ou mensais.
-- Compras e finanças com categorias, orçamentos, quantidade, preço unitário,
-  recorrência, comparação mensal, histórico de preço e CSV.
-- Treino guiado com cronômetro, descanso, cargas, repetições, recordes,
-  histórico e sugestão de progressão.
-- Biblioteca com vários livros, porcentagem, sessões, diário e notas por página.
-- PWA instalável, identidade indígena no ícone, tela offline e suporte a Web
-  Push com agendador no backend.
-- Formulários móveis sem zoom automático, navegação inferior oculta durante a
-  digitação e nova compra sem abertura involuntária do teclado.
-- Compra planejada com atalhos Hoje, Amanhã e Outra data; biblioteca antes dos
-  resumos; saudação com arco e flecha e tema no cabeçalho.
-- Backup JSON completo e restauração atômica por perfil.
-- Migrações aditivas/preservadoras para os bancos SQLite existentes.
-
-## Validações concluídas
-
-- Backend: `43 passed`.
-- Frontend: `44 passed` e build Vite de produção concluído.
-- `pip-audit` e `npm audit`: nenhuma vulnerabilidade conhecida.
-- API de produção: `/health` respondeu HTTP 200; uma requisição sem chave foi
-  recusada com 401 e uma requisição autorizada retornou os dois perfis.
-- Hábitos, tarefas, treinos, compras, leitura, estatísticas e backup responderam
-  na API remota. Uma gravação temporária no PostgreSQL foi confirmada e removida.
-- A configuração de push remota respondeu habilitada com chave pública VAPID.
-- CORS aceita `https://habitos-base.vercel.app` e recusa a origem local usada no
-  preview.
-- Cabeçalhos `nosniff`, `DENY`, `no-referrer` e `no-store` confirmados.
-- PWA pública: manifest, service worker, tela offline, ícones e grafismo
-  responderam HTTP 200; o manifest usa modo `standalone` e início em `/today`.
-- Interface pública em viewport de iPhone `390 x 844`: Hoje, Hábitos, Tarefas,
-  Compras e Foco sem rolagem horizontal e conectados à API real.
-- Formulário de compras mobile: nenhum campo recebe foco ao abrir, inputs
-  calculados em `16px`, barra inferior oculta durante o foco e seletor de data
-  condicional aprovado.
-- Cabeçalho, troca de tema, ordem da biblioteca e contenção do horário dos
-  hábitos conferidos em `390 x 844`.
-- Backup/restauração exercitados por teste de ida e volta com hábitos, tarefas,
-  compras, treino e leitura.
-- Migração de hábitos/tarefas exercitada sobre esquema legado com preservação
-  das linhas existentes.
-
-## Portões da publicação
-
-- [x] Dependências instaladas a partir dos arquivos versionados.
-- [x] Testes automatizados do backend aprovados.
-- [x] Testes automatizados e build do frontend aprovados.
-- [x] API local, banco, backup e interface mobile validados.
-- [x] Auditoria local de dependências sem vulnerabilidades conhecidas.
-- [x] Configurar banco persistente, chave de acesso e par VAPID no backend
-  remoto.
-- [x] Publicar e validar o backend em ambiente controlado.
-- [x] Criar e validar o pacote do frontend apontando para a API real.
-- [x] Promover manualmente para produção após aprovação explícita.
-- [ ] Confirmar instalação na tela inicial e entrega de uma notificação em um
-  iPhone físico. Esse passo depende do aparelho e da permissão do iOS.
-
-## Publicação
-
-| Componente | Estado | Observação |
-| --- | --- | --- |
-| Versão anterior | Preservada | Recuperável pelo histórico Git/Vercel |
-| Backend FastAPI | Online | Railway + PostgreSQL, saúde 200 |
-| Frontend React/PWA | Online | Vercel `Ready`, mobile e PWA aprovados |
-
-Consulte [DEPLOY.md](DEPLOY.md) para repetir os portões sem confundir build
-local, preview e produção.
+A estabilização estará concluída quando houver um backup verificado nas últimas
+24 horas, restauração isolada aprovada, Sentry e monitor ativos, scheduler sem
+entregas silenciosamente perdidas e vinte trocas de perfil sob rede lenta sem
+exibição ou mutação de dados do perfil anterior.

@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -92,6 +93,13 @@ class WorkoutSession(Base):
             "status",
             "started_at",
         ),
+        Index(
+            "uq_workout_sessions_active_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ).ddl_if(dialect=("postgresql", "sqlite")),
     )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)

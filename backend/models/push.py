@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -9,6 +10,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 
 from database import Base
@@ -49,9 +51,31 @@ class PushDelivery(Base):
             name="uq_push_deliveries_subscription_reminder",
         ),
         Index("ix_push_deliveries_created", "created_at"),
+        CheckConstraint(
+            "status IN ('pending', 'sent', 'failed')",
+            name="ck_push_deliveries_status",
+        ),
+        CheckConstraint(
+            "attempts >= 0",
+            name="ck_push_deliveries_attempts_nonnegative",
+        ),
+        Index(
+            "ix_push_deliveries_pending_retry",
+            "next_retry_at",
+            "id",
+            postgresql_where=text("status = 'pending'"),
+            sqlite_where=text("status = 'pending'"),
+        ).ddl_if(dialect=("postgresql", "sqlite")),
     )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        server_default="0",
+    )
     subscription_id = Column(
         Integer,
         ForeignKey("push_subscriptions.id", ondelete="CASCADE"),
@@ -59,7 +83,33 @@ class PushDelivery(Base):
         index=True,
     )
     reminder_key = Column(String(180), nullable=False)
+    status = Column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default="sent",
+    )
+    payload = Column(Text, nullable=False, default="{}", server_default="{}")
+    attempts = Column(Integer, nullable=False, default=0, server_default="1")
+    next_retry_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(String(255), nullable=True)
+    scheduled_for = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+    expires_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+    sent_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
 
 
 class AnahiBriefing(Base):

@@ -1,12 +1,18 @@
 from datetime import timedelta
 from decimal import Decimal
 
+import pytest
+from sqlalchemy import inspect
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
 from models.workout import (
     WorkoutExercisePreference,
     WorkoutSession,
     WorkoutSessionExercise,
     WorkoutSetLog,
 )
+from time_utils import app_now
 
 
 def _first_trainable_workout(client, auth_headers, user_id):
@@ -16,6 +22,68 @@ def _first_trainable_workout(client, auth_headers, user_id):
     )
     assert response.status_code == 200
     return next(workout for workout in response.json() if workout["exercises"])
+
+
+def test_active_workout_constraint_serializes_two_sessions(context, user_id):
+    indexes = inspect(context.engine).get_indexes("workout_sessions")
+    assert any(
+        index.get("name") == "uq_workout_sessions_active_user"
+        and index.get("unique")
+        for index in indexes
+    )
+
+    now = app_now()
+    first_db = context.session_factory()
+    second_db = context.session_factory()
+    try:
+        values = {
+            "user_id": user_id,
+            "workout_id": None,
+            "workout_title": "Treino concorrente",
+            "workout_day": "Seg",
+            "status": "active",
+            "rest_seconds": 60,
+            "started_at": now,
+        }
+        first_db.add(WorkoutSession(**values, idempotency_key="active-race-1"))
+        second_db.add(WorkoutSession(**values, idempotency_key="active-race-2"))
+        first_db.commit()
+        with pytest.raises(IntegrityError):
+            second_db.commit()
+        second_db.rollback()
+    finally:
+        first_db.close()
+        second_db.close()
+
+
+def test_workout_router_returns_conflict_for_integrity_race(
+    client,
+    auth_headers,
+    user_id,
+    monkeypatch,
+):
+    workout = _first_trainable_workout(client, auth_headers, user_id)
+    original_commit = Session.commit
+    should_fail = True
+
+    def fail_first_commit(session):
+        nonlocal should_fail
+        if should_fail:
+            should_fail = False
+            raise IntegrityError("INSERT", {}, Exception("simulated race"))
+        return original_commit(session)
+
+    monkeypatch.setattr(Session, "commit", fail_first_commit)
+    response = client.post(
+        f"/api/users/{user_id}/workouts/{workout['id']}/sessions",
+        headers=auth_headers,
+        json={"idempotency_key": "workout-race-response", "rest_seconds": 60},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Another workout session was started concurrently"
+    }
 
 
 def test_guided_workout_flow_is_idempotent_and_keeps_history_snapshot(

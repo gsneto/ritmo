@@ -9,6 +9,8 @@ from models.user import User
 from models.workout import WorkoutExercisePreference
 from schemas.user import ThemeUpdate, UserResponse, UserUpdate
 from seed import create_default_workouts
+from services.push_deliveries import cancel_pending_push_deliveries
+from time_utils import app_now
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -69,6 +71,12 @@ def reset_user_data(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
 
     try:
+        cancel_pending_push_deliveries(
+            db,
+            user_id=user.id,
+            reason="Profile content reset",
+            now=app_now(),
+        )
         # ORM deletes honor relationship cascades and leave no orphan rows.
         for habit in list(user.habits):
             db.delete(habit)

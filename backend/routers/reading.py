@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
@@ -20,6 +21,7 @@ from schemas.reading import (
 from time_utils import app_now, app_today
 
 router = APIRouter(prefix="/api", tags=["reading"])
+ACTIVE_BOOK_CONFLICT = "Another reading book is already active for this user"
 
 
 def _ensure_user(user_id: int, db: Session) -> None:
@@ -36,11 +38,12 @@ def _get_book(book_id: int, db: Session) -> ReadingBook:
 
 
 def _deactivate_other_books(book: ReadingBook, db: Session) -> None:
-    db.query(ReadingBook).filter(
-        ReadingBook.user_id == book.user_id,
-        ReadingBook.id != book.id,
-        ReadingBook.is_active.is_(True),
-    ).update({ReadingBook.is_active: False}, synchronize_session="fetch")
+    with db.no_autoflush:
+        db.query(ReadingBook).filter(
+            ReadingBook.user_id == book.user_id,
+            ReadingBook.id != book.id,
+            ReadingBook.is_active.is_(True),
+        ).update({ReadingBook.is_active: False}, synchronize_session="fetch")
 
 
 def _normalize_book_state(book: ReadingBook, db: Session) -> None:
@@ -62,10 +65,20 @@ def _normalize_book_state(book: ReadingBook, db: Session) -> None:
     book.updated_at = now
 
 
-def _commit_and_refresh(db: Session, value):
+def _commit_and_refresh(
+    db: Session,
+    value,
+    *,
+    integrity_detail: str | None = None,
+):
     try:
         db.commit()
         db.refresh(value)
+    except IntegrityError as exc:
+        db.rollback()
+        if integrity_detail is not None:
+            raise HTTPException(status_code=409, detail=integrity_detail) from exc
+        raise
     except Exception:
         db.rollback()
         raise
@@ -123,7 +136,6 @@ def upsert_reading_book(
             updated_at=now,
         )
         db.add(reading_book)
-        db.flush()
     else:
         reading_book.title = data.title
         reading_book.current_page = data.current_page
@@ -131,7 +143,11 @@ def upsert_reading_book(
         reading_book.notes = data.notes
 
     _normalize_book_state(reading_book, db)
-    return _commit_and_refresh(db, reading_book)
+    return _commit_and_refresh(
+        db,
+        reading_book,
+        integrity_detail=ACTIVE_BOOK_CONFLICT,
+    )
 
 
 @router.delete("/users/{user_id}/reading-book")
@@ -196,9 +212,12 @@ def create_reading_book(
         updated_at=now,
     )
     db.add(reading_book)
-    db.flush()
     _normalize_book_state(reading_book, db)
-    return _commit_and_refresh(db, reading_book)
+    return _commit_and_refresh(
+        db,
+        reading_book,
+        integrity_detail=ACTIVE_BOOK_CONFLICT,
+    )
 
 
 @router.put(
@@ -230,7 +249,11 @@ def update_reading_book(
     for field, value in changes.items():
         setattr(book, field, value)
     _normalize_book_state(book, db)
-    return _commit_and_refresh(db, book)
+    return _commit_and_refresh(
+        db,
+        book,
+        integrity_detail=ACTIVE_BOOK_CONFLICT,
+    )
 
 
 @router.post(
@@ -246,7 +269,11 @@ def activate_reading_book(book_id: int, db: Session = Depends(get_db)):
         )
     book.is_active = True
     _normalize_book_state(book, db)
-    return _commit_and_refresh(db, book)
+    return _commit_and_refresh(
+        db,
+        book,
+        integrity_detail=ACTIVE_BOOK_CONFLICT,
+    )
 
 
 @router.delete("/reading-books/{book_id}")
@@ -334,6 +361,9 @@ def create_reading_session(
     try:
         db.commit()
         db.refresh(session)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=ACTIVE_BOOK_CONFLICT) from exc
     except Exception:
         db.rollback()
         raise

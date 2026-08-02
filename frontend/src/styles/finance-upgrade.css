@@ -6,6 +6,19 @@
   gap: 10px;
 }
 
+.shopping-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.shopping-refresh-action {
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  box-shadow: none;
+}
+
 .shopping-balance-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -662,6 +675,11 @@ section.shopping-price-history {
 }
 
 @media (max-width: 480px) {
+  .shopping-hero-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
   .shopping-balance-row,
   .shopping-list-budget {
     grid-template-columns: 1fr;

@@ -109,19 +109,19 @@ export function useNotifications() {
 
 // Convenience functions for common notifications
 export const notify = {
-  reminder: (
+  reminder: async (
     title: string,
     body: string,
     url = '/today',
     tag = 'ritmo-reminder',
-  ) => {
-    if (canNotify()) {
-      void showSystemNotification(title, {
-        body,
-        tag,
-        data: { url },
-      })
-    }
+  ): Promise<boolean> => {
+    if (!canNotify()) return false
+    const notification = await showSystemNotification(title, {
+      body,
+      tag,
+      data: { url },
+    })
+    return notification !== null
   },
 
   checkin: (habitName: string) => {

@@ -1,7 +1,8 @@
 import asyncio
 import logging
+import threading
 from collections.abc import Callable
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 
 import sentry_sdk
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -15,7 +16,7 @@ from starlette.responses import Response
 
 from config import Settings, get_settings
 from database import SessionLocal, get_db, init_db
-from push_scheduler import run_push_scheduler
+from push_worker import PushWorkerState, notification_runtime, run_worker
 from rate_limit import limiter
 from routers import anahi, backup, habits, push, reading, shopping, stats, tasks, users, workouts
 from security import require_api_key
@@ -54,10 +55,12 @@ def create_app(
     configure_sentry(settings)
     initialize_database = database_initializer or init_db
     make_session = session_factory or SessionLocal
+    push_worker_state = PushWorkerState()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        initialize_database()
+        if settings.database_bootstrap_enabled:
+            initialize_database()
         db = make_session()
         try:
             seed_default_data(db)
@@ -66,19 +69,33 @@ def create_app(
             raise
         finally:
             db.close()
-        push_task: asyncio.Task | None = None
-        if settings.push_enabled:
-            push_task = asyncio.create_task(
-                run_push_scheduler(make_session, settings),
-                name="ritmo-push-reminders",
+
+        worker_stop: threading.Event | None = None
+        worker_thread: threading.Thread | None = None
+        if settings.push_enabled and settings.PUSH_SCHEDULER_IN_API:
+            worker_stop = threading.Event()
+            worker_thread = threading.Thread(
+                target=run_worker,
+                kwargs={
+                    "settings": settings,
+                    "stop_event": worker_stop,
+                    "state": push_worker_state,
+                    "session_factory": make_session,
+                },
+                name="ritmo-push-scheduler",
+                daemon=True,
             )
+            worker_thread.start()
+
         try:
             yield
         finally:
-            if push_task is not None:
-                push_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await push_task
+            if worker_stop is not None and worker_thread is not None:
+                worker_stop.set()
+                join_timeout = 30
+                await asyncio.to_thread(worker_thread.join, join_timeout)
+                if worker_thread.is_alive():
+                    logger.error("Push worker did not stop within %s seconds", join_timeout)
 
     docs_enabled = settings.DEBUG
     application = FastAPI(
@@ -91,6 +108,7 @@ def create_app(
         openapi_url="/openapi.json" if docs_enabled else None,
     )
     application.state.limiter = limiter
+    application.state.push_worker_state = push_worker_state
     application.add_exception_handler(
         RateLimitExceeded,
         rate_limit_exceeded_handler,
@@ -144,10 +162,42 @@ def create_app(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Database unavailable",
             ) from exc
+        notifications = notification_runtime(settings, push_worker_state)
         return {
-            "status": "healthy",
+            "status": (
+                "degraded"
+                if notifications["mode"] == "embedded"
+                and notifications["status"] != "ready"
+                else "healthy"
+            ),
             "date": app_today().isoformat(),
             "timezone": settings.TIMEZONE,
+            "notifications": notifications,
+        }
+
+    @application.get("/ready")
+    def ready(response: Response, db: Session = Depends(get_db)):
+        notifications = notification_runtime(settings, push_worker_state)
+        database_ready = True
+        try:
+            db.execute(text("SELECT 1"))
+        except Exception:
+            database_ready = False
+            logger.exception("Database readiness check failed")
+
+        notifications_ready = not (
+            notifications["mode"] == "embedded"
+            and notifications["status"] != "ready"
+        )
+        ready_status = database_ready and notifications_ready
+        if not ready_status:
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {
+            "status": "healthy" if ready_status else "unhealthy",
+            "database": "ready" if database_ready else "unavailable",
+            "date": app_today().isoformat(),
+            "timezone": settings.TIMEZONE,
+            "notifications": notifications,
         }
 
     if app_settings is not None:

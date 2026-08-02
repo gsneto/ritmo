@@ -1,4 +1,5 @@
-from typing import Annotated
+from datetime import datetime
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from pydantic import Field, StringConstraints, field_validator
@@ -81,6 +82,9 @@ class PushSubscriptionStatusRequest(ApiSchema):
 class PushConfigResponse(ApiSchema):
     enabled: bool
     public_key: str | None = None
+    delivery_status: Literal["ready", "starting", "unavailable", "external", "disabled"]
+    delivery_mode: Literal["embedded", "external", "disabled"]
+    last_cycle_at: datetime | None = None
 
 
 class PushSubscriptionResponse(ApiSchema):
@@ -98,6 +102,15 @@ class PushTestResponse(ApiSchema):
     sent: int
     failed: int
     expired: int
+
+
+class PushTestRequest(ApiSchema):
+    endpoint: PushEndpoint
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_push_service(cls, value: str) -> str:
+        return PushSubscriptionUpsert.validate_push_service(value)
 
 
 class BriefingSettingsResponse(ApiSchema):

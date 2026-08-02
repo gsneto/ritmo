@@ -4,7 +4,7 @@ import { useNotifications } from '../hooks/useNotifications'
 import { usePwaInstall } from '../hooks/usePwaInstall'
 import { usePushNotifications } from '../hooks/usePushNotifications'
 import { apiRoutes } from '../services/api'
-import type { User } from '../services/api'
+import type { RitmoBackup, User } from '../services/api'
 import Settings from './Settings'
 
 vi.mock('../hooks/useNotifications', () => ({
@@ -51,6 +51,9 @@ describe('settings mobile installation', () => {
       isConfigured: false,
       isSubscribed: false,
       isLinkedToOtherProfile: false,
+      deliveryStatus: 'disabled',
+      deliveryMode: 'disabled',
+      lastCycleAt: null,
       isLoading: false,
       error: '',
       lastSyncedAt: null,
@@ -154,6 +157,96 @@ describe('settings mobile installation', () => {
 
     click.mockRestore()
     exportRequest.mockRestore()
+  })
+
+  it('restores a version 2 backup selected from the device', async () => {
+    vi.mocked(usePwaInstall).mockReturnValue({
+      canInstall: false,
+      isInstalled: true,
+      isIos: false,
+      isAndroid: true,
+      install: vi.fn(),
+    })
+    const restoreRequest = vi.spyOn(apiRoutes, 'restoreUserBackup').mockResolvedValue({
+      data: { message: 'restored', restored: { habits: 1, tasks: 2 } },
+    } as never)
+    const confirmRestore = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const onDataReset = vi.fn()
+    const backup: RitmoBackup = {
+      version: 2,
+      app: 'Ritmo',
+      exported_at: '2026-08-01T12:00:00Z',
+      profile: { name: 'Antonio', initials: 'AN', theme: 'dark' },
+      habits: [],
+      tasks: [],
+      shopping_lists: [],
+      shopping_budgets: [],
+      workouts: [],
+      workout_sessions: [],
+      workout_preferences: [],
+      reading_books: [],
+    }
+    const file = new File([JSON.stringify(backup)], 'ritmo-v2.json', {
+      type: 'application/json',
+    })
+    Object.defineProperty(file, 'text', {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(JSON.stringify(backup)),
+    })
+
+    render(
+      <Settings
+        user={user}
+        users={[user]}
+        onUserChange={vi.fn()}
+        onDataReset={onDataReset}
+        onChangeAccessCode={vi.fn()}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText('Escolher backup JSON do Ritmo'), {
+      target: { files: [file] },
+    })
+
+    await waitFor(() => expect(restoreRequest).toHaveBeenCalledWith(1, backup))
+    expect(screen.getByRole('status').textContent).toContain(
+      'Backup restaurado com segurança: 3 registros principais.',
+    )
+    expect(onDataReset).toHaveBeenCalledOnce()
+
+    confirmRestore.mockRestore()
+    restoreRequest.mockRestore()
+  })
+
+  it('describes the profile content reset without promising to remove everything', () => {
+    vi.mocked(usePwaInstall).mockReturnValue({
+      canInstall: false,
+      isInstalled: true,
+      isIos: false,
+      isAndroid: true,
+      install: vi.fn(),
+    })
+    const confirmReset = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    render(
+      <Settings
+        user={user}
+        users={[user]}
+        onUserChange={vi.fn()}
+        onChangeAccessCode={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText(/Preserva nome, iniciais e tema, pareamento de compras/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Reiniciar conteúdo do perfil' }))
+    expect(confirmReset).toHaveBeenCalledWith(expect.stringContaining(
+      'vínculo push e configuração do briefing serão preservados',
+    ))
+    expect(confirmReset).toHaveBeenCalledWith(expect.stringContaining(
+      'Os treinos padrão serão recriados.',
+    ))
+
+    confirmReset.mockRestore()
   })
 
   it('configures the daily ANAHÍ briefing for the active profile', async () => {
@@ -268,6 +361,9 @@ describe('settings mobile installation', () => {
       isConfigured: true,
       isSubscribed: true,
       isLinkedToOtherProfile: false,
+      deliveryStatus: 'ready',
+      deliveryMode: 'embedded',
+      lastCycleAt: new Date('2026-08-01T12:00:00Z'),
       isLoading: false,
       error: '',
       lastSyncedAt: null,
@@ -342,6 +438,9 @@ describe('settings mobile installation', () => {
       isConfigured: true,
       isSubscribed: false,
       isLinkedToOtherProfile: true,
+      deliveryStatus: 'ready',
+      deliveryMode: 'embedded',
+      lastCycleAt: null,
       isLoading: false,
       error: '',
       lastSyncedAt: null,
@@ -369,5 +468,52 @@ describe('settings mobile installation', () => {
 
     expect(screen.getByText(/vinculado a outro perfil/i)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Ativar neste perfil' })).toBeTruthy()
+  })
+
+  it('warns when a subscribed device has no healthy background processor', () => {
+    vi.mocked(useNotifications).mockReturnValue({
+      permission: 'granted',
+      requestPermission: vi.fn(),
+      sendNotification: vi.fn(),
+      isSupported: true,
+      isSecureContext: true,
+    })
+    vi.mocked(usePushNotifications).mockReturnValue({
+      supported: true,
+      isConfigured: true,
+      isSubscribed: true,
+      isLinkedToOtherProfile: false,
+      deliveryStatus: 'unavailable',
+      deliveryMode: 'embedded',
+      lastCycleAt: new Date('2026-08-01T12:00:00Z'),
+      isLoading: false,
+      error: '',
+      lastSyncedAt: null,
+      subscribe: vi.fn(),
+      unsubscribe: vi.fn(),
+      sendTest: vi.fn(),
+      refresh: vi.fn(),
+    })
+    vi.mocked(usePwaInstall).mockReturnValue({
+      canInstall: false,
+      isInstalled: true,
+      isIos: false,
+      isAndroid: true,
+      install: vi.fn(),
+    })
+
+    render(
+      <Settings
+        user={user}
+        users={[user]}
+        onUserChange={vi.fn()}
+        onChangeAccessCode={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Segundo plano não está processando')).toBeTruthy()
+    expect(screen.getByText(/Avisos locais dependem de o Ritmo estar aberto/)).toBeTruthy()
+    expect(screen.getByText(/Última execução:/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Testar agora' })).toBeTruthy()
   })
 })

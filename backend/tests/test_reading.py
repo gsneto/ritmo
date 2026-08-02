@@ -1,14 +1,15 @@
 import pytest
 from fastapi import Depends
 from sqlalchemy import inspect, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, sessionmaker
 
 from database import create_database_engine, init_db
 from models.reading import ReadingBook, ReadingNote, ReadingSession
 from models.user import User
 from routers.reading import router
 from security import require_api_key
-from time_utils import app_today
+from time_utils import app_now, app_today
 
 
 @pytest.fixture()
@@ -195,6 +196,82 @@ def test_reading_table_has_at_most_one_active_book_per_profile(context):
         )
     )
     assert one_active_book_index
+
+
+def test_active_reading_book_constraint_serializes_two_sessions(context, user_id):
+    now = app_now()
+    first_db = context.session_factory()
+    second_db = context.session_factory()
+    try:
+        first_db.add(
+            ReadingBook(
+                user_id=user_id,
+                title="Primeiro ativo",
+                current_page=1,
+                total_pages=100,
+                notes="",
+                status="lendo",
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        second_db.add(
+            ReadingBook(
+                user_id=user_id,
+                title="Segundo ativo",
+                current_page=1,
+                total_pages=100,
+                notes="",
+                status="lendo",
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        first_db.commit()
+        with pytest.raises(IntegrityError):
+            second_db.commit()
+        second_db.rollback()
+    finally:
+        first_db.close()
+        second_db.close()
+
+
+def test_reading_router_returns_conflict_for_integrity_race(
+    reading_client,
+    auth_headers,
+    user_id,
+    monkeypatch,
+):
+    original_commit = Session.commit
+    should_fail = True
+
+    def fail_first_commit(session):
+        nonlocal should_fail
+        if should_fail:
+            should_fail = False
+            raise IntegrityError("INSERT", {}, Exception("simulated race"))
+        return original_commit(session)
+
+    monkeypatch.setattr(Session, "commit", fail_first_commit)
+    response = reading_client.post(
+        f"/api/users/{user_id}/reading-books",
+        headers=auth_headers,
+        json={
+            "title": "Conflito concorrente",
+            "current_page": 1,
+            "total_pages": 100,
+            "notes": "",
+            "status": "lendo",
+            "is_active": True,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Another reading book is already active for this user"
+    }
 
 
 def test_library_supports_multiple_books_and_one_optional_active_book(

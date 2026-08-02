@@ -60,7 +60,16 @@ describe('useDailyReminders', () => {
     vi.stubGlobal('Notification', { permission: 'granted' })
     mocks.getTasks.mockResolvedValue({ data: [] })
     mocks.getShoppingLists.mockResolvedValue({ data: [] })
-    mocks.getPushConfig.mockResolvedValue({ data: { enabled: false, public_key: null } })
+    mocks.reminder.mockResolvedValue(true)
+    mocks.getPushConfig.mockResolvedValue({
+      data: {
+        enabled: false,
+        public_key: null,
+        delivery_status: 'disabled',
+        delivery_mode: 'disabled',
+        last_cycle_at: null,
+      },
+    })
     mocks.getPushSubscriptionStatus.mockResolvedValue({
       data: { active: false, linked_to_other_profile: false },
     })
@@ -129,7 +138,13 @@ describe('useDailyReminders', () => {
     })
     vi.stubGlobal('PushManager', class PushManagerMock {})
     mocks.getPushConfig.mockResolvedValue({
-      data: { enabled: true, public_key: 'public-vapid-key' },
+      data: {
+        enabled: true,
+        public_key: 'public-vapid-key',
+        delivery_status: 'ready',
+        delivery_mode: 'embedded',
+        last_cycle_at: '2026-07-31T14:59:00Z',
+      },
     })
     mocks.getPushSubscriptionStatus.mockResolvedValue({
       data: { active: true, linked_to_other_profile: false },
@@ -156,7 +171,13 @@ describe('useDailyReminders', () => {
     })
     vi.stubGlobal('PushManager', class PushManagerMock {})
     mocks.getPushConfig.mockResolvedValue({
-      data: { enabled: true, public_key: 'public-vapid-key' },
+      data: {
+        enabled: true,
+        public_key: 'public-vapid-key',
+        delivery_status: 'ready',
+        delivery_mode: 'embedded',
+        last_cycle_at: null,
+      },
     })
     mocks.getPushSubscriptionStatus.mockResolvedValue({
       data: { active: false, linked_to_other_profile: true },
@@ -172,5 +193,105 @@ describe('useDailyReminders', () => {
       subscription.endpoint,
     )
     expect(mocks.reminder).toHaveBeenCalledOnce()
+  })
+
+  it('keeps local reminders when the subscription is active but the worker is unavailable', async () => {
+    const subscription = { endpoint: 'https://fcm.googleapis.com/fcm/send/dead-worker' }
+    const registration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(subscription),
+      },
+    }
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { getRegistration: vi.fn().mockResolvedValue(registration) },
+    })
+    vi.stubGlobal('PushManager', class PushManagerMock {})
+    mocks.getPushConfig.mockResolvedValue({
+      data: {
+        enabled: true,
+        public_key: 'public-vapid-key',
+        delivery_status: 'unavailable',
+        delivery_mode: 'embedded',
+        last_cycle_at: '2026-07-31T12:00:00Z',
+      },
+    })
+    mocks.getPushSubscriptionStatus.mockResolvedValue({
+      data: { active: true, linked_to_other_profile: false },
+    })
+    mocks.getHabits.mockResolvedValue({ data: [habitAt('12:01')] })
+
+    renderHook(() => useDailyReminders(1))
+    await flushReminderLoading()
+    await act(async () => vi.advanceTimersByTimeAsync(61_000))
+
+    expect(mocks.reminder).toHaveBeenCalledOnce()
+  })
+
+  it('keeps local reminders when the browser subscription uses an old VAPID key', async () => {
+    const subscription = {
+      endpoint: 'https://fcm.googleapis.com/fcm/send/old-vapid',
+      options: { applicationServerKey: new Uint8Array([1, 2, 3]).buffer },
+    }
+    const registration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(subscription),
+      },
+    }
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { getRegistration: vi.fn().mockResolvedValue(registration) },
+    })
+    vi.stubGlobal('PushManager', class PushManagerMock {})
+    mocks.getPushConfig.mockResolvedValue({
+      data: {
+        enabled: true,
+        public_key: 'BAUG',
+        delivery_status: 'ready',
+        delivery_mode: 'embedded',
+        last_cycle_at: '2026-07-31T15:00:00Z',
+      },
+    })
+    mocks.getPushSubscriptionStatus.mockResolvedValue({
+      data: { active: true, linked_to_other_profile: false },
+    })
+    mocks.getHabits.mockResolvedValue({ data: [habitAt('12:01')] })
+
+    renderHook(() => useDailyReminders(1))
+    await flushReminderLoading()
+    await act(async () => vi.advanceTimersByTimeAsync(61_000))
+
+    expect(mocks.reminder).toHaveBeenCalledOnce()
+  })
+
+  it('marks a reminder only after the notification resolves successfully', async () => {
+    mocks.getHabits.mockResolvedValue({ data: [habitAt('12:01')] })
+    let resolveNotification: ((shown: boolean) => void) | undefined
+    mocks.reminder.mockReturnValue(new Promise(resolve => {
+      resolveNotification = resolve
+    }))
+
+    renderHook(() => useDailyReminders(1))
+    await flushReminderLoading()
+    await act(async () => vi.advanceTimersByTimeAsync(61_000))
+
+    const storageKey = 'ritmo-reminder:habit-7-2026-07-31'
+    expect(window.localStorage.getItem(storageKey)).toBeNull()
+    await act(async () => resolveNotification?.(true))
+    expect(window.localStorage.getItem(storageKey)).toBe('1')
+  })
+
+  it('does not mark or show a reminder when its callback runs too late', async () => {
+    mocks.getHabits.mockResolvedValue({ data: [habitAt('12:01')] })
+
+    renderHook(() => useDailyReminders(1))
+    await flushReminderLoading()
+    vi.setSystemTime(new Date(2026, 6, 31, 12, 20, 0))
+    await act(async () => vi.runOnlyPendingTimersAsync())
+
+    expect(mocks.reminder).not.toHaveBeenCalled()
+    expect(
+      window.localStorage.getItem('ritmo-reminder:habit-7-2026-07-31'),
+    ).toBeNull()
   })
 })

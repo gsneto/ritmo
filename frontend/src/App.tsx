@@ -134,7 +134,7 @@ export default function App() {
     clearAccessKey()
     setUsers([])
     setActiveUser(null)
-    setAccessMessage('Digite o novo código pessoal para continuar.')
+    setAccessMessage('O código foi esquecido neste aparelho. Digite o código da casa para continuar.')
     setStatus('access')
   }
 
@@ -209,7 +209,7 @@ export default function App() {
         <img src="/grafismo-indigena-ritmo.png" alt="" />
       </div>
       <Navigation />
-      <main key={refreshKey}>
+      <main key={`${activeUser.id}:${refreshKey}`}>
         {activePath === '/today' && <Today userId={activeUser.id} />}
         {activePath === '/habits' && (
           <Habits

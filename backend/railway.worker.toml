@@ -1,0 +1,10 @@
+# Advanced optional mode only. Select this config on a dedicated worker and set
+# PUSH_SCHEDULER_IN_API=false on the API service to avoid duplicate schedulers.
+[build]
+  builder = "DOCKERFILE"
+  dockerfilePath = "Dockerfile"
+
+[deploy]
+  preDeployCommand = "alembic upgrade head"
+  startCommand = "python -m push_worker"
+  restartPolicyType = "ALWAYS"
