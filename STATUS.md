@@ -1,22 +1,29 @@
 # Estado do Ritmo
 
-Atualizado em 2 de agosto de 2026.
+Atualizado em 17 de outubro de 2026.
 
 ## Resumo atual
 
-O Ritmo continua online na versão de produção do commit `3d9d7b3`. A
-estabilização descrita abaixo está implementada no working tree, mas ainda não
-foi publicada. Ela deve passar por staging antes de chegar à produção.
+A estabilização está commitada em `main` no commit `676c1f3` (2 de agosto de
+2026) e o repositório local está sincronizado com `origin/main`. A produção
+continua na versão `3d9d7b3` e não recebeu essa estabilização.
 
-| Componente | Estado atual |
+Em 17 de outubro de 2026, a API pública documentada não responde. O host
+`https://supportive-warmth-production-dd70.up.railway.app` retorna HTTP 404 com
+`{"message":"Application not found"}` e cabeçalho `x-railway-fallback: true`, o
+que indica domínio sem serviço associado, não erro da aplicação. O frontend
+responde HTTP 200, mas o bundle publicado ainda aponta para essa mesma API, de
+modo que a aplicação está degradada.
+
+| Componente | Estado em 17/10/2026 |
 | --- | --- |
-| Frontend público | `https://habitos-base.vercel.app`, última implantação confirmada `dpl_CrRMC1Wo3B8TrFiUYV9aVAsanCRw` |
-| API pública | `https://supportive-warmth-production-dd70.up.railway.app`, última implantação confirmada `3e4557c0-9ac2-4e7c-93a1-5acf02c458d6` |
-| Banco de produção | PostgreSQL persistente, ainda sem backup automático confirmado |
+| Frontend público | `https://habitos-base.vercel.app` responde HTTP 200; o bundle publicado referencia a API indisponível |
+| API pública | host antigo retorna HTTP 404 (`Application not found`); última implantação confirmada `3e4557c0-9ac2-4e7c-93a1-5acf02c458d6`, em 1º de agosto de 2026 |
+| Banco de produção | PostgreSQL persistente; backup automático não confirmado |
 | Modelo doméstico | Casa confiável: uma chave familiar e dois perfis organizacionais |
-| Novas funcionalidades | Congeladas até 15 de agosto de 2026 para estabilização e uso real |
+| Novas funcionalidades | Congeladas; a prioridade é recuperar a publicação |
 
-## Implementado nesta estabilização
+## Implementado nesta estabilização (commit `676c1f3`)
 
 - Backup PostgreSQL diário versionado, criptografado, retido por 30 dias e
   restaurado automaticamente em PostgreSQL isolado antes do upload.
@@ -55,30 +62,69 @@ foi publicada. Ela deve passar por staging antes de chegar à produção.
 
 ## Validação local
 
-- Backend: `118 passed` (2 avisos de depreciação do Alembic).
+### Reexecutada em 17 de outubro de 2026
+
+- Backend: `118 passed`, com 2 avisos de depreciação do Alembic sobre
+  `path_separator`.
 - Ruff: aprovado.
-- Mypy configurado: aprovado.
+- Mypy: aprovado em 18 arquivos.
+- Frontend: `139 passed` em 28 arquivos.
+- ESLint: sem erros e com 12 avisos de hooks já conhecidos.
+- TypeScript e build Vite: aprovados.
+- `alembic upgrade head`: aprovado em SQLite temporário isolado, fora do
+  repositório.
+- Docker não está instalado nesta máquina; o build da imagem não foi executado
+  nesta verificação.
+
+### Registro histórico de 2 de agosto de 2026
+
 - Migração `f4b7d2a91c03`: upgrade, check, downgrade e novo upgrade aprovados em
   SQLite vazio isolado; SQL PostgreSQL compilado e PostgreSQL 16 configurado no CI.
-- Frontend: `139 passed` em 28 arquivos.
 - Cobertura frontend: 68,97% de statements, 70,35% de branches e 71,03% de linhas.
-- TypeScript e build Vite: aprovados.
-- ESLint: sem erros e com 12 avisos de hooks já conhecidos.
 - Workflows GitHub: 5 arquivos YAML validados localmente.
 - Backup JSON local: dois perfis exportados com checksums válidos e restaurados
   com sucesso em banco SQLite isolado; backup de produção continua pendente.
 - Release de produção agora exige snapshot JSON criptografado dos dois perfis
   antes da migração e aborta automaticamente se esse gate falhar.
 
+## Correções da Fase 1 (17 de outubro de 2026)
+
+- `backend/tests/test_security_health.py` iniciava a aplicação sem banco
+  isolado. Com `RITMO_DEBUG=true`, o lifespan executava `init_db` e o seed no
+  `./ritmo.db` do diretório atual. O teste agora usa um SQLite temporário e
+  sobrescreve `get_db`. Verificado: a suíte completa não altera mais
+  `backend/ritmo.db` e não cria banco no diretório de trabalho.
+- `backend/.env.example` documenta desenvolvimento, testes e produção, incluindo
+  o requisito de `RITMO_DEBUG=true` para o modo SQLite sem chave.
+- `docs/LOCAL_SETUP.md` centraliza o procedimento local reproduzível.
+- `.gitignore` passou a cobrir dumps, chaves e artefatos de criptografia.
+
+## Staging PostgreSQL (17 de outubro de 2026)
+
+Foi criado o projeto Neon Free `ritmo-pessoal-staging` na região
+`aws-us-east-1`, isolado e sem dados pessoais. As quatro migrações Alembic foram
+aplicadas e o banco está em `f4b7d2a91c03`; o esquema resultante coincide com os
+modelos SQLAlchemy (20 tabelas, 156 colunas). A API pública continua indisponível
+e nenhum serviço Render foi criado. Detalhes, limites gratuitos e pendências
+estão em `docs/NEON_STAGING.md`.
+
 ## Bloqueios externos
 
-- [ ] Criar o ambiente GitHub `database-backups` e cadastrar
-  `DATABASE_BACKUP_URL` e `BACKUP_AGE_RECIPIENT`.
+Verificado em 17 de outubro de 2026:
+
+- [x] Ambientes GitHub `backend-production` e `database-backups` existem.
+- [ ] Cadastrar `RAILWAY_TOKEN` e `RAILWAY_PROJECT_ID` em `backend-production`.
+  Sem eles, a execução `30730790617` (2 de agosto de 2026) falhou no job
+  *Publish backend*.
+- [ ] Cadastrar `DATABASE_BACKUP_URL` e `BACKUP_AGE_RECIPIENT` em
+  `database-backups`. O ambiente existe, mas está sem secrets.
+- [ ] Reativar os workflows `Production health monitor`, `Daily PostgreSQL backup`
+  e `Monthly restore reminder`, que estão `disabled_inactivity`.
 - [ ] Executar `Daily PostgreSQL backup` e confirmar dump, restauração isolada,
   criptografia e retenção do artefato.
-- [ ] Exportar o JSON atual dos perfis Antonio e Itayna com a chave de produção.
-- [ ] Criar projetos Sentry e configurar DSNs no Railway e na Vercel.
-- [ ] Publicar os workflows para ativar o monitor de saúde e o lembrete mensal.
+- [ ] Exportar o JSON atual dos perfis com a chave de produção.
+- [ ] Criar projetos Sentry e configurar DSNs no backend e na Vercel.
+- [ ] Restabelecer a API pública; o host antigo não tem serviço associado.
 - [ ] Criar `backend-staging`, PostgreSQL isolado, preview Vercel e proteções no
   GitHub.
 - [ ] Aplicar a migração em staging e validar backup, API, worker, retries e
@@ -86,19 +132,42 @@ foi publicada. Ela deve passar por staging antes de chegar à produção.
 - [ ] Parear os perfis e validar troca, compras e push em dois aparelhos reais.
 - [ ] Instalar a PWA e testar microfone, atalhos e Web Push em Android e iPhone.
 
+Issues abertas no repositório: `#1` (API indisponível) e `#2` (validação de
+restauração mensal).
+
 O `backend/ritmo.db` local é anterior ao Alembic e continua atendido pela camada
-de compatibilidade SQLite. Ele não foi marcado como migrado porque
-`alembic check` detectou diferenças históricas; os dois perfis locais foram
-exportados e restaurados com sucesso antes dessa verificação.
+de compatibilidade SQLite. Em 17 de outubro de 2026 foi confirmado que ele
+possui uma tabela `alembic_version` vazia, sem revisão registrada. Ele não foi
+migrado nem estampado. Durante esta sessão, uma execução da suíte aplicou DDL de
+compatibilidade nesse arquivo, conforme registrado em Limitações; as contagens
+de dados conferem com o export de 2 de agosto de 2026.
+
+## Limitações do ambiente local
+
+- `backend/.env` é ignorado pelo Git. Em 17 de outubro de 2026 ele não continha
+  `RITMO_DEBUG` nem `DATABASE_URL`; as duas linhas foram acrescentadas
+  localmente, sem alterar o restante do arquivo. Sem `RITMO_DEBUG=true`, a
+  validação de `config.py` recusa `ALLOW_INSECURE_NO_ACCESS_TOKEN=true` com
+  SQLite e comandos como `alembic current` falham antes de abrir o banco. O
+  procedimento seguro para completar o arquivo está em `docs/LOCAL_SETUP.md`.
+- Docker não está instalado nesta máquina.
+- Em 17 de outubro de 2026, antes da correção de isolamento acima, uma execução
+  da suíte aplicou DDL de compatibilidade em `backend/ritmo.db`. As contagens de
+  dados conferem com o export de 2 de agosto de 2026 (2 perfis, 14 treinos, 2
+  sessões); nenhum registro foi removido. Um ponto de restauração foi copiado
+  para fora do repositório e do OneDrive.
+- Os snapshots em `.ritmo-backups/` não foram alterados.
 
 ## Próxima prioridade
 
-1. Revisar estas alterações e executar o CI sem publicar.
-2. Ativar backup e Sentry antes de qualquer migração de produção.
-3. Criar staging com uma única réplica da API e scheduler embutido.
-4. Publicar em staging e executar o roteiro de aceitação de dois perfis.
-5. Promover para produção somente após backup restaurável e staging aprovados.
-6. Usar o app por duas semanas sem novas features e registrar somente defeitos.
+1. Revisar as mudanças da Fase 1 e executar o CI sem publicar.
+2. Definir a arquitetura gratuita (Render Free + Neon Free + Vercel Hobby) e
+   revalidar as franquias antes de provisionar.
+3. Recriar a API em ambiente gratuito com PostgreSQL gerenciado e variáveis
+   configuradas fora do Git.
+4. Migrar o SQLite legado com backup, importação validada e rollback.
+5. Ativar backup independente, Sentry e monitoramento.
+6. Promover o frontend somente após staging e aceitação de dois perfis.
 
 ## Critério de conclusão
 

@@ -38,12 +38,13 @@
 
 ## Executar localmente
 
-Pré-requisitos: Node.js 20+ e Python 3.12+.
+Pré-requisitos: Node.js 20+ e Python 3.12+. O passo a passo detalhado está em
+`docs/LOCAL_SETUP.md`.
 
 ```powershell
 # Terminal 1 — API
 Set-Location backend
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m uvicorn main:app --reload
 ```
@@ -51,13 +52,16 @@ Copy-Item .env.example .env
 ```powershell
 # Terminal 2 — interface
 Set-Location frontend
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 npm ci
 npm run dev
 ```
 
 Abra `http://localhost:5173` no navegador. A API local fica em
 `http://localhost:8000`.
+
+Não sobrescreva um `backend/.env` existente. O modo local sem chave exige
+`RITMO_DEBUG=true` com SQLite; sem isso, a validação de configuração falha.
 
 Para usar a ANAHÍ localmente, defina `GEMINI_API_KEY` somente em
 `backend/.env`. Nunca exponha chaves em variáveis `VITE_*` ou no repositório.

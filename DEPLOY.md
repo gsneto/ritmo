@@ -16,13 +16,62 @@ Em 1º de agosto de 2026, a última produção confirmada usava:
   `SUCCESS`;
 - aplicação: commit `3d9d7b3`.
 
-As mudanças de estabilização descritas em `STATUS.md` ainda precisam passar por
-staging antes de substituir essa versão. Não confunda validação local com código
-publicado.
+Em 17 de outubro de 2026, uma verificação direta encontrou:
+
+- o frontend responde HTTP 200, mas o bundle publicado referencia a API antiga;
+- a API antiga responde HTTP 404 com `{"message":"Application not found"}` e
+  cabeçalho `x-railway-fallback: true`, indicando domínio sem serviço associado;
+- a estabilização está commitada em `676c1f3`, mas a produção continua em
+  `3d9d7b3`.
+
+Trate o endpoint Railway antigo como indisponível até que um novo deploy seja
+verificado. Não presuma que o host responde porque a documentação antiga o cita.
 
 Os segredos permanecem somente nos provedores. O teste em viewport mobile foi
 aprovado; instalação e notificação em um iPhone físico ainda precisam ser
 confirmadas no próprio aparelho.
+
+## Arquitetura gratuita pretendida (não provisionada)
+
+Esta seção registra a direção planejada e os limites verificados em 17 de
+outubro de 2026. Nenhum recurso foi criado, alterado ou publicado nesta fase.
+
+| Camada | Escolha pretendida | Limite gratuito verificado |
+| --- | --- | --- |
+| Frontend | Vercel Hobby | 100 GB de transferência/mês e 100 deployments/dia; uso pessoal não comercial |
+| API | Render Free web service | 750 horas de instância/mês por workspace; suspensão após 15 minutos sem tráfego; filesystem efêmero; sem disco persistente |
+| Banco | Neon Free PostgreSQL | 100 CU-hours por projeto/mês; 1 GB por projeto (20 GB no total); 5 GB de transferência pública; scale-to-zero após 5 minutos; 6 horas de restore; 1 snapshot manual |
+| Código e CI | GitHub Free | 2.000 minutos/mês em repositório privado (repositórios públicos não consomem minutos); workflows agendados podem ser desativados após 60 dias sem atividade, como já ocorreu neste repositório |
+| Backup | GitHub Actions com artefato criptografado | depende da franquia de Actions e da retenção de artefatos |
+
+O Render Free Postgres não é adequado: o banco gratuito expira 30 dias após a
+criação e não oferece backup. Por isso o banco pretendido é o Neon.
+
+O projeto Neon Free `ritmo-pessoal-staging` já existe e teve o esquema validado
+em PostgreSQL 18. Plano, região, limites verificados e pendências estão em
+`docs/NEON_STAGING.md`.
+
+Consequências obrigatórias para o desenho:
+
+- Uma instância gratuita com filesystem efêmero não pode depender de SQLite
+  local. Os dados precisam ficar em um PostgreSQL gerenciado e a `DATABASE_URL`
+  precisa ser configurada no provedor, fora do Git.
+- A primeira requisição depois da suspensão pode levar cerca de um minuto. A
+  interface precisa tolerar esse tempo de inicialização.
+- Lembretes agendados não podem depender de uma instância que pode estar
+  suspensa. É necessário aceitar atraso ou acordar o serviço com um gatilho
+  externo, respeitando as 750 horas/mês.
+- O Render pode suspender um serviço gratuito que gere volume incomum de tráfego
+  de saída; o acesso ao banco externo conta nesse limite.
+- A conexão com o Neon deve usar SSL (`sslmode=require`). O endpoint com pooler
+  opera em modo transação; com psycopg 3, avalie `prepare_threshold=None` para
+  evitar conflito de prepared statements.
+- Limites, cotas e termos dos planos gratuitos podem mudar. Revalide as páginas
+  oficiais antes de qualquer publicação.
+
+A migração do SQLite legado exige backup verificado, estratégia de importação,
+validação em banco isolado e rollback. O banco real não pode ser usado como
+ambiente genérico de testes.
 
 ## Política de promoção
 
@@ -109,6 +158,9 @@ o monitoramento concluído.
 
 ## 1. Validação local
 
+O passo a passo reproduzível, incluindo a verificação de variáveis sem expor
+segredos, está em `docs/LOCAL_SETUP.md`.
+
 ### Backend
 
 ```powershell
@@ -116,7 +168,7 @@ Set-Location backend
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 .\.venv\Scripts\python.exe -m pip_audit -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m compileall -q .
 .\.venv\Scripts\alembic.exe upgrade head
@@ -126,10 +178,16 @@ Copy-Item .env.example .env
 .\.venv\Scripts\python.exe -m uvicorn main:app --reload
 ```
 
+Não sobrescreva um `backend/.env` existente: ele pode conter chaves locais. Se
+`RITMO_DEBUG` estiver ausente, a API recusa a combinação
+`ALLOW_INSECURE_NO_ACCESS_TOKEN=true` com SQLite e comandos como
+`alembic current` falham na validação de `config.py`.
+
 Esse `alembic upgrade head` pressupõe banco novo ou já versionado. Se um SQLite
 local antigo tiver tabelas e não tiver revisão Alembic, não use `stamp head`
 sem validar o schema. Exporte os JSONs dos perfis e teste a restauração em um
-banco novo antes de substituir ou arquivar o arquivo legado.
+banco novo antes de substituir ou arquivar o arquivo legado. `backend/ritmo.db`
+não deve ser migrado, recriado nem usado como banco de testes.
 
 Em outro terminal, faça pelo menos estes smoke tests:
 
@@ -146,7 +204,7 @@ além das rotas de estatísticas. Confirme que reiniciar a API não perde os dad
 
 ```powershell
 Set-Location frontend
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 npm ci
 npm run lint
 npm test

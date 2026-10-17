@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from threading import Event
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -7,10 +8,11 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import SecretStr, ValidationError
+from sqlalchemy.orm import sessionmaker
 
 import database as database_module
 from config import Settings
-from database import Base, get_db, init_db
+from database import Base, create_database_engine, get_db, init_db
 from main import create_app
 from security import auth_failure_limiter, validate_api_key
 
@@ -312,15 +314,46 @@ def test_lifespan_starts_and_stops_embedded_worker_without_blocking(
         return 0
 
     monkeypatch.setattr("main.run_worker", fake_worker)
-    application = create_app(settings)
 
-    with TestClient(application) as test_client:
-        assert started.wait(timeout=1)
-        response = test_client.get("/health")
-        assert response.json()["notifications"]["status"] == "ready"
-        readiness = test_client.get("/ready")
-        assert readiness.status_code == 200
-        assert readiness.json()["status"] == "healthy"
+    # The lifespan must never touch the developer's default database, so pass
+    # an isolated SQLite engine and override the request dependency as well.
+    test_engine = create_database_engine(settings.database_url)
+    testing_session = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=test_engine,
+    )
+
+    def override_get_db():
+        db = testing_session()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    application = create_app(
+        settings,
+        database_initializer=partial(
+            init_db,
+            bind=test_engine,
+            session_factory=testing_session,
+        ),
+        session_factory=testing_session,
+    )
+    application.dependency_overrides[get_db] = override_get_db
+
+    try:
+        with TestClient(application) as test_client:
+            assert started.wait(timeout=1)
+            response = test_client.get("/health")
+            assert response.json()["notifications"]["status"] == "ready"
+            readiness = test_client.get("/ready")
+            assert readiness.status_code == 200
+            assert readiness.json()["status"] == "healthy"
+    finally:
+        application.dependency_overrides.clear()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
 
     assert stopped.wait(timeout=1)
     assert application.state.push_worker_state.snapshot()["running"] is False

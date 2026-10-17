@@ -20,11 +20,17 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
-# Local databases
+# Local databases, dumps and encryption material
 *.db
 *.db-*
 *.sqlite
 *.sqlite3
+*.dump
+*.sql.gz
+*.age
+*.pem
+*.key
+*.bak
 .ritmo-backups/
 
 # Node / Vite
