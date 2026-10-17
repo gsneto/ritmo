@@ -73,6 +73,74 @@ A migração do SQLite legado exige backup verificado, estratégia de importaç�
 validação em banco isolado e rollback. O banco real não pode ser usado como
 ambiente genérico de testes.
 
+## Backend em Render Free (staging)
+
+O serviço de staging **não foi criado**. O MCP do Render não está exposto neste
+ambiente e não há credencial disponível, então nenhum recurso Render foi
+provisionado, consultado ou publicado. O que segue são as condições verificadas
+na documentação oficial em 17 de outubro de 2026 e o roteiro para execução
+manual.
+
+### Condições de custo zero
+
+- Web services aceitam o plano `Free` com Docker.
+- 750 horas de instância por workspace por mês; serviços suspensos não consomem
+  horas.
+- Suspensão após 15 minutos sem tráfego de entrada; retomada leva cerca de um
+  minuto.
+- Sem disco persistente no plano Free; o sistema de arquivos é efêmero.
+- Sem método de pagamento, o esgotamento de banda ou de minutos de build
+  **suspende** os serviços gratuitos em vez de cobrar. Com método de pagamento
+  cadastrado, há cobrança por excedente.
+- Antes de criar o serviço, confirme no painel que o workspace não possui método
+  de pagamento. Se possuir, não crie o serviço sem antes definir um limite de
+  gastos efetivo.
+
+### Configuração do serviço
+
+| Campo | Valor |
+| --- | --- |
+| Nome | `ritmo-api-staging` |
+| Repositório | `gsneto/ritmo` |
+| Branch | `chore/ritmo-free-preflight` |
+| Runtime | Docker |
+| Dockerfile | `backend/Dockerfile` |
+| Contexto de build | `backend` |
+| Região | Virginia (a mesma de `aws-us-east-1` no Neon) |
+| Plano | Free |
+| Disco persistente | nenhum |
+| Health check | `/ready` |
+
+O `Dockerfile` já respeita a porta injetada pelo provedor
+(`--port ${PORT:-8000}`), escuta em `0.0.0.0` e executa `alembic upgrade head`
+antes de subir o uvicorn. O `.dockerignore` exclui `.env`, `.venv`, bancos e
+testes, então nenhum segredo local entra na imagem.
+
+### Variáveis de ambiente
+
+Somente estas são necessárias para um staging seguro:
+
+| Nome | Conteúdo |
+| --- | --- |
+| `DATABASE_URL` | URL PostgreSQL do Neon, endpoint direto com `sslmode=require` |
+| `APP_ACCESS_TOKEN` | segredo longo e aleatório, exclusivo deste ambiente |
+| `CORS_ORIGINS` | origens do frontend que poderão chamar esta API |
+| `RITMO_DEBUG` | `false` |
+| `ALLOW_INSECURE_NO_ACCESS_TOKEN` | `false` |
+| `TIMEZONE` | `America/Sao_Paulo` |
+
+Não configure `SENTRY_DSN`, `GEMINI_API_KEY` nem chaves VAPID nesta fase. Sem
+VAPID, o modo de notificações fica `disabled`, o scheduler não inicia e `/ready`
+avalia apenas o banco.
+
+### Limitações conhecidas
+
+- A instância dorme e a primeira requisição após a suspensão é lenta.
+- Lembretes agendados não são confiáveis em uma instância que pode estar
+  suspensa.
+- O staging não contém dados pessoais e não substitui a migração do aplicativo.
+
+
 ## Política de promoção
 
 1. Preservar a versão antiga em produção.

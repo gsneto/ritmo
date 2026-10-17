@@ -108,6 +108,20 @@ modelos SQLAlchemy (20 tabelas, 156 colunas). A API pública continua indisponí
 e nenhum serviço Render foi criado. Detalhes, limites gratuitos e pendências
 estão em `docs/NEON_STAGING.md`.
 
+## Preparação para staging (17 de outubro de 2026)
+
+- Branch `chore/ritmo-free-preflight` publicada em `origin` no commit
+  `734a3f4`, sem force push e sem alterar `main`.
+- `main` permanece em `676c1f3`; não houve merge nem pull request.
+- Branch Neon `ritmo-online-migration-validation` (`br-mute-flower-b85ezren`)
+  criada e esvaziada para provar as migrations online.
+- `alembic upgrade head` online ainda **não** foi executado: faltava um meio
+  seguro de fornecer a credencial ao processo. O procedimento está em
+  `docs/NEON_STAGING.md`.
+- O serviço Render de staging não foi criado. O MCP do Render não está exposto
+  neste ambiente e não há credencial disponível; o roteiro manual está em
+  `DEPLOY.md`.
+
 ## Bloqueios externos
 
 Verificado em 17 de outubro de 2026:

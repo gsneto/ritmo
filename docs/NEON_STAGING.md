@@ -56,6 +56,69 @@ este banco. A tabela `alembic_version` já está em `f4b7d2a91c03`, então uma
 execução futura deve ser um no-op, mas isso precisa ser confirmado na Fase 2B com
 `alembic current` e `alembic upgrade head` reais.
 
+## Branch de validação online
+
+| Item | Valor |
+| --- | --- |
+| Nome | `ritmo-online-migration-validation` |
+| ID | `br-mute-flower-b85ezren` |
+| Origem | `br-ancient-cloud-b8hp23th` (`main`), no LSN `0/1C52148` |
+| Criada em | 2026-10-17T15:13:13Z |
+| Estado | `ready`, vazia (0 tabelas em `public`) |
+
+O esquema copiado da branch `main` foi removido **somente nesta branch** com
+`DROP SCHEMA public CASCADE; CREATE SCHEMA public`. A branch `main` foi
+reverificada em seguida e continuou com 20 tabelas e `alembic_version =
+f4b7d2a91c03`, comprovando o isolamento. A branch de validação não contém dados
+pessoais.
+
+## Validação online do Alembic: pendente
+
+Esta é a lacuna aberta da fase. `alembic upgrade head` **online**, conectado por
+psycopg a esta branch, ainda não foi executado. Os motivos são objetivos:
+
+- o agente não possui um cofre ou mecanismo de injeção de credenciais;
+- obter a URL pelo MCP e repassá-la a um processo Python exigiria expô-la em
+  argumento de shell, arquivo ou variável persistente, o que é proibido;
+- a única alternativa executável sem exposição seria repetir o DDL offline pelo
+  MCP, que não comprova o caminho online.
+
+O estado atual prova a cadeia de migrations em PostgreSQL 18 de duas formas
+(projeto novo em 2A e branch esvaziada em 2B), mas **não** prova o comando
+Alembic conectado. A branch ficou deliberadamente vazia para receber esse teste.
+
+### Procedimento seguro para concluir
+
+Execute no terminal do próprio usuário, onde a URL nunca entra em histórico nem
+em argumentos visíveis:
+
+```powershell
+Set-Location C:\Users\anton\OneDrive\Desktop\habitos-base\backend
+$secure = Read-Host "Cole a DATABASE_URL da branch de validacao (nao sera exibida)" -AsSecureString
+$plain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+  [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+)
+$env:DATABASE_URL = $plain
+$env:RITMO_DEBUG = "false"
+$env:ALLOW_INSECURE_NO_ACCESS_TOKEN = "false"
+$env:APP_ACCESS_TOKEN = "staging-validation-token"
+$env:CORS_ORIGINS = "https://example.invalid"
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m alembic current
+Remove-Item Env:DATABASE_URL, Env:RITMO_DEBUG, Env:ALLOW_INSECURE_NO_ACCESS_TOKEN, Env:APP_ACCESS_TOKEN, Env:CORS_ORIGINS
+```
+
+Depois, confirme no console do Neon, na branch de validação:
+
+```sql
+SELECT version_num FROM alembic_version;
+SELECT count(*) FROM information_schema.tables
+WHERE table_schema = 'public' AND table_name <> 'alembic_version';
+```
+
+Esperado: `f4b7d2a91c03` e `20`. Quando isso passar, a lacuna está fechada e a
+branch pode ser descartada.
+
 ## Testes executados
 
 - Conexão de leitura e escrita pelo MCP: OK.
@@ -106,3 +169,13 @@ tratado como o menor entre esse valor e a franquia do projeto.
 - Considerar `RITMO_DEBUG=false` e `ALLOW_INSECURE_NO_ACCESS_TOKEN=false` no
   staging, com uma `APP_ACCESS_TOKEN` própria.
 - Revalidar as franquias antes de publicar.
+
+## Estado em 17 de outubro de 2026 (após a Fase 2B)
+
+- Branch `main` (`br-ancient-cloud-b8hp23th`): 20 tabelas, `f4b7d2a91c03`, sem
+  dados pessoais.
+- Branch `ritmo-online-migration-validation` (`br-mute-flower-b85ezren`): vazia,
+  reservada para o teste online do Alembic.
+- Projeto continua no plano Free (`free_v3`), região `aws-us-east-1`.
+- Consumo de compute permaneceu em 0.25 CU com scale-to-zero; sem upgrade.
+
