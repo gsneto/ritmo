@@ -25,6 +25,7 @@ def test_sentry_uses_safe_fastapi_defaults(monkeypatch):
         _env_file=None,
         DEBUG=False,
         APP_ACCESS_TOKEN="production-secret",
+        DATABASE_URL="postgresql://user:secret@postgres.internal:5432/ritmo",
         SENTRY_DSN="https://public@example.ingest.sentry.io/123",
         SENTRY_ENVIRONMENT="production",
         CORS_ORIGINS="https://ritmo.example",

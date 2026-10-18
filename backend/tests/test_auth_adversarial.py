@@ -442,6 +442,49 @@ def test_non_numeric_profile_id_is_forbidden_not_a_server_error(client, profiles
 # ---------------------------------------------------------------------------
 
 
+def test_production_requires_an_explicit_database_url():
+    """A published environment must never fall back to local SQLite.
+
+    This is the failure that broke the first staging deploy: an empty
+    DATABASE_URL bound an ephemeral SQLite file and the app crashed later with
+    "no such table: users" instead of refusing to start.
+    """
+    from config import Settings
+
+    with pytest.raises(Exception, match="DATABASE_URL is required"):
+        Settings(
+            _env_file=None,
+            DEBUG=False,
+            APP_ACCESS_TOKEN="x" * 40,
+            DATABASE_URL=None,
+            CORS_ORIGINS="https://example.invalid",
+        )
+
+    with pytest.raises(Exception, match="DATABASE_URL is required"):
+        Settings(
+            _env_file=None,
+            DEBUG=False,
+            APP_ACCESS_TOKEN="x" * 40,
+            DATABASE_URL="",
+            CORS_ORIGINS="https://example.invalid",
+        )
+
+
+def test_development_still_allows_the_local_sqlite_default():
+    from config import Settings
+
+    settings = Settings(
+        _env_file=None,
+        DEBUG=True,
+        APP_ACCESS_TOKEN=None,
+        ALLOW_INSECURE_NO_ACCESS_TOKEN=True,
+        DATABASE_URL=None,
+        CORS_ORIGINS="http://localhost:5173",
+    )
+
+    assert settings.database_url == "sqlite:///./ritmo.db"
+
+
 def test_login_errors_do_not_leak_internals(client, profiles):
     response = login(client, "antonio", "senha-errada")
 

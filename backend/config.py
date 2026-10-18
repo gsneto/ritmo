@@ -270,6 +270,21 @@ class Settings(BaseSettings):
             raise ValueError(
                 "SESSION_COOKIE_SAMESITE=none requires SESSION_COOKIE_SECURE=true"
             )
+        # Never let a published environment fall back to the local SQLite file.
+        # Without this check an empty or missing DATABASE_URL silently binds an
+        # ephemeral SQLite database, and the failure only shows up later as a
+        # confusing "no such table" error.
+        if not self.DEBUG:
+            has_configured_url = bool(self.DATABASE_URL or self.DATABASE_URL_SYNC)
+            has_managed_host = bool(
+                self.DB_HOST and self.DB_HOST not in {"sqlite", ":memory:"}
+            )
+            if not has_configured_url and not has_managed_host:
+                raise ValueError(
+                    "DATABASE_URL is required when RITMO_DEBUG=false; "
+                    "refusing to fall back to a local SQLite file in a "
+                    "published environment"
+                )
 
         try:
             ZoneInfo(self.TIMEZONE)
