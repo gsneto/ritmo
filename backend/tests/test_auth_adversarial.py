@@ -80,11 +80,56 @@ def test_users_endpoint_hides_other_profiles_from_session(client, profiles, auth
     assert {user["profile_id"] for user in server_view} == {"antonio", "itayna"}
 
 
-def test_profile_directory_is_minimal(client):
+def test_profile_directory_is_anonymous(client):
+    """An unauthenticated caller must not learn who lives here."""
     response = client.get("/api/auth/profiles")
 
     assert response.status_code == 200
-    assert all(set(entry) == {"profile_id", "name"} for entry in response.json())
+    entries = response.json()
+    assert all(set(entry) == {"login_id", "label"} for entry in entries)
+    assert [entry["label"] for entry in entries] == [
+        f"Perfil {index}" for index in range(1, len(entries) + 1)
+    ]
+
+    body = response.text.lower()
+    for leaked in ("antonio", "itayna", "initials", "theme"):
+        assert leaked not in body
+
+
+def test_login_accepts_the_anonymous_handle(client, profiles):
+    """The login form only ever sees handles, so they must authenticate."""
+    entries = client.get("/api/auth/profiles").json()
+    handle = entries[0]["login_id"]
+
+    response = login(client, handle)
+
+    assert response.status_code == 200
+    assert response.json()["profile"]["profile_id"] == "antonio"
+
+
+def test_login_handle_does_not_resemble_the_profile_id(client, profiles):
+    entries = client.get("/api/auth/profiles").json()
+    handles = {entry["login_id"] for entry in entries}
+
+    assert "antonio" not in handles
+    assert "itayna" not in handles
+    assert all(len(handle) == 16 for handle in handles)
+    # Distinct profiles get distinct handles.
+    assert len(handles) == len(entries)
+
+
+def test_login_still_accepts_the_raw_profile_id_for_scripts(client, profiles):
+    """Server-side scripts keep working; the password and lockout still apply."""
+    response = login(client, "antonio")
+
+    assert response.status_code == 200
+
+
+def test_unknown_handle_fails_without_revealing_existence(client, profiles):
+    response = login(client, "0000000000000000")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Perfil ou senha invalidos"
 
 
 # ---------------------------------------------------------------------------

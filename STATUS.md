@@ -246,6 +246,24 @@ de staging está com 0 usuários, 0 hábitos, 21 tabelas e revisão
 Produção (`habitos-base.vercel.app`) **não foi alterada**: continua no
 deployment `3d9d7b3` de 1º de agosto.
 
+## Preparação da migração (18 de outubro de 2026)
+
+- CORS do Render passou a aceitar somente o alias estável do preview
+  (`habitos-base-git-feat-ritmo-staging-deploy-gsneto.vercel.app`). E2E
+  repetido no alias: login, CSRF, isolamento e logout aprovados.
+- Fontes locais inventariadas por metadados e contagens. SQLite legado e os
+  JSONs de 2 de agosto descrevem o mesmo estado; nenhuma tabela do SQLite tem
+  dados que o JSON não carregue.
+- `backend/scripts/backup_local_data.py` criado (AES-256-GCM + scrypt). Backup
+  gerado em `C:\Users\anton\AppData\Local\ritmo-backups` e **verificado por
+  descriptografia**: 4 arquivos, hashes idênticos, `integrity_check` ok.
+- Importador definido como o endpoint existente `PUT /api/users/{id}/backup`,
+  reutilizado em vez de reimplementado. Ensaio com fixtures sintéticas em
+  `tests/test_migration_dry_run.py`: 8 testes, incluindo idempotência, órfãos,
+  duplicidade e rollback após falha de commit.
+- Plano de cutover e rollback em `docs/MIGRATION_PLAN.md`.
+- Backend: 190 testes. Nenhum perfil real importado, nenhuma senha provisionada.
+
 ## Bloqueios externos
 
 Verificado em 17 de outubro de 2026:

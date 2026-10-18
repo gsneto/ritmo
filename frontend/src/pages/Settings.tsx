@@ -306,7 +306,7 @@ export default function Settings({
           aparelho, saia e entre com a senha dele.
         </p>
         <div className="profile-cards">
-          {users.map((u) => (
+          {users.map((u, index) => (
             <article
               key={u.id}
               className={`profile-card ${u.id === user.id ? 'active-profile' : ''}`}
@@ -314,7 +314,10 @@ export default function Settings({
               <span className="profile-avatar">{u.initials}</span>
               <div>
                 <strong>{u.name}</strong>
-                <small>{u.id === user.id ? 'Perfil ativo' : ''}</small>
+                <small>
+                  Perfil {index + 1}
+                  {u.id === user.id ? ' - ativo' : ''}
+                </small>
               </div>
               {u.id === user.id ? (
                 <button className="profile-current-button" disabled type="button">
