@@ -23,6 +23,9 @@ class User(Base):
         default=lambda: time(7, 30),
         server_default="07:30:00",
     )
+    # Argon2id hash. Nullable because profiles created before browser
+    # authentication existed have no credential until an operator provisions one.
+    password_hash = Column(String(255), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
     # Relationships
@@ -41,6 +44,11 @@ class User(Base):
     )
     shopping_lists = relationship(
         "ShoppingList",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    sessions = relationship(
+        "UserSession",
         back_populates="user",
         cascade="all, delete-orphan",
     )

@@ -38,6 +38,8 @@ def settings(tmp_path) -> Settings:
         DATABASE_URL=f"sqlite:///{(tmp_path / 'ritmo-test.db').as_posix()}",
         CORS_ORIGINS="http://localhost:5173",
         TIMEZONE="America/Sao_Paulo",
+        # TestClient speaks plain HTTP, so a Secure cookie would never be sent.
+        SESSION_COOKIE_SECURE=False,
     )
 
 

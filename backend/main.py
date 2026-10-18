@@ -18,8 +18,20 @@ from config import Settings, get_settings
 from database import SessionLocal, get_db, init_db
 from push_worker import PushWorkerState, notification_runtime, run_worker
 from rate_limit import limiter
-from routers import anahi, backup, habits, push, reading, shopping, stats, tasks, users, workouts
-from security import require_api_key
+from routers import (
+    anahi,
+    auth,
+    backup,
+    habits,
+    push,
+    reading,
+    shopping,
+    stats,
+    tasks,
+    users,
+    workouts,
+)
+from security import get_principal
 from seed import seed_default_data
 from time_utils import app_today
 
@@ -132,7 +144,8 @@ def create_app(
             response.headers["Cache-Control"] = "no-store"
         return response
 
-    protected = [Depends(require_api_key)]
+    protected = [Depends(get_principal)]
+    application.include_router(auth.router)
     application.include_router(users.router, dependencies=protected)
     application.include_router(habits.router, dependencies=protected)
     application.include_router(tasks.router, dependencies=protected)

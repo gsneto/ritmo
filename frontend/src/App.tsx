@@ -1,12 +1,10 @@
 import { useCallback, useState, useEffect } from 'react'
 import {
   apiRoutes,
-  clearAccessKey,
   isUnauthorizedError,
-  setAccessKey,
   UNAUTHORIZED_EVENT,
 } from './services/api'
-import type { User } from './services/api'
+import type { PublicProfile, User } from './services/api'
 import Today from './pages/Today'
 import Habits from './pages/Habits'
 import Tasks from './pages/Tasks'
@@ -18,12 +16,12 @@ import Workouts from './pages/Workouts'
 import Anahi from './pages/Anahi'
 import Topbar from './components/Topbar'
 import Navigation from './components/Navigation'
-import AccessCodeGate from './components/AccessCodeGate'
+import LoginGate from './components/LoginGate'
 import { useAppRouter } from './router'
 import { useDailyReminders } from './hooks/useDailyReminders'
 import { resolvePwaShortcut } from './utils/pwaShortcuts'
 
-type AppStatus = 'loading' | 'ready' | 'error' | 'access'
+type AppStatus = 'loading' | 'ready' | 'error' | 'login'
 const VALID_PATHS = new Set([
   '/today',
   '/habits',
@@ -43,10 +41,34 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [status, setStatus] = useState<AppStatus>('loading')
   const [errorMessage, setErrorMessage] = useState('')
-  const [accessMessage, setAccessMessage] = useState('')
+  const [loginMessage, setLoginMessage] = useState('')
+  const [publicProfiles, setPublicProfiles] = useState<PublicProfile[]>([])
+  const [pendingProfileId, setPendingProfileId] = useState('')
   useDailyReminders(activeUser?.id ?? null)
 
-  const loadUsers = useCallback(async (isAccessRetry = false) => {
+  const loadPublicProfiles = useCallback(async () => {
+    try {
+      const response = await apiRoutes.getPublicProfiles()
+      setPublicProfiles(response.data)
+    } catch (error) {
+      console.error('Failed to load profiles:', error)
+      setPublicProfiles([])
+    }
+  }, [])
+
+  const showLogin = useCallback(
+    async (message = '', profileId = '') => {
+      setUsers([])
+      setActiveUser(null)
+      setLoginMessage(message)
+      setPendingProfileId(profileId)
+      await loadPublicProfiles()
+      setStatus('login')
+    },
+    [loadPublicProfiles],
+  )
+
+  const loadUsers = useCallback(async () => {
     setStatus('loading')
     setErrorMessage('')
 
@@ -60,18 +82,21 @@ export default function App() {
         return
       }
 
-      const saved = localStorage.getItem('ritmo-active-profile')
-      const found = response.data.find(user => user.profile_id === saved)
+      const session = await apiRoutes.getSession()
+      const authenticated = response.data.find(
+        user => user.profile_id === session.data.profile.profile_id,
+      )
+
       setUsers(response.data)
-      setActiveUser(found || response.data[0])
-      setAccessMessage('')
-      setStatus('ready')
+      setActiveUser(authenticated ?? null)
+      setLoginMessage('')
+      setStatus(authenticated ? 'ready' : 'login')
+      if (!authenticated) {
+        await showLogin('Sessão encerrada. Entre novamente.')
+      }
     } catch (error) {
       if (isUnauthorizedError(error)) {
-        setUsers([])
-        setActiveUser(null)
-        setAccessMessage(isAccessRetry ? 'Código recusado. Confira e tente novamente.' : '')
-        setStatus('access')
+        await showLogin('')
         return
       }
 
@@ -79,7 +104,7 @@ export default function App() {
       setErrorMessage('Não foi possível conectar ao Ritmo. Confira se a API está disponível.')
       setStatus('error')
     }
-  }, [])
+  }, [showLogin])
 
   useEffect(() => {
     void loadUsers()
@@ -87,13 +112,12 @@ export default function App() {
 
   useEffect(() => {
     function handleUnauthorized() {
-      setAccessMessage('Seu código de acesso precisa ser informado novamente.')
-      setStatus('access')
+      void showLogin('Sua sessão expirou. Entre novamente.')
     }
 
     window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
-  }, [])
+  }, [showLogin])
 
   useEffect(() => {
     if (!activeUser) return
@@ -124,29 +148,50 @@ export default function App() {
     }
   }, [navigate, pathname, search])
 
-  async function handleAccessSubmit(code: string) {
-    setAccessKey(code)
-    setAccessMessage('')
-    await loadUsers(true)
+  async function handleLogin(profileId: string, password: string) {
+    setLoginMessage('')
+    try {
+      const response = await apiRoutes.login(profileId, password)
+      const profile = response.data.profile
+      setActiveUser(profile)
+      setPendingProfileId('')
+      await loadUsers()
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        setLoginMessage('Perfil ou senha inválidos.')
+        return
+      }
+      console.error('Failed to sign in:', error)
+      setLoginMessage('Não foi possível entrar agora. Tente novamente.')
+    }
   }
 
-  function handleChangeAccessCode() {
-    clearAccessKey()
-    setUsers([])
-    setActiveUser(null)
-    setAccessMessage('O código foi esquecido neste aparelho. Digite o código da casa para continuar.')
-    setStatus('access')
+  async function handleChangeAccessCode() {
+    try {
+      await apiRoutes.logout()
+    } catch (error) {
+      console.error('Failed to sign out:', error)
+    }
+    await showLogin('Você saiu deste aparelho. Entre novamente.')
   }
 
   function handleRetry() {
     void loadUsers()
   }
 
-  function handleUserChange(user: User) {
-    setActiveUser(user)
-    if (status !== 'ready') {
-      setStatus('ready')
+  async function handleUserChange(user: User) {
+    if (activeUser && user.id === activeUser.id) {
+      return
     }
+    try {
+      await apiRoutes.logout()
+    } catch (error) {
+      console.error('Failed to sign out before profile switch:', error)
+    }
+    await showLogin(
+      'Entre com a senha deste perfil para continuar.',
+      user.profile_id,
+    )
   }
 
   function handleHeaderMenuNavigate(destination: '/workouts' | '/reading' | '/progress' | '/settings') {
@@ -170,8 +215,15 @@ export default function App() {
     void loadUsers()
   }
 
-  if (status === 'access') {
-    return <AccessCodeGate message={accessMessage} onSubmit={handleAccessSubmit} />
+  if (status === 'login') {
+    return (
+      <LoginGate
+        profiles={publicProfiles}
+        message={loginMessage}
+        initialProfileId={pendingProfileId}
+        onSubmit={handleLogin}
+      />
+    )
   }
 
   if (status === 'loading') {

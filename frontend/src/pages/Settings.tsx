@@ -302,8 +302,8 @@ export default function Settings({
           <div><p className="section-label">Perfis</p><h2>Quem está usando?</h2></div>
         </div>
         <p className="settings-copy">
-          O código da casa permite acessar os dois perfis. Eles separam rotina,
-          preferências e progresso para manter a organização do casal.
+          Cada perfil tem a sua própria senha. Para usar o outro perfil neste
+          aparelho, saia e entre com a senha dele.
         </p>
         <div className="profile-cards">
           {users.map((u) => (

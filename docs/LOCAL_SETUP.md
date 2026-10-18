@@ -109,6 +109,29 @@ Remove-Item Env:DATABASE_URL
 Remove-Item -LiteralPath $probe -ErrorAction SilentlyContinue
 ```
 
+### Senhas dos perfis
+
+O login do navegador usa perfil + senha. O hash é gravado no banco por um
+comando de operador; não existe cadastro público nem senha padrão.
+
+```powershell
+Set-Location backend
+.\.venv\Scripts\python.exe -m scripts.set_profile_password --profile-id antonio
+```
+
+A senha é pedida no terminal e não aparece no histórico. Use pelo menos 12
+caracteres. Para automação, `--stdin` lê a senha da entrada padrão.
+
+No banco legado local o comando funciona, mas evite rodá-lo contra
+`backend/ritmo.db` sem antes ter um backup verificado.
+
+### Login no navegador
+
+Depois de subir a API e o frontend, abra `http://localhost:5173`. A tela de
+entrada lista os perfis e pede a senha. A sessão fica num cookie `HttpOnly`
+chamado `ritmo_session` (sem o prefixo `__Host-` em http local) e expira em 30
+dias por padrão.
+
 ## Frontend
 
 ```powershell

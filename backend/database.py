@@ -540,6 +540,20 @@ def _ensure_user_briefing_schema(bind: Engine) -> None:
             )
 
 
+def _ensure_user_auth_schema(bind: Engine) -> None:
+    """Keep pre-Alembic local databases usable after browser auth ships."""
+    inspector = inspect(bind)
+    if "users" not in set(inspector.get_table_names()):
+        return
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    if "password_hash" in columns:
+        return
+    with bind.begin() as connection:
+        connection.execute(
+            text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)")
+        )
+
+
 def init_db(
     *,
     bind: Engine | None = None,
@@ -556,7 +570,7 @@ def init_db(
     if selected_engine.dialect.name != "sqlite":
         return
 
-    from models import habit, push, reading, shopping, task, user, workout  # noqa
+    from models import habit, push, reading, session, shopping, task, user, workout  # noqa
 
     selected_session_factory = session_factory or SessionLocal
     _ensure_reading_library_schema(selected_engine)
@@ -565,6 +579,7 @@ def init_db(
     _ensure_shopping_finance_schema(selected_engine)
     _ensure_routine_recurrence_schema(selected_engine)
     _ensure_user_briefing_schema(selected_engine)
+    _ensure_user_auth_schema(selected_engine)
     _ensure_push_subscription_schema(selected_engine)
     _ensure_push_delivery_schema(selected_engine)
     _ensure_active_workout_uniqueness(selected_engine)

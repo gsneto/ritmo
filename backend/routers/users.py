@@ -8,6 +8,7 @@ from models.shopping import ShoppingMonthlyBudget
 from models.user import User
 from models.workout import WorkoutExercisePreference
 from schemas.user import ThemeUpdate, UserResponse, UserUpdate
+from security import Principal, get_principal, require_user_access
 from seed import create_default_workouts
 from services.push_deliveries import cancel_pending_push_deliveries
 from time_utils import app_now
@@ -16,15 +17,29 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 
 
 @router.get("", response_model=list[UserResponse])
-def list_users(db: Session = Depends(get_db)):
-    """List all user profiles."""
-    users = db.query(User).all()
-    return users
+def list_users(
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
+    """List the profiles this caller may see.
+
+    A browser session only ever sees its own profile, so the endpoint cannot be
+    used to enumerate the household. A server API key keeps full visibility for
+    scripts, backups and tests.
+    """
+    if principal.method == "session":
+        return db.query(User).filter(User.id == principal.user_id).all()
+    return db.query(User).all()
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-def get_user(user_id: int, db: Session = Depends(get_db)):
+def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Get a specific user by ID."""
+    require_user_access(principal, user_id)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -32,8 +47,14 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{user_id}", response_model=UserResponse)
-def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db)):
+def update_user(
+    user_id: int,
+    data: UserUpdate,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Update user profile."""
+    require_user_access(principal, user_id)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -51,8 +72,14 @@ def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db)):
 
 
 @router.put("/{user_id}/theme", response_model=UserResponse)
-def update_theme(user_id: int, data: ThemeUpdate, db: Session = Depends(get_db)):
+def update_theme(
+    user_id: int,
+    data: ThemeUpdate,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Update user theme preference."""
+    require_user_access(principal, user_id)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -64,8 +91,13 @@ def update_theme(user_id: int, data: ThemeUpdate, db: Session = Depends(get_db))
 
 
 @router.delete("/{user_id}/data")
-def reset_user_data(user_id: int, db: Session = Depends(get_db)):
+def reset_user_data(
+    user_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Reset all personal data for a user."""
+    require_user_access(principal, user_id)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

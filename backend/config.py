@@ -167,6 +167,23 @@ class Settings(BaseSettings):
         default=LOCAL_CORS_ORIGINS,
         validation_alias="CORS_ORIGINS",
     )
+    # Browser sessions. The cookie is HttpOnly; the CSRF token is a separate,
+    # readable cookie tied to the same server-side session row.
+    SESSION_TTL_HOURS: int = Field(
+        default=720,
+        validation_alias="SESSION_TTL_HOURS",
+        ge=1,
+        le=8_760,
+    )
+    SESSION_COOKIE_SECURE: bool = Field(
+        default=True,
+        validation_alias="SESSION_COOKIE_SECURE",
+    )
+    SESSION_COOKIE_SAMESITE: str = Field(
+        default="lax",
+        validation_alias="SESSION_COOKIE_SAMESITE",
+        pattern=r"^(lax|strict|none)$",
+    )
     TIMEZONE: str = Field(
         default="America/Sao_Paulo",
         validation_alias="TIMEZONE",
@@ -245,6 +262,13 @@ class Settings(BaseSettings):
             raise ValueError(
                 "PUSH_DELIVERY_TTL_HOURS cannot be shorter than "
                 "PUSH_REMINDER_RECOVERY_HOURS"
+            )
+        # A cross-site cookie is only accepted by browsers with SameSite=None,
+        # and SameSite=None requires Secure. Fail fast instead of shipping a
+        # cookie the browser will silently drop.
+        if self.SESSION_COOKIE_SAMESITE == "none" and not self.SESSION_COOKIE_SECURE:
+            raise ValueError(
+                "SESSION_COOKIE_SAMESITE=none requires SESSION_COOKIE_SECURE=true"
             )
 
         try:

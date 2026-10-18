@@ -170,6 +170,20 @@ tratado como o menor entre esse valor e a franquia do projeto.
   staging, com uma `APP_ACCESS_TOKEN` própria.
 - Revalidar as franquias antes de publicar.
 
+## Migration pendente para staging
+
+A Fase 2C criou a revisão `a1c4e9f7b2d5` (coluna `users.password_hash`, tabela
+`user_sessions` e dois índices). Ela foi testada em SQLite temporário com
+upgrade, downgrade e novo upgrade, mas **não** foi aplicada em nenhum banco
+remoto.
+
+Ordem prevista para o staging:
+
+1. aplicar e validar na branch `ritmo-online-migration-validation`;
+2. aplicar na branch `main` do projeto;
+3. provisionar as senhas dos perfis com
+   `python -m scripts.set_profile_password --profile-id <perfil>`.
+
 ## Estado em 17 de outubro de 2026 (após a Fase 2B)
 
 - Branch `main` (`br-ancient-cloud-b8hp23th`): 20 tabelas, `f4b7d2a91c03`, sem

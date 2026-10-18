@@ -1,22 +1,40 @@
 import axios from 'axios'
 
-export const ACCESS_KEY_STORAGE_KEY = 'ritmo-access-key'
 export const UNAUTHORIZED_EVENT = 'ritmo:unauthorized'
 export const REMINDERS_CHANGED_EVENT = 'ritmo:reminders-changed'
 
 // In development, Vite proxies /api to FastAPI. Production must provide the
-// complete API prefix, for example https://api.example.com/api.
+// complete API prefix, for example https://api.example.com/api, or serve the
+// API from the same origin through a proxy so the session cookie stays
+// first-party.
 const configuredBaseUrl = import.meta.env.VITE_API_URL?.trim()
 const BASE_URL = configuredBaseUrl
   ? configuredBaseUrl.replace(/\/+$/, '')
   : '/api'
 
+const CSRF_COOKIE_NAMES = ['__Host-ritmo_csrf', 'ritmo_csrf']
+const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete'])
+
 const api = axios.create({
   baseURL: BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 })
+
+export function readCsrfToken(): string {
+  if (typeof document === 'undefined') return ''
+  const cookies = document.cookie ? document.cookie.split(';') : []
+  for (const entry of cookies) {
+    const [rawName, ...rest] = entry.split('=')
+    const name = rawName.trim()
+    if (CSRF_COOKIE_NAMES.includes(name)) {
+      return decodeURIComponent(rest.join('=').trim())
+    }
+  }
+  return ''
+}
 
 export interface User {
   id: number
@@ -24,6 +42,19 @@ export interface User {
   name: string
   initials: string
   theme: 'light' | 'dark'
+}
+
+export interface PublicProfile {
+  profile_id: string
+  name: string
+  initials: string
+  theme: 'light' | 'dark'
+}
+
+export interface SessionResponse {
+  authenticated: boolean
+  profile: User
+  expires_at: string
 }
 
 export interface Habit {
@@ -253,29 +284,21 @@ export interface WorkoutInput {
   }>
 }
 
-export function getAccessKey(): string {
-  if (typeof window === 'undefined') return ''
-  return window.localStorage.getItem(ACCESS_KEY_STORAGE_KEY)?.trim() || ''
-}
-
-export function setAccessKey(value: string): void {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(ACCESS_KEY_STORAGE_KEY, value.trim())
-}
-
-export function clearAccessKey(): void {
-  if (typeof window === 'undefined') return
-  window.localStorage.removeItem(ACCESS_KEY_STORAGE_KEY)
-}
-
 export function isUnauthorizedError(error: unknown): boolean {
   return axios.isAxiosError(error) && error.response?.status === 401
 }
 
+export function isForbiddenError(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 403
+}
+
 api.interceptors.request.use((config) => {
-  const accessKey = getAccessKey()
-  if (accessKey) {
-    config.headers.set('X-Ritmo-Key', accessKey)
+  const method = config.method?.toLowerCase()
+  if (method && MUTATING_METHODS.has(method)) {
+    const csrfToken = readCsrfToken()
+    if (csrfToken) {
+      config.headers.set('X-CSRF-Token', csrfToken)
+    }
   }
   return config
 })
@@ -304,6 +327,16 @@ api.interceptors.response.use(
 )
 
 export const apiRoutes = {
+  // Authentication
+  getPublicProfiles: () => api.get<PublicProfile[]>('/auth/profiles'),
+  login: (profileId: string, password: string) =>
+    api.post<SessionResponse>('/auth/login', {
+      profile_id: profileId,
+      password,
+    }),
+  getSession: () => api.get<SessionResponse>('/auth/session'),
+  logout: () => api.post<{ authenticated: boolean }>('/auth/logout'),
+
   // Users
   getUsers: () => api.get<User[]>('/users'),
   getUser: (id: number) => api.get<User>(`/users/${id}`),

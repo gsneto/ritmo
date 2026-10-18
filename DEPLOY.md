@@ -133,6 +133,36 @@ Não configure `SENTRY_DSN`, `GEMINI_API_KEY` nem chaves VAPID nesta fase. Sem
 VAPID, o modo de notificações fica `disabled`, o scheduler não inicia e `/ready`
 avalia apenas o banco.
 
+### Autenticação do navegador
+
+O frontend usa sessão em cookie, não a chave de API. No serviço publicado:
+
+| Nome | Conteúdo |
+| --- | --- |
+| `SESSION_COOKIE_SECURE` | `true` |
+| `SESSION_COOKIE_SAMESITE` | `lax` (ou `none` apenas se a API ficar em outro site) |
+| `SESSION_TTL_HOURS` | opcional, padrão `720` |
+
+Depois da primeira subida, provisione a senha de cada perfil dentro do ambiente:
+
+```powershell
+python -m scripts.set_profile_password --profile-id <perfil>
+```
+
+Para manter o cookie first-party, sirva a API na mesma origem do frontend com um
+rewrite na Vercel, declarado antes do catch-all:
+
+```json
+{ "source": "/api/:path*", "destination": "https://<api-host>/api/:path*" }
+```
+
+Nesse cenário `VITE_API_URL` fica vazio. Se a API ficar em outro domínio, o
+cookie passa a ser de terceiros e pode ser bloqueado pelo navegador; nesse caso
+`SESSION_COOKIE_SAMESITE=none` e `SESSION_COOKIE_SECURE=true` são obrigatórios.
+
+A chave `APP_ACCESS_TOKEN` continua necessária para scripts e backups, mas não é
+usada pelo navegador nem entra no bundle. Detalhes em `docs/ADR-AUTH-WEB.md`.
+
 ### Limitações conhecidas
 
 - A instância dorme e a primeira requisição após a suspensão é lenta.

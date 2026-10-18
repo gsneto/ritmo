@@ -3,7 +3,7 @@ from logging.config import fileConfig
 from alembic import context
 from config import get_settings
 from database import Base, create_database_engine
-from models import habit, push, reading, shopping, task, user, workout  # noqa: F401
+from models import habit, push, reading, session, shopping, task, user, workout  # noqa: F401
 
 config = context.config
 settings = get_settings()

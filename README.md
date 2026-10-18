@@ -109,10 +109,15 @@ npm run build
 
 ## Modelo doméstico e privacidade
 
-O Ritmo foi criado para uma casa confiável com dois perfis. Uma única chave dá
-acesso ao ambiente familiar e qualquer pessoa com essa chave pode alternar entre
-os perfis. Os perfis separam rotina, preferências e progresso para organização;
-eles não são uma barreira de confidencialidade entre o casal.
+O Ritmo foi criado para uma casa confiável com dois perfis. Cada perfil tem a
+sua própria senha e a sessão do navegador fica num cookie HttpOnly, então o
+JavaScript da página nunca vê uma credencial. Um perfil não consegue ler nem
+alterar os dados do outro pela API, exceto nas compras compartilhadas, que usam
+o par gravado no banco.
+
+A chave de API (`APP_ACCESS_TOKEN`) continua existindo para scripts, backups e
+testes, com acesso total ao ambiente familiar. Ela não é usada pelo navegador e
+não é embutida no bundle. Os detalhes estão em `docs/ADR-AUTH-WEB.md`.
 
 Quando o compartilhamento de compras está ativo, listas, itens e histórico
 aparecem juntos nos dois perfis. Hábitos, tarefas, treinos, leitura e orçamento

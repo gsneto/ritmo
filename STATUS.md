@@ -122,6 +122,28 @@ estão em `docs/NEON_STAGING.md`.
   neste ambiente e não há credencial disponível; o roteiro manual está em
   `DEPLOY.md`.
 
+## Autenticação do navegador (17 de outubro de 2026)
+
+- O frontend não guarda mais a chave da casa em `localStorage` e o bundle não
+  contém `X-Ritmo-Key`, `APP_ACCESS_TOKEN` nem URL de banco.
+- Cada perfil passou a ter senha própria (Argon2id) e sessão em cookie HttpOnly
+  com token CSRF obrigatório em métodos mutáveis.
+- Uma sessão só acessa o próprio perfil, inclusive nas rotas por id de recurso;
+  compras compartilhadas continuam usando o par gravado no banco.
+- A chave de API segue válida apenas para scripts, backups e testes.
+- Migration `a1c4e9f7b2d5` criada e testada em SQLite temporário (upgrade,
+  downgrade, novo upgrade e `alembic check` sem diferenças). O DDL PostgreSQL foi
+  gerado offline e compila. Não foi aplicada em nenhum banco remoto.
+- Revisão adversarial concluída: o script de senha não cai mais no banco legado,
+  `GET /api/users` devolve só o perfil da sessão, a troca de senha revoga
+  sessões, `Sec-Fetch-Site: cross-site` é rejeitado e o diretório de perfis foi
+  reduzido a `profile_id` e `name`.
+- Backend: 164 testes. Frontend: 144 testes em 28 arquivos. Ruff, Mypy, ESLint e
+  build aprovados.
+- Nenhum achado crítico ou alto permanece sem mitigação.
+- Nada foi publicado: API e frontend em produção continuam como estavam.
+- Decisão e limitações em `docs/ADR-AUTH-WEB.md`.
+
 ## Bloqueios externos
 
 Verificado em 17 de outubro de 2026:
