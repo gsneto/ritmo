@@ -237,6 +237,34 @@ Pré-requisito para a Fase 2H:
 2. Confirmar que ela pode ser lida de outro dispositivo.
 3. Só então executar a importação descrita nas seções 6 e 7.
 
+### Bloqueio novo: a frase de recuperação não abre
+
+Em 18 de outubro de 2026 a verificação do backup foi refeita e falhou.
+
+| Verificação | Resultado |
+| --- | --- |
+| SHA-256 do arquivo contra o manifesto | igual |
+| `CryptUnprotectData` no blob DPAPI | `ERROR_INVALID_DATA` (13) |
+| Blob de teste protegido e aberto no mesmo instante | funciona |
+| Master key referenciada pelo blob | existe na conta atual |
+| Estrutura do blob | cabeçalho íntegro; 262 bytes, o tamanho exato de um segredo de 32 bytes |
+| Substituição de 1 byte no corpo (204 posições × 255 valores) | nenhuma abre |
+
+O erro 13 é exatamente o que o DPAPI devolve para conteúdo adulterado: um
+blob de teste com um único byte alterado, truncado, ou com assinatura
+alterada produz o mesmo código. O blob real tem o cabeçalho correto, a
+master key correta e o tamanho correto, mas não passa na verificação de
+integridade. Conclusão: **o arquivo `.passphrase.dpapi` está corrompido e a
+frase não é recuperável a partir desta máquina.**
+
+Isso não afeta o conteúdo da migração: os JSONs v2 e o SQLite estão
+íntegros e são a fonte de verdade. Afeta a recuperação de desastre, que era
+o propósito do backup cifrado.
+
+Enquanto a frase não existir em outro lugar, o backup cifrado não pode ser
+usado para restaurar nada. A verificação de restauração exigida pela Etapa B
+fica impossível.
+
 ### Ensaio do importador contra a API publicada
 
 O ensaio com fixtures cobre o endpoint em processo. Faltava provar o mesmo

@@ -666,3 +666,99 @@ def test_cli_rejects_a_short_password(disposable_database):
 
     assert result.returncode != 0
     assert "12 characters" in result.stderr
+
+# ---------------------------------------------------------------------------
+# Cross-profile access to the backup endpoints
+# ---------------------------------------------------------------------------
+
+
+def _minimal_backup(initials: str = "ZZ") -> dict:
+    return {
+        "version": 2,
+        "app": "Ritmo",
+        "exported_at": "2026-01-15T12:00:00Z",
+        "profile": {"name": "Perfil Desconhecido", "initials": initials, "theme": "dark"},
+        "habits": [],
+        "tasks": [],
+        "shopping_lists": [],
+        "shopping_budgets": [],
+        "workouts": [],
+        "workout_sessions": [],
+        "workout_preferences": [],
+        "reading_books": [],
+    }
+
+
+def _own_and_other(context, client) -> tuple[int, int]:
+    """Log in as the first profile and return (own_id, other_id)."""
+    db = context.session_factory()
+    try:
+        ids = [row[0] for row in db.query(User.id).order_by(User.id).all()]
+    finally:
+        db.close()
+    assert len(ids) >= 2
+    response = login(client)
+    assert response.status_code == 200
+    own = client.get("/api/users").json()[0]["id"]
+    other = next(i for i in ids if i != own)
+    return own, other
+
+
+def test_session_cannot_export_another_profiles_backup(client, context, profiles):
+    _, other = _own_and_other(context, client)
+
+    response = client.get(f"/api/users/{other}/backup")
+
+    assert response.status_code == 403
+
+
+def test_session_cannot_export_another_profiles_calendar(client, context, profiles):
+    _, other = _own_and_other(context, client)
+
+    response = client.get(f"/api/users/{other}/export/calendar.ics")
+
+    assert response.status_code == 403
+
+
+def test_session_cannot_overwrite_another_profiles_backup(client, context, profiles):
+    _, other = _own_and_other(context, client)
+    db = context.session_factory()
+    try:
+        before = db.query(User).filter(User.id == other).one()
+        before_name, before_initials = before.name, before.initials
+    finally:
+        db.close()
+
+    response = client.put(
+        f"/api/users/{other}/backup",
+        json=_minimal_backup(),
+        headers={"X-CSRF-Token": csrf(client)},
+    )
+
+    assert response.status_code == 403
+    db = context.session_factory()
+    try:
+        after = db.query(User).filter(User.id == other).one()
+        assert (after.name, after.initials) == (before_name, before_initials)
+    finally:
+        db.close()
+
+
+def test_api_key_still_reaches_any_profile_backup(client, context, profiles):
+    _, other = _own_and_other(context, client)
+    client.cookies.clear()
+
+    response = client.get(
+        f"/api/users/{other}/backup",
+        headers={"X-Ritmo-Key": os.environ["APP_ACCESS_TOKEN"]},
+    )
+
+    assert response.status_code == 200
+
+
+def test_session_can_still_use_its_own_backup(client, context, profiles):
+    own, _ = _own_and_other(context, client)
+
+    response = client.get(f"/api/users/{own}/backup")
+
+    assert response.status_code == 200
