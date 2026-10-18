@@ -105,6 +105,26 @@ primeira tentativa com o pooler falhou, e o helper passou a recusar esse host.
 - 0 hábitos, 0 tarefas, 0 compras, 0 sessões ativas.
 - Nenhum dado pessoal importado.
 
+## Limpeza do staging (18 de outubro de 2026)
+
+O startup da API criava fixtures automaticamente. Antes da correção, a branch
+continha exatamente o resultado de `seed_default_data`:
+
+| Tabela | Contagem | Origem |
+| --- | --- | --- |
+| `users` | 2 | `DEFAULT_USERS` |
+| `workouts` | 14 | 2 × `DEFAULT_WORKOUTS` |
+| `exercises` | 26 | 2 × 13 exercícios do seed |
+| `habits`, `tasks`, `shopping_lists`, `reading_books`, `user_sessions` | 0 | — |
+
+A correspondência era exata e nenhum registro de origem incerta existia, então
+os dois perfis foram removidos em uma transação. As FKs em `CASCADE` limparam
+treinos e exercícios.
+
+Estado atual: 0 usuários, 0 treinos, 0 exercícios, 21 tabelas de aplicação,
+revisão `a1c4e9f7b2d5`. O perfil fictício `staging-probe` é criado sob demanda
+para testes e removido depois.
+
 ## Histórico: validação pendente antes de 18/10
 
 

@@ -73,14 +73,17 @@ def create_app(
     async def lifespan(_app: FastAPI):
         if settings.database_bootstrap_enabled:
             initialize_database()
-        db = make_session()
-        try:
-            seed_default_data(db)
-        except Exception:
-            db.rollback()
-            raise
-        finally:
-            db.close()
+        if settings.SEED_DEFAULT_DATA:
+            # Explicit opt-in only. Never implicit, never in a published
+            # environment: see RITMO_SEED_DEFAULT_DATA in .env.example.
+            db = make_session()
+            try:
+                seed_default_data(db)
+            except Exception:
+                db.rollback()
+                raise
+            finally:
+                db.close()
 
         worker_stop: threading.Event | None = None
         worker_thread: threading.Thread | None = None

@@ -256,6 +256,15 @@ exatamente o requisito do prefixo `__Host-`.
 Não habilite cache para `/api/*`: as respostas carregam sessão e dados pessoais.
 O `main.py` já envia `Cache-Control: no-store` para todo caminho `/api`.
 
+### Aviso sobre o rewrite no vercel.json
+
+O rewrite `/api/:path*` aponta para a API de **staging**. Ele existe apenas para
+validar a integração a partir de um Preview Deployment.
+
+**Antes de publicar o frontend em produção, essa destination precisa apontar
+para a API de produção.** Caso contrário o site público enviaria todo o tráfego
+de `/api` para o ambiente de staging.
+
 ### Preview da Vercel
 
 O preview é gerado a partir da branch `feat/ritmo-staging-deploy`. Não promova

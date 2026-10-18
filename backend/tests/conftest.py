@@ -40,6 +40,9 @@ def settings(tmp_path) -> Settings:
         TIMEZONE="America/Sao_Paulo",
         # TestClient speaks plain HTTP, so a Secure cookie would never be sent.
         SESSION_COOKIE_SECURE=False,
+        # The suite relies on the two demo profiles as fixtures. This is the
+        # explicit opt-in the application now requires; production never sets it.
+        SEED_DEFAULT_DATA=True,
     )
 
 

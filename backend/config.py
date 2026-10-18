@@ -184,6 +184,13 @@ class Settings(BaseSettings):
         validation_alias="SESSION_COOKIE_SAMESITE",
         pattern=r"^(lax|strict|none)$",
     )
+    # Demo fixtures (two default profiles plus their workouts) are opt-in. They
+    # must never be created implicitly: a published environment that seeded
+    # itself would get passwordless profiles nobody asked for.
+    SEED_DEFAULT_DATA: bool = Field(
+        default=False,
+        validation_alias="RITMO_SEED_DEFAULT_DATA",
+    )
     TIMEZONE: str = Field(
         default="America/Sao_Paulo",
         validation_alias="TIMEZONE",

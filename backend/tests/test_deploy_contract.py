@@ -73,3 +73,40 @@ def test_render_blueprint_does_not_contain_connection_strings():
     assert "postgres://" not in blueprint
     assert "postgresql://" not in blueprint
     assert "neon.tech" not in blueprint
+
+
+def test_vercel_rewrites_api_before_the_spa_catch_all():
+    import json
+
+    config = json.loads((REPO_ROOT / "vercel.json").read_text(encoding="utf-8"))
+    sources = [rule["source"] for rule in config["rewrites"]]
+
+    assert sources.index("/api/:path*") < sources.index("/(.*)")
+
+    api_rule = next(
+        rule for rule in config["rewrites"] if rule["source"] == "/api/:path*"
+    )
+    # FastAPI routes already start with /api, so the prefix must be preserved
+    # on both sides. Dropping it would produce 404s, duplicating it would
+    # produce /api/api/...
+    assert api_rule["destination"].endswith("/api/:path*")
+    assert api_rule["destination"].count("/api/") == 1
+
+
+def test_vercel_marks_api_responses_as_no_store():
+    import json
+
+    config = json.loads((REPO_ROOT / "vercel.json").read_text(encoding="utf-8"))
+    api_headers = next(
+        entry for entry in config["headers"] if entry["source"] == "/api/(.*)"
+    )
+    keys = {header["key"]: header["value"] for header in api_headers["headers"]}
+
+    assert "no-store" in keys["Cache-Control"]
+
+
+def test_vercel_config_contains_no_secrets():
+    text = (REPO_ROOT / "vercel.json").read_text(encoding="utf-8")
+
+    for needle in ("npg_", "postgres://", "postgresql://", "APP_ACCESS_TOKEN", "neon.tech"):
+        assert needle not in text

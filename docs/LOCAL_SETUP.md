@@ -109,6 +109,21 @@ Remove-Item Env:DATABASE_URL
 Remove-Item -LiteralPath $probe -ErrorAction SilentlyContinue
 ```
 
+### Dados de demonstração (opcional)
+
+O Ritmo não cria perfis nem treinos automaticamente. Se quiser os dois perfis de
+exemplo e os sete treinos padrão em um banco local descartável, ative o seed
+explicitamente:
+
+```powershell
+$env:RITMO_SEED_DEFAULT_DATA = "true"
+.\\.venv\\Scripts\\python.exe -m uvicorn main:app --reload
+Remove-Item Env:RITMO_SEED_DEFAULT_DATA
+```
+
+O seed é idempotente: não duplica registros nem sobrescreve perfis existentes, e
+nunca define senha. Nunca habilite essa variável em staging ou produção.
+
 ### Senhas dos perfis
 
 O login do navegador usa perfil + senha. O hash é gravado no banco por um

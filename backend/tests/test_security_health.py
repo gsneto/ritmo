@@ -136,7 +136,9 @@ def test_production_startup_skips_schema_bootstrap_and_hides_docs():
             assert client.get("/openapi.json").status_code == 404
 
     database_initializer.assert_not_called()
-    session.close.assert_called_once()
+    # No seed in a published environment, so no session is opened at all.
+    session_factory.assert_not_called()
+    session.close.assert_not_called()
     assert production_app.docs_url is None
     assert production_app.redoc_url is None
     assert production_app.openapi_url is None

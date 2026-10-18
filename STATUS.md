@@ -199,6 +199,20 @@ A integração com a Vercel não pôde ser feita: o perfil de navegador não est
 autenticado em `vercel.com` e não há token. `vercel.json` permanece intocado para
 não arriscar a publicação de produção.
 
+## Seed, dados de staging e rewrite (18 de outubro de 2026)
+
+- O seed de demonstração passou a ser **opt-in** por
+  `RITMO_SEED_DEFAULT_DATA`. Antes ele rodava em todo startup, inclusive em
+  produção, criando dois perfis sem senha.
+- O staging foi limpo: os registros removidos eram exatamente o resultado do
+  seed (2 perfis, 14 treinos, 26 exercícios) e nada mais. O banco ficou com 0
+  usuários, 0 treinos, 21 tabelas de aplicação e revisão `a1c4e9f7b2d5`.
+- `vercel.json` recebeu o rewrite `/api/:path*` para a API de staging, antes do
+  catch-all, e `Cache-Control: no-store` para `/api/*`.
+- **Aviso**: o rewrite aponta para staging. Antes de publicar produção ele
+  precisa apontar para a API de produção.
+- Backend: 182 testes. Frontend: 144. Ruff, Mypy, ESLint e build aprovados.
+
 ## Bloqueios externos
 
 Verificado em 17 de outubro de 2026:
