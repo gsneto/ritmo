@@ -98,40 +98,75 @@ manual.
 
 ### Configuração do serviço
 
+O blueprint está versionado em `render.yaml` na raiz. Ele declara um único web
+service, plano `free`, região `virginia`, sem disco persistente e sem workers.
+
 | Campo | Valor |
 | --- | --- |
 | Nome | `ritmo-api-staging` |
-| Repositório | `gsneto/ritmo` |
-| Branch | `chore/ritmo-free-preflight` |
 | Runtime | Docker |
 | Dockerfile | `backend/Dockerfile` |
 | Contexto de build | `backend` |
-| Região | Virginia (a mesma de `aws-us-east-1` no Neon) |
-| Plano | Free |
+| Região | `virginia` (a mesma de `aws-us-east-1` no Neon) |
+| Plano | `free` |
 | Disco persistente | nenhum |
 | Health check | `/ready` |
+| Auto-deploy | desligado (`autoDeployTrigger: 'off'`) |
 
-O `Dockerfile` já respeita a porta injetada pelo provedor
-(`--port ${PORT:-8000}`), escuta em `0.0.0.0` e executa `alembic upgrade head`
-antes de subir o uvicorn. O `.dockerignore` exclui `.env`, `.venv`, bancos e
-testes, então nenhum segredo local entra na imagem.
+O `Dockerfile` escuta em `0.0.0.0` e respeita `${PORT:-8000}`. O `CMD` **não**
+executa migrations: subir a instância nunca altera o schema.
+
+### Criar o serviço (passo manual)
+
+O MCP do Render não está exposto neste ambiente, então o serviço **não foi
+criado**. Antes de criar, confirme no dashboard que o workspace **não** tem
+método de pagamento: com cartão cadastrado, excedente de banda ou de minutos de
+build vira cobrança; sem cartão, o Render suspende os serviços gratuitos até o
+próximo ciclo.
+
+1. Abra `https://dashboard.render.com/blueprints` e clique em **New Blueprint
+   Instance**.
+2. Selecione o repositório `gsneto/ritmo` e a branch `feat/ritmo-staging-deploy`.
+3. Confirme o arquivo `render.yaml` e o plano `free`.
+4. No momento do sync, o Render pedirá `DATABASE_URL` e `CORS_ORIGINS`
+   (`sync: false`). Informe a URL da branch de validação do Neon e a origem exata
+   do preview da Vercel.
+5. Confirme que `APP_ACCESS_TOKEN` foi gerado pelo próprio Render e que
+   `SESSION_COOKIE_SECURE=true`.
+6. Anote a URL pública `https://<nome>.onrender.com`.
+
+Se o dashboard não oferecer o plano `free` para o workspace, interrompa: não
+prossiga com plano pago.
 
 ### Variáveis de ambiente
 
-Somente estas são necessárias para um staging seguro:
-
-| Nome | Conteúdo |
+| Nome | Origem |
 | --- | --- |
-| `DATABASE_URL` | URL PostgreSQL do Neon, endpoint direto com `sslmode=require` |
-| `APP_ACCESS_TOKEN` | segredo longo e aleatório, exclusivo deste ambiente |
-| `CORS_ORIGINS` | origens do frontend que poderão chamar esta API |
+| `DATABASE_URL` | informada no dashboard, endpoint direto com `sslmode=require` |
+| `APP_ACCESS_TOKEN` | gerada pelo Render (`generateValue: true`) |
 | `RITMO_DEBUG` | `false` |
 | `ALLOW_INSECURE_NO_ACCESS_TOKEN` | `false` |
+| `SESSION_COOKIE_SECURE` | `true` |
+| `SESSION_COOKIE_SAMESITE` | `lax` |
 | `TIMEZONE` | `America/Sao_Paulo` |
+| `CORS_ORIGINS` | origem exata do preview da Vercel |
 
-Não configure `SENTRY_DSN`, `GEMINI_API_KEY` nem chaves VAPID nesta fase. Sem
-VAPID, o modo de notificações fica `disabled`, o scheduler não inicia e `/ready`
-avalia apenas o banco.
+Nenhum valor secreto é versionado. Não configure `SENTRY_DSN`, `GEMINI_API_KEY`
+nem chaves VAPID nesta fase.
+
+### Migrations são explícitas
+
+Depois que o serviço existir, aplique o schema uma única vez, de forma
+controlada, a partir de um shell confiável:
+
+```powershell
+Set-Location backend
+.\scripts\alembic_online.ps1
+```
+
+O helper exige que o host seja o da branch de validação e redige a URL em
+qualquer saída. Não habilite `preDeployCommand` com `alembic upgrade head` em
+produção: cada restart reaplicaria a cadeia.
 
 ### Autenticação do navegador
 
@@ -170,6 +205,38 @@ usada pelo navegador nem entra no bundle. Detalhes em `docs/ADR-AUTH-WEB.md`.
   suspensa.
 - O staging não contém dados pessoais e não substitui a migração do aplicativo.
 
+
+### Proxy same-origin na Vercel
+
+Enquanto o serviço Render não existir, **não** adicione uma destination
+fictícia. Quando a URL real estiver confirmada, insira a regra **antes** do
+catch-all da SPA em `vercel.json`:
+
+```json
+{
+  "source": "/api/:path*",
+  "destination": "https://<nome>.onrender.com/api/:path*"
+}
+```
+
+O prefixo `/api` aparece dos dois lados de propósito: as rotas do FastAPI já
+começam em `/api`, então a destination precisa preservá-lo. Uma regra
+`/api/:path*` para `https://host/:path*` produziria 404.
+
+Com esse rewrite e `VITE_API_URL` vazio, o navegador fala apenas com a origem do
+preview. O cookie `__Host-ritmo_session` passa a ser host-only da Vercel, que é
+exatamente o requisito do prefixo `__Host-`.
+
+Não habilite cache para `/api/*`: as respostas carregam sessão e dados pessoais.
+O `main.py` já envia `Cache-Control: no-store` para todo caminho `/api`.
+
+### Preview da Vercel
+
+O preview é gerado a partir da branch `feat/ritmo-staging-deploy`. Não promova
+para produção nesta fase e não altere variáveis do ambiente Production.
+
+Se o push disparar um preview automático, acompanhe apenas esse preview. A
+Vercel Hobby é para uso pessoal não comercial; o Ritmo se enquadra nisso.
 
 ## Política de promoção
 

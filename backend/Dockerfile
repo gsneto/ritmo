@@ -18,4 +18,7 @@ USER ritmo
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Migrations are NOT run on boot. Applying schema changes is an explicit,
+# auditable operator step (`alembic upgrade head`) so a restart or a sleeping
+# instance can never change the database by itself.
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]

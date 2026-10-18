@@ -132,6 +132,21 @@ entrada lista os perfis e pede a senha. A sessão fica num cookie `HttpOnly`
 chamado `ritmo_session` (sem o prefixo `__Host-` em http local) e expira em 30
 dias por padrão.
 
+### Migrations contra o PostgreSQL de staging
+
+`backend/scripts/alembic_online.ps1` aplica a cadeia Alembic em um banco remoto
+sem expor a URL:
+
+```powershell
+Set-Location backend
+.\scripts\alembic_online.ps1 -DryRun   # confere o destino, nao executa
+.\scripts\alembic_online.ps1           # executa upgrade head, current e check
+```
+
+O helper lê a URL com entrada oculta, exige que o host seja o da branch de
+validação (`ep-lucky-unit-b8tr5lts`) e redige qualquer URL na saída. Nunca passe
+a URL como argumento.
+
 ## Frontend
 
 ```powershell

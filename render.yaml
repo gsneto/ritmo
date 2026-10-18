@@ -1,0 +1,40 @@
+# Render Blueprint for the Ritmo staging API.
+#
+# Free plan only: no persistent disk, no paid add-ons, no extra workers.
+# Nothing here creates a database; the API uses the external Neon project.
+#
+# Secrets are declared with `sync: false`, which makes Render prompt for them in
+# the dashboard instead of storing them in this file.
+services:
+  - type: web
+    name: ritmo-api-staging
+    runtime: docker
+    plan: free
+    region: virginia
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /ready
+    # Staging must not redeploy on every push; deploys stay manual.
+    autoDeployTrigger: 'off'
+    envVars:
+      # PostgreSQL connection string for the Neon staging branch.
+      # Paste it in the dashboard; it is never committed.
+      - key: DATABASE_URL
+        sync: false
+      # Server-side key for scripts and backups. Not used by the browser.
+      # Render generates a strong value on first sync.
+      - key: APP_ACCESS_TOKEN
+        generateValue: true
+      - key: RITMO_DEBUG
+        value: 'false'
+      - key: ALLOW_INSECURE_NO_ACCESS_TOKEN
+        value: 'false'
+      - key: SESSION_COOKIE_SECURE
+        value: 'true'
+      - key: SESSION_COOKIE_SAMESITE
+        value: lax
+      - key: TIMEZONE
+        value: America/Sao_Paulo
+      # Exact origin of the Vercel preview that will call this API.
+      - key: CORS_ORIGINS
+        sync: false

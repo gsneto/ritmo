@@ -144,6 +144,24 @@ estão em `docs/NEON_STAGING.md`.
 - Nada foi publicado: API e frontend em produção continuam como estavam.
 - Decisão e limitações em `docs/ADR-AUTH-WEB.md`.
 
+## Staging: preparação concluída, provisionamento bloqueado (17 de outubro de 2026)
+
+- Branch `feat/ritmo-staging-deploy` criada a partir de
+  `origin/feat/ritmo-browser-auth`.
+- `render.yaml` versionado: um único web service, plano `free`, região
+  `virginia`, Docker em `backend/`, health check `/ready`, auto-deploy
+  desligado, sem disco.
+- O `Dockerfile` deixou de executar `alembic upgrade head` no boot. Migrations
+  passaram a ser um passo explícito do operador.
+- `backend/scripts/alembic_online.ps1` criado para executar o Alembic online sem
+  expor a URL e recusando qualquer host que não seja o da branch de validação.
+- Neon confirmado: projeto `ritmo-pessoal-staging` (`autumn-recipe-20127160`),
+  plano Free, PostgreSQL 18, região `aws-us-east-1`. Branch de validação
+  `br-mute-flower-b85ezren` no endpoint `ep-lucky-unit-b8tr5lts`, `ready` e com
+  0 tabelas.
+- **Não concluído nesta fase**: `alembic upgrade head` online, criação do
+  serviço Render e preview da Vercel. Ver `docs/NEON_STAGING.md` e `DEPLOY.md`.
+
 ## Bloqueios externos
 
 Verificado em 17 de outubro de 2026:

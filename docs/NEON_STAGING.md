@@ -74,50 +74,72 @@ pessoais.
 
 ## Validação online do Alembic: pendente
 
-Esta é a lacuna aberta da fase. `alembic upgrade head` **online**, conectado por
-psycopg a esta branch, ainda não foi executado. Os motivos são objetivos:
+`alembic upgrade head` **online** continua não executado. O bloqueio é único e
+objetivo: o agente não tem como receber a senha do banco sem que ela entre no
+contexto do modelo, nos logs ou em um arquivo. Obter a URL pelo MCP e passá-la a
+um processo Python exigiria expô-la em argumento de shell ou variável persistente.
 
-- o agente não possui um cofre ou mecanismo de injeção de credenciais;
-- obter a URL pelo MCP e repassá-la a um processo Python exigiria expô-la em
-  argumento de shell, arquivo ou variável persistente, o que é proibido;
-- a única alternativa executável sem exposição seria repetir o DDL offline pelo
-  MCP, que não comprova o caminho online.
+O banco em si já foi provado em PostgreSQL 18 de duas formas independentes
+(projeto novo na Fase 2A e branch esvaziada na Fase 2B), mas o **comando**
+Alembic conectado ainda não foi exercitado.
 
-O estado atual prova a cadeia de migrations em PostgreSQL 18 de duas formas
-(projeto novo em 2A e branch esvaziada em 2B), mas **não** prova o comando
-Alembic conectado. A branch ficou deliberadamente vazia para receber esse teste.
+### Endpoint da branch de validação
 
-### Procedimento seguro para concluir
+| Item | Valor |
+| --- | --- |
+| Branch | `ritmo-online-migration-validation` (`br-mute-flower-b85ezren`) |
+| Endpoint read-write | `ep-lucky-unit-b8tr5lts` |
+| Host | `ep-lucky-unit-b8tr5lts.c-14.us-east-1.aws.neon.tech` |
+| Estado | `ready`, 0 tabelas em `public` |
+| Relação com `main` | endpoint **diferente** de `ep-wispy-base-b8d6ty9q` |
 
-Execute no terminal do próprio usuário, onde a URL nunca entra em histórico nem
-em argumentos visíveis:
+O endpoint ser distinto é o que permite ao helper recusar qualquer destino que
+não seja esta branch.
+
+### Helper seguro
+
+`backend/scripts/alembic_online.ps1` executa a validação sem expor a URL:
+
+- lê a URL com `Read-Host -AsSecureString`, sem eco e sem argumento;
+- exige que o host comece por `ep-lucky-unit-b8tr5lts` e recusa qualquer outro;
+- mantém a URL apenas em memória e em `$env:DATABASE_URL` durante os processos
+  filhos;
+- redige toda URL `postgres://`/`postgresql://` da saída antes de imprimir;
+- remove a variável no `finally`, inclusive em caso de erro;
+- não grava nada em disco.
+
+Execução, no terminal do próprio operador:
 
 ```powershell
 Set-Location C:\Users\anton\OneDrive\Desktop\habitos-base\backend
-$secure = Read-Host "Cole a DATABASE_URL da branch de validacao (nao sera exibida)" -AsSecureString
-$plain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-  [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-)
-$env:DATABASE_URL = $plain
-$env:RITMO_DEBUG = "false"
-$env:ALLOW_INSECURE_NO_ACCESS_TOKEN = "false"
-$env:APP_ACCESS_TOKEN = "staging-validation-token"
-$env:CORS_ORIGINS = "https://example.invalid"
-.\.venv\Scripts\python.exe -m alembic upgrade head
-.\.venv\Scripts\python.exe -m alembic current
-Remove-Item Env:DATABASE_URL, Env:RITMO_DEBUG, Env:ALLOW_INSECURE_NO_ACCESS_TOKEN, Env:APP_ACCESS_TOKEN, Env:CORS_ORIGINS
+.\scripts\alembic_online.ps1
 ```
 
-Depois, confirme no console do Neon, na branch de validação:
+Para conferir o destino sem executar nada, use `-DryRun`.
+
+A URL da branch é obtida no console do Neon, em **Connect** da branch
+`ritmo-online-migration-validation`. Não cole essa URL em chat, issue, commit ou
+arquivo.
+
+### Resultado esperado
+
+```
+alembic current  ->  a1c4e9f7b2d5 (head)
+alembic check    ->  No new upgrade operations detected.
+```
+
+Depois disso, confirmar na branch:
 
 ```sql
 SELECT version_num FROM alembic_version;
 SELECT count(*) FROM information_schema.tables
 WHERE table_schema = 'public' AND table_name <> 'alembic_version';
+SELECT column_name FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'password_hash';
 ```
 
-Esperado: `f4b7d2a91c03` e `20`. Quando isso passar, a lacuna está fechada e a
-branch pode ser descartada.
+Esperado: `a1c4e9f7b2d5`, `21` (as 20 anteriores mais `user_sessions`) e uma
+linha para `password_hash`.
 
 ## Testes executados
 
