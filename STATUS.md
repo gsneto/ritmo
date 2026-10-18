@@ -264,6 +264,20 @@ deployment `3d9d7b3` de 1º de agosto.
 - Plano de cutover e rollback em `docs/MIGRATION_PLAN.md`.
 - Backend: 190 testes. Nenhum perfil real importado, nenhuma senha provisionada.
 
+## Privacidade do login e migração (18 de outubro de 2026)
+
+- `GET /api/auth/profiles` deixou de expor nomes. Devolve um `login_id` opaco
+  (HMAC-SHA256 truncado) e um rótulo `Perfil N`. Verificado na API publicada no
+  commit `b5b45a1`, com perfis sintéticos: nenhum nome, inicial, tema ou slug
+  apareceu; login pelo handle funcionou.
+- O login continua aceitando o `profile_id` bruto para scripts, protegido por
+  senha e lockout como antes.
+- `backend/scripts/backup_local_data.py` e o plano de migração foram trazidos
+  para a branch de staging.
+- **Migração real ainda não executada.** O pré-requisito de guardar a frase de
+  recuperação fora da máquina não foi cumprido. Ver `docs/MIGRATION_PLAN.md`.
+- Backend: 194 testes. Frontend: 145. Ruff, Mypy, ESLint e build aprovados.
+
 ## Bloqueios externos
 
 Verificado em 17 de outubro de 2026:

@@ -93,10 +93,11 @@ Opção **A**, com a opção **C** como alvo de implantação.
 - `argon2-cffi` passa a ser dependência de runtime.
 - O frontend troca a tela de código por perfil + senha, e a troca de perfil passa
   a exigir a senha do outro perfil.
-- `GET /api/auth/profiles` expõe `profile_id` e `name`, nada mais. É uma decisão
-  consciente para permitir escolher o perfil na tela de login sem digitar um
-  identificador às cegas; a rota é limitada a 30 req/min. Iniciais e tema foram
-  removidos na revisão adversarial.
+- `GET /api/auth/profiles` devolve **apenas** um identificador opaco
+  (`login_id`, HMAC-SHA256 truncado) e um rótulo posicional (`Perfil 1`,
+  `Perfil 2`). Nenhum nome, inicial, tema ou slug de perfil sai sem
+  autenticação. O `login_id` é resolvido no login; o `profile_id` bruto
+  continua aceito para scripts, protegido pela senha e pelo lockout.
 - Sessões antigas continuam válidas após troca de senha. Revogação imediata
   exige apagar as linhas de `user_sessions` do perfil.
 
@@ -143,7 +144,7 @@ tem um teste automatizado em `backend/tests/test_auth_adversarial.py` ou em
 | Alto | Trocar a senha não revogava sessões existentes. | `revoke_all_sessions` existia sem chamadas | o script revoga todas as sessões do perfil | `test_password_rotation_revokes_existing_sessions`, `test_cli_sets_only_the_target_profile_and_revokes_sessions` |
 | Alto | `Sec-Fetch-Site: cross-site` não era considerado; uma requisição cross-site sem `Origin` dependia apenas do token. | `security.enforce_origin` | rejeita `cross-site` antes de olhar o token | `test_cross_site_fetch_metadata_is_rejected` |
 | Médio | O campo `password` do login não tinha limite superior; um corpo enorme virava custo de CPU no Argon2. | `schemas/auth.py` | `min_length=1`, `max_length=256` | coberto pelo schema |
-| Médio | `GET /api/auth/profiles` expunha iniciais e tema antes do login. | `schemas/auth.py` | resposta reduzida a `profile_id` e `name` | `test_profile_directory_is_minimal` |
+| Alto | `GET /api/auth/profiles` devolvia nome real e o próprio slug do perfil (`profile_id`), que é um primeiro nome, sem autenticação. Qualquer pessoa com o domínio da API enumerava a casa. | `routers/auth.py`, `schemas/auth.py` | handle opaco por HMAC + rótulo posicional; nomes só aparecem em `/api/users`, autenticado | `test_profile_directory_is_anonymous`, `test_login_accepts_the_anonymous_handle`, `test_login_handle_does_not_resemble_the_profile_id` |
 | Médio | `enforce_profile_scope` fazia `int()` sem guarda e podia devolver 500 com um `user_id` não numérico. | `security.py` | conversão protegida; retorna 403 | `test_non_numeric_profile_id_is_forbidden_not_a_server_error` |
 | Baixo | `CSRF_EXEMPT_PATHS` é inalcançável: o login não passa por `get_principal`. | leitura de `security.py` e `routers/auth.py` | mantido apenas como documentação; o login tem `enforce_origin` | `test_login_errors_do_not_leak_internals` |
 | Baixo | O lockout é por processo e usa `request.client.host`; atrás de proxy o IP é o do proxy. | `security.py`, `rate_limit.py` | documentado; não protege contra força bruta distribuída | — |

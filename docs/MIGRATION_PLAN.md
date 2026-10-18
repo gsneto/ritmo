@@ -210,7 +210,47 @@ Condições para interromper antes de concluir:
 
 Em qualquer um desses casos, parar, não apagar nada e relatar.
 
-## 8. Limitações conhecidas
+## 8. Estado da execução em 18 de outubro de 2026
+
+### Concluído
+
+| Item | Evidência |
+| --- | --- |
+| Backup localizado e íntegro | `ritmo-backup-20261018T152355Z.tar.gz.enc`, SHA-256 `293B9314…3DD98`, igual ao manifesto |
+| Restauração verificada | `files_verified: 4`, `sqlite_integrity_ok: 1`, `VERIFY OK` |
+| Frase recuperada | DPAPI da conta Windows atual |
+| Fontes conferidas | manifesto com 2 perfis, ambos com hash conferido; contagens idênticas às da Fase 2G |
+| Destino identificado | projeto `autumn-recipe-20127160`, branch `br-mute-flower-b85ezren`, revisão `a1c4e9f7b2d5`, 21 tabelas |
+| Destino limpo | 0 usuários, 0 sessões, 0 treinos |
+| Privacidade do login | `GET /api/auth/profiles` passou a devolver só `login_id` + `Perfil N`; verificado na API publicada em `b5b45a1` |
+| Ensaio do importador | 8 testes com fixtures sintéticas, todos aprovados |
+
+### Pendente — bloqueio real
+
+A frase de recuperação **não** está guardada fora desta máquina. Enquanto isso
+não acontecer, nenhum dado pessoal é transferido: perder a máquina tornaria o
+backup irrecuperável e não haveria rollback.
+
+Pré-requisito para a Fase 2H:
+
+1. Copiar a frase para um gerenciador de senhas (ou papel guardado fora de casa).
+2. Confirmar que ela pode ser lida de outro dispositivo.
+3. Só então executar a importação descrita nas seções 6 e 7.
+
+### Verificação de privacidade executada em produção
+
+Com dois perfis sintéticos inseridos temporariamente na branch de staging:
+
+```
+GET /api/auth/profiles
+[{"login_id":"4df5a32ea879b1b9","label":"Perfil 1"},
+ {"login_id":"31a28ab5ef732f3e","label":"Perfil 2"}]
+```
+
+Sem nomes, iniciais, temas ou slugs. Login pelo `login_id` devolveu 200. Os
+perfis sintéticos foram removidos em seguida; o banco voltou a 0 usuários.
+
+## 9. Limitações conhecidas
 
 - O backup criptografado usa uma frase gerada localmente e protegida por DPAPI
   na conta Windows atual. Se a máquina for perdida sem que a frase tenha sido
