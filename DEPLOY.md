@@ -116,7 +116,33 @@ service, plano `free`, região `virginia`, sem disco persistente e sem workers.
 O `Dockerfile` escuta em `0.0.0.0` e respeita `${PORT:-8000}`. O `CMD` **não**
 executa migrations: subir a instância nunca altera o schema.
 
-### Criar o serviço (passo manual)
+### Serviço criado (18 de outubro de 2026)
+
+O serviço existe e está no ar:
+
+| Campo | Valor |
+| --- | --- |
+| Nome | `ritmo-api-staging` |
+| ID | `srv-dbaa28rncjis73cpk0mg` |
+| Blueprint | `ritmo-staging` (`exs-dbaa1d6q1p3s73at540g`) |
+| URL | `https://ritmo-api-staging.onrender.com` |
+| Plano / região | Free / `virginia` |
+| Commit | `fe6ba1f` |
+| Health check | `/ready` |
+
+Criado pelo Blueprint do dashboard, a partir do repositório público
+`gsneto/ritmo` na branch `feat/ritmo-staging-deploy`. O workspace não tem cartão
+cadastrado (`No card on file`), então excedente suspende o serviço em vez de
+cobrar.
+
+`DATABASE_URL` **não** foi criada automaticamente: o campo `sync: false` ficou
+vazio no formulário. Foi adicionada depois em Environment, com o endpoint direto
+do Neon (sem `-pooler`). Sem ela o primeiro deploy caiu no SQLite efêmero e
+falhou com `no such table: users`; a correção está em `fe6ba1f`.
+
+### Provisionamento manual (histórico)
+
+
 
 O MCP do Render não está exposto neste ambiente, então o serviço **não foi
 criado**. Antes de criar, confirme no dashboard que o workspace **não** tem

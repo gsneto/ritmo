@@ -162,6 +162,43 @@ estão em `docs/NEON_STAGING.md`.
 - **Não concluído nesta fase**: `alembic upgrade head` online, criação do
   serviço Render e preview da Vercel. Ver `docs/NEON_STAGING.md` e `DEPLOY.md`.
 
+## Staging no ar (18 de outubro de 2026)
+
+O backend de staging está publicado e funcional.
+
+| Item | Valor |
+| --- | --- |
+| Serviço | `ritmo-api-staging` (`srv-dbaa28rncjis73cpk0mg`) |
+| Blueprint | `ritmo-staging` (`exs-dbaa1d6q1p3s73at540g`) |
+| URL | `https://ritmo-api-staging.onrender.com` |
+| Plano / região | Free / `virginia` |
+| Commit em execução | `fe6ba1f` |
+| Deploy | Live, 1m06s |
+| `/health` | 200, `healthy` |
+| `/ready` | 200, `database: ready` |
+| Banco | Neon `br-mute-flower-b85ezren`, revisão `a1c4e9f7b2d5` |
+
+Smoke tests aprovados por HTTP: login válido, login inválido (401), perfil
+inexistente (401), escrita sem CSRF (403), escrita com CSRF (200), acesso a
+outro perfil (403), logout (200) e reuso da sessão revogada (401).
+
+### Achados desta rodada
+
+- O primeiro deploy falhou com `no such table: users`: `DATABASE_URL` não tinha
+  sido criada no serviço e a aplicação caía no SQLite efêmero. Corrigido em
+  `fe6ba1f` — `DEBUG=false` sem `DATABASE_URL` agora falha na validação em vez
+  de degradar em silêncio.
+- `seed_default_data` roda em **todo** startup, não apenas no bootstrap SQLite.
+  Ele criou os dois perfis padrão no staging, sem senha. Nenhum hábito, tarefa
+  ou compra foi criado. Isso é comportamento do código atual, mas significa que
+  o staging nunca fica vazio.
+
+### Bloqueio remanescente
+
+A integração com a Vercel não pôde ser feita: o perfil de navegador não está
+autenticado em `vercel.com` e não há token. `vercel.json` permanece intocado para
+não arriscar a publicação de produção.
+
 ## Bloqueios externos
 
 Verificado em 17 de outubro de 2026:

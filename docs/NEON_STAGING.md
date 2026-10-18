@@ -72,7 +72,42 @@ reverificada em seguida e continuou com 20 tabelas e `alembic_version =
 f4b7d2a91c03`, comprovando o isolamento. A branch de validação não contém dados
 pessoais.
 
-## Validação online do Alembic: pendente
+## Validação online do Alembic: concluída (18 de outubro de 2026)
+
+`alembic upgrade head` **online** executou com sucesso na branch
+`br-mute-flower-b85ezren`, por conexão psycopg real.
+
+```
+alembic upgrade head  -> 5 revisões aplicadas
+alembic current       -> a1c4e9f7b2d5 (head)
+alembic check         -> No new upgrade operations detected.
+```
+
+Verificado por MCP depois da execução:
+
+| Verificação | Resultado |
+| --- | --- |
+| `alembic_version` | `a1c4e9f7b2d5` |
+| Tabelas em `public` | 22 (21 de aplicação + `alembic_version`) |
+| `users.password_hash` | presente, `varchar(255)`, nullable |
+| `user_sessions` | 8 colunas, tipos corretos |
+| Índices de sessão | `uq_user_sessions_token_hash`, `ix_user_sessions_user_id`, `ix_user_sessions_expires_at`, PK |
+| Chaves estrangeiras | 24 |
+| Fingerprint modelo↔banco | `8f1bd2771e0b5ffc41493dffe05d8545` (21 tabelas, 165 colunas) |
+
+O endpoint usado foi o direto (`ep-lucky-unit-b8tr5lts`, sem `-pooler`). A
+primeira tentativa com o pooler falhou, e o helper passou a recusar esse host.
+
+### Conteúdo atual da branch
+
+- 2 perfis criados por `seed_default_data` no startup da API, **sem senha**.
+- 14 treinos e 26 exercícios do seed padrão.
+- 0 hábitos, 0 tarefas, 0 compras, 0 sessões ativas.
+- Nenhum dado pessoal importado.
+
+## Histórico: validação pendente antes de 18/10
+
+
 
 `alembic upgrade head` **online** continua não executado. O bloqueio é único e
 objetivo: o agente não tem como receber a senha do banco sem que ela entre no
