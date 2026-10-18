@@ -275,6 +275,27 @@ desligar essa proteção, o que não foi feito.
 separadas por vírgula. Sem a origem do preview, o login falha com
 `Origin not allowed` — foi exatamente o erro observado na primeira tentativa.
 
+### Cada preview tem URL própria
+
+Um novo push gera um novo domínio de preview. Como `CORS_ORIGINS` exige
+correspondência exata, uma URL nova quebra o login até ser adicionada.
+
+Use o alias estável da branch, que não muda entre deployments:
+
+```
+https://habitos-base-git-feat-ritmo-staging-deploy-gsneto.vercel.app
+```
+
+Valor recomendado para `CORS_ORIGINS`:
+
+```
+https://habitos-base-git-feat-ritmo-staging-deploy-gsneto.vercel.app,https://habitos-base.vercel.app
+```
+
+O valor configurado no momento desta validação contém a URL efêmera
+`habitos-base-4vtbdep9m-gsneto.vercel.app`, que foi a testada no E2E. Trocar
+pelo alias estável é uma edição manual de um campo no painel do Render.
+
 ### Aviso sobre o rewrite no vercel.json
 
 O rewrite `/api/:path*` aponta para a API de **staging**. Ele existe apenas para
