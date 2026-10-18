@@ -1,13 +1,40 @@
+# Secrets and local environment
 .env
 .env.*
 !.env.example
+
+# Python environments and caches
 .venv/
+venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
+
+# Tests are not needed in the runtime image
 tests/
+
+# Local databases, dumps and encryption material.
+# These must never reach a published image: the app uses PostgreSQL in
+# staging, and a stray dump would carry personal data.
 *.db
 *.db-*
 ritmo.db*
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.gz
+*.age
+*.pem
+*.key
+*.bak
+
+# Local logs and editor artifacts
+*.log
+.idea/
+.vscode/

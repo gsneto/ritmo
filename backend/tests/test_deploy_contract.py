@@ -36,9 +36,21 @@ def test_dockerignore_excludes_secrets_and_local_databases():
         if line.strip() and not line.strip().startswith("#")
     }
 
-    assert ".env" in patterns
-    assert ".venv/" in patterns
-    assert "*.db" in patterns
+    required = {
+        ".env",
+        ".venv/",
+        "*.db",
+        "*.sqlite",
+        "*.dump",
+        "*.age",
+        "*.pem",
+        "*.key",
+        "*.log",
+        "tests/",
+        ".coverage",
+    }
+    missing = sorted(required - patterns)
+    assert not missing, f"dockerignore is missing: {missing}"
 
 
 def test_render_blueprint_is_free_and_stateless():
