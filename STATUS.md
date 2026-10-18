@@ -213,6 +213,39 @@ não arriscar a publicação de produção.
   precisa apontar para a API de produção.
 - Backend: 182 testes. Frontend: 144. Ruff, Mypy, ESLint e build aprovados.
 
+## Preview da Vercel validado (18 de outubro de 2026)
+
+| Item | Valor |
+| --- | --- |
+| Projeto Vercel | `habitos-base` (`prj_kxMcwNSdlE2yu0be9zMcfKIFwNb5`), agora conectado a `gsneto/ritmo` |
+| Preview | `https://habitos-base-4vtbdep9m-gsneto.vercel.app` |
+| Branch / commit | `feat/ritmo-staging-deploy` / `258d76d` |
+| Rewrite | `/api/:path*` → `https://ritmo-api-staging.onrender.com/api/:path*`, antes do catch-all |
+| Cache | `no-store` para `/api/*` |
+| `CORS_ORIGINS` | origem exata do preview + produção |
+
+E2E no navegador real, no preview:
+
+| Verificação | Resultado |
+| --- | --- |
+| Tela de login sem sessão | exibida, listando só o perfil fictício |
+| Login com perfil fictício | 200, app carregou |
+| Cookie de sessão | `__Host-ritmo_session`, HttpOnly, Secure, SameSite=Lax, Path=/, host-only |
+| Cookie CSRF | `__Host-ritmo_csrf`, legível, Secure, SameSite=Lax |
+| Escrita sem CSRF | 403 |
+| Escrita com CSRF | 200 |
+| Acesso a outro perfil | 403 |
+| Persistência após reload | sessão mantida |
+| Logout | volta ao login |
+| Sessão revogada | 401 e cookies limpos |
+
+O perfil fictício e o hábito criado no teste foram removidos ao final. O banco
+de staging está com 0 usuários, 0 hábitos, 21 tabelas e revisão
+`a1c4e9f7b2d5`.
+
+Produção (`habitos-base.vercel.app`) **não foi alterada**: continua no
+deployment `3d9d7b3` de 1º de agosto.
+
 ## Bloqueios externos
 
 Verificado em 17 de outubro de 2026:

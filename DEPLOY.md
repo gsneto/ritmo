@@ -256,6 +256,25 @@ exatamente o requisito do prefixo `__Host-`.
 Não habilite cache para `/api/*`: as respostas carregam sessão e dados pessoais.
 O `main.py` já envia `Cache-Control: no-store` para todo caminho `/api`.
 
+### Preview validado
+
+O projeto Vercel `habitos-base` foi reconectado ao repositório `gsneto/ritmo`
+(estava sem Git desde agosto) e passou a gerar previews por branch.
+
+| Item | Valor |
+| --- | --- |
+| Preview de staging | `https://habitos-base-4vtbdep9m-gsneto.vercel.app` |
+| Branch | `feat/ritmo-staging-deploy` |
+| Commit | `258d76d` |
+
+O preview exige autenticação da Vercel (Deployment Protection padrão do Hobby),
+então só o dono da conta acessa. Para liberar publicamente seria necessário
+desligar essa proteção, o que não foi feito.
+
+`CORS_ORIGINS` no Render contém a origem exata do preview e a de produção,
+separadas por vírgula. Sem a origem do preview, o login falha com
+`Origin not allowed` — foi exatamente o erro observado na primeira tentativa.
+
 ### Aviso sobre o rewrite no vercel.json
 
 O rewrite `/api/:path*` aponta para a API de **staging**. Ele existe apenas para

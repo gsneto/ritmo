@@ -591,15 +591,15 @@ export default function Settings({
 
       <section className="panel settings-panel">
         <div className="panel-head">
-          <div><p className="section-label">Segurança</p><h2>Código da casa</h2></div>
+          <div><p className="section-label">Segurança</p><h2>Sessão</h2></div>
         </div>
         <p className="settings-copy">
-          Esta ação remove o código somente deste aparelho. Ela não altera a
-          chave configurada no servidor nem desconecta outros aparelhos.
+          Encerrar a sessão desconecta este aparelho. A senha do perfil continua
+          a mesma e os outros aparelhos seguem conectados.
         </p>
         <button className="ghost-button settings-action" type="button" onClick={onChangeAccessCode}>
           <KeyRound size={17} aria-hidden="true" />
-          <span>Esquecer código neste aparelho</span>
+          <span>Sair deste aparelho</span>
         </button>
       </section>
 
