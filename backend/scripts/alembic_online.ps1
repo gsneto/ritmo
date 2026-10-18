@@ -11,18 +11,34 @@
       duration of the child processes;
     * refuses any host other than the validation branch endpoint, so it cannot
       accidentally migrate the staging "main" branch or a production database;
+    * opens a READ-ONLY preflight connection first, reports the server version
+      and the number of tables in `public`, and aborts before any DDL if the
+      database is not empty;
     * redacts every postgres:// / postgresql:// URL from the output before
       printing it;
     * removes DATABASE_URL from the environment when it finishes, even on error.
 
     It never writes the URL to disk and never prints it.
 
+    Note: clearing a .NET string in PowerShell is not guaranteed. The helper
+    removes the environment variable, drops the references and zeroes the BSTR,
+    which is the cleanup PowerShell can actually offer.
+
 .PARAMETER ExpectHost
     Endpoint prefix that the URL host must start with. Defaults to the endpoint
     of the Neon branch ritmo-online-migration-validation.
 
 .PARAMETER DryRun
-    Only print the target host (no credentials) and exit without running Alembic.
+    Only validate and print the target host (no credentials), then exit.
+
+.PARAMETER AllowNonEmpty
+    Skip the "database must be empty" rule. Use only when resuming a partially
+    applied migration that was already inspected.
+
+.PARAMETER AllowPooler
+    Permit a "-pooler" host. Refused by default: the pooler runs in transaction
+    mode, which breaks Alembic DDL and psycopg prepared statements. Use the
+    direct endpoint from the Neon Connect dialog instead.
 
 .EXAMPLE
     .\scripts\alembic_online.ps1
@@ -30,10 +46,21 @@
 [CmdletBinding()]
 param(
     [string]$ExpectHost = 'ep-lucky-unit-b8tr5lts',
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$AllowNonEmpty,
+    [switch]$AllowPooler
 )
 
 $ErrorActionPreference = 'Stop'
+
+$script:Transcript = Join-Path $env:TEMP 'ritmo-alembic-online.log'
+
+function Write-TranscriptLine {
+    param([string]$Text)
+    if ([string]::IsNullOrEmpty($Text)) { return }
+    # Only redacted text ever reaches this file.
+    Add-Content -LiteralPath $script:Transcript -Value $Text -Encoding utf8
+}
 
 function Redact-ConnectionStrings {
     param([string]$Text)
@@ -43,26 +70,70 @@ function Redact-ConnectionStrings {
     return [regex]::Replace($Text, $pattern, '$1<redacted>')
 }
 
-function Invoke-Step {
+function Invoke-Python {
     param(
         [string]$Label,
-        [string[]]$Arguments
+        [string[]]$Arguments,
+        [string]$Stdin
     )
 
     Write-Host ""
     Write-Host "== $Label ==" -ForegroundColor Cyan
 
-    $output = & $script:Python -m @Arguments 2>&1 | Out-String
-    $code = $LASTEXITCODE
+    # Alembic writes INFO lines to stderr. In Windows PowerShell 5.1 a native
+    # command writing to stderr with $ErrorActionPreference = 'Stop' raises
+    # NativeCommandError and aborts the step, and 2>&1 still emits a noisy
+    # error block. Start-Process with file redirection avoids both problems
+    # and gives a reliable exit code.
+    $base = Join-Path $env:TEMP ("ritmo-alembic-" + [guid]::NewGuid().ToString('N'))
+    $outFile = "$base.out"
+    $errFile = "$base.err"
+    $inFile = "$base.in"
 
-    $safe = Redact-ConnectionStrings -Text $output
-    if ($safe.Trim()) { Write-Host $safe.TrimEnd() }
-
-    if ($code -ne 0) {
-        Write-Host "$Label failed with exit code $code" -ForegroundColor Red
-        return $false
+    $hasStdin = $null -ne $Stdin
+    if ($hasStdin) {
+        Set-Content -LiteralPath $inFile -Value $Stdin -Encoding utf8
     }
-    return $true
+
+    try {
+        $params = @{
+            FilePath               = $script:Python
+            ArgumentList           = $Arguments
+            NoNewWindow            = $true
+            Wait                   = $true
+            PassThru               = $true
+            RedirectStandardOutput = $outFile
+            RedirectStandardError  = $errFile
+        }
+        if ($hasStdin) {
+            $params.RedirectStandardInput = $inFile
+        }
+
+        $proc = Start-Process @params
+        $code = $proc.ExitCode
+
+        $stdout = ''
+        if (Test-Path -LiteralPath $outFile) {
+            $stdout = Get-Content -LiteralPath $outFile -Raw -ErrorAction SilentlyContinue
+        }
+        $stderr = ''
+        if (Test-Path -LiteralPath $errFile) {
+            $stderr = Get-Content -LiteralPath $errFile -Raw -ErrorAction SilentlyContinue
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $outFile, $errFile, $inFile -ErrorAction SilentlyContinue
+    }
+
+    $combined = (@($stdout, $stderr) | Where-Object { $_ }) -join "`n"
+    $safe = Redact-ConnectionStrings -Text $combined
+    if ($safe.Trim()) {
+        Write-Host $safe.TrimEnd()
+        Write-TranscriptLine "[$Label]"
+        Write-TranscriptLine $safe.TrimEnd()
+    }
+
+    return [pscustomobject]@{ Ok = ($code -eq 0); Output = $safe; Code = $code }
 }
 
 $backend = Split-Path -Parent $PSScriptRoot
@@ -73,6 +144,53 @@ if (-not (Test-Path -LiteralPath $python)) {
 }
 
 $script:Python = $python
+
+$preflightScript = @'
+import os
+import sys
+
+import psycopg
+
+url = os.environ.get("DATABASE_URL", "")
+if not url:
+    print("PREFLIGHT_FAIL: DATABASE_URL missing")
+    sys.exit(2)
+
+try:
+    conn = psycopg.connect(
+        url,
+        connect_timeout=20,
+        options="-c default_transaction_read_only=on",
+    )
+except Exception as exc:
+    print("PREFLIGHT_FAIL:", type(exc).__name__)
+    sys.exit(3)
+
+with conn:
+    with conn.cursor() as cur:
+        cur.execute("select version()")
+        print("PG_VERSION:", cur.fetchone()[0].split(",")[0])
+        cur.execute("select current_database(), current_user")
+        database, role = cur.fetchone()
+        print("DATABASE:", database)
+        print("ROLE:", role)
+        cur.execute(
+            "select count(*) from information_schema.tables "
+            "where table_schema = 'public'"
+        )
+        tables = cur.fetchone()[0]
+        print("PUBLIC_TABLES:", tables)
+        cur.execute("select to_regclass('public.users') is not null")
+        has_users = cur.fetchone()[0]
+        print("HAS_USERS_TABLE:", has_users)
+        if has_users:
+            cur.execute("select count(*) from public.users")
+            print("USERS_ROWS:", cur.fetchone()[0])
+        cur.execute("select to_regclass('public.alembic_version') is not null")
+        print("HAS_ALEMBIC_VERSION:", cur.fetchone()[0])
+
+print("PREFLIGHT_OK")
+'@
 
 Write-Host "Target: Alembic online migration"
 Write-Host "This will run against the PostgreSQL host starting with '$ExpectHost'."
@@ -106,6 +224,12 @@ try {
         throw "Refusing to run: host does not match the validation branch endpoint ($ExpectHost)."
     }
 
+    if ($uri.Host -like '*-pooler*' -and -not $AllowPooler) {
+        throw ("Refusing to run: '$($uri.Host)' is the pooler endpoint. " +
+            'The pooler uses transaction mode, which breaks Alembic DDL. ' +
+            'Copy the direct endpoint (without -pooler) from the Neon Connect dialog.')
+    }
+
     if ([string]::IsNullOrWhiteSpace($uri.UserInfo)) {
         throw 'Refusing to run: the URL has no credentials, so it is not a database connection string.'
     }
@@ -114,7 +238,7 @@ try {
     Write-Host "Database: $($uri.AbsolutePath.TrimStart('/'))"
 
     if ($DryRun) {
-        Write-Host "Dry run: no migration executed."
+        Write-Host "Dry run: no connection opened, no migration executed."
         return
     }
 
@@ -128,22 +252,52 @@ try {
         $env:APP_ACCESS_TOKEN = 'online-migration-validation'
     }
 
-    $ok = Invoke-Step -Label 'alembic upgrade head' -Arguments @('alembic', 'upgrade', 'head')
-    if ($ok) {
-        $ok = Invoke-Step -Label 'alembic current' -Arguments @('alembic', 'current')
+    $pre = Invoke-Python -Label 'preflight (read-only)' -Arguments @('-') -Stdin $preflightScript
+
+    if (-not $pre.Ok) {
+        throw 'Preflight connection failed. Nothing was changed.'
     }
-    if ($ok) {
-        # `alembic check` needs the revision table to be at head; it reports
-        # model/schema drift and exits non-zero when differences exist.
-        Invoke-Step -Label 'alembic check' -Arguments @('alembic', 'check') | Out-Null
+
+    if ($pre.Output -notmatch 'PREFLIGHT_OK') {
+        throw 'Preflight did not finish cleanly. Nothing was changed.'
+    }
+
+    $tablesMatch = [regex]::Match($pre.Output, 'PUBLIC_TABLES:\s*(\d+)')
+    if (-not $tablesMatch.Success) {
+        throw 'Preflight did not report a table count. Nothing was changed.'
+    }
+
+    $tables = [int]$tablesMatch.Groups[1].Value
+    if ($tables -gt 0 -and -not $AllowNonEmpty) {
+        Write-Host ""
+        Write-Host "Refusing to migrate: the target already has $tables table(s) in public." -ForegroundColor Yellow
+        Write-Host "This run expects an empty validation branch. Nothing was changed." -ForegroundColor Yellow
+        Write-Host "Inspect the branch, then rerun with -AllowNonEmpty only if that is expected." -ForegroundColor Yellow
+        return
     }
 
     Write-Host ""
-    if ($ok) {
-        Write-Host 'Done. Expected head: a1c4e9f7b2d5' -ForegroundColor Green
+    Write-Host "Preflight passed: empty target, read-only connection." -ForegroundColor Green
+
+    $upgrade = Invoke-Python -Label 'alembic upgrade head' -Arguments @('-m', 'alembic', 'upgrade', 'head')
+    $current = $null
+    $check = $null
+
+    if ($upgrade.Ok) {
+        $current = Invoke-Python -Label 'alembic current' -Arguments @('-m', 'alembic', 'current')
+        $check = Invoke-Python -Label 'alembic check' -Arguments @('-m', 'alembic', 'check')
+    }
+
+    Write-Host ""
+    if ($upgrade.Ok -and $current -and $current.Ok) {
+        Write-Host 'SUCCESS: alembic upgrade head completed.' -ForegroundColor Green
+        Write-Host 'Expected head: a1c4e9f7b2d5' -ForegroundColor Green
+        if ($check -and -not $check.Ok) {
+            Write-Host 'Note: alembic check reported drift; review the output above.' -ForegroundColor Yellow
+        }
     }
     else {
-        Write-Host 'Alembic did not finish cleanly. Review the redacted output above.' -ForegroundColor Red
+        Write-Host 'FAILED: alembic did not finish cleanly. Review the redacted output above.' -ForegroundColor Red
     }
 }
 finally {
