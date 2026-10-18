@@ -237,6 +237,31 @@ Pré-requisito para a Fase 2H:
 2. Confirmar que ela pode ser lida de outro dispositivo.
 3. Só então executar a importação descrita nas seções 6 e 7.
 
+### Ensaio do importador contra a API publicada
+
+O ensaio com fixtures cobre o endpoint em processo. Faltava provar o mesmo
+caminho no container publicado, que é onde a migração real vai rodar. Em
+18 de outubro de 2026, com um perfil sintético criado e removido na branch de
+staging:
+
+| Passo | Resultado |
+| --- | --- |
+| `GET /api/auth/profiles` | 1 handle |
+| `POST /api/auth/login` | 200, cookies `__Host-ritmo_session` e `__Host-ritmo_csrf` |
+| `PUT /api/users/9/backup` | 200, `restored` com 1 hábito, 1 treino, 1 sessão |
+| Segundo `PUT` idêntico | 200 — idempotente |
+| `GET /api/users/9/backup` | contagens idênticas: 1 hábito, 1 treino, 2 exercícios, 1 sessão, 2 exercícios de sessão, 3 séries |
+| Perfil e instantes | iniciais preservadas; `started_at` manteve o instante UTC |
+| `POST /api/auth/logout` | 200 |
+| Limpeza | 0 usuários, 0 hábitos, 0 treinos, 0 sessões, 0 séries |
+
+Duas lições operacionais para a execução real:
+
+1. `sets` e `reps` em `workouts[].exercises[]` são **strings**, não números.
+   Um documento com inteiros é rejeitado com 422 antes de qualquer escrita.
+2. O token CSRF vem no cookie `__Host-ritmo_csrf` (prefixo presente porque
+   `SESSION_COOKIE_SECURE` está ativo) e precisa ir no header `X-CSRF-Token`.
+
 ### Verificação de privacidade executada em produção
 
 Com dois perfis sintéticos inseridos temporariamente na branch de staging:
