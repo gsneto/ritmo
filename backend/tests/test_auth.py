@@ -295,12 +295,12 @@ def test_password_strength_rules():
     validate_password_strength("uma-senha-bem-longa")
 
 
-def test_profile_directory_exposes_only_display_fields(client):
+def test_profile_directory_exposes_only_anonymous_fields(client):
     response = client.get("/api/auth/profiles")
 
     assert response.status_code == 200
     entry = response.json()[0]
-    assert set(entry) == {"profile_id", "name"}
+    assert set(entry) == {"login_id", "label"}
 
 
 def test_password_hash_never_appears_in_responses(client, profiles, auth_headers):

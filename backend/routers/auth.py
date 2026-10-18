@@ -13,8 +13,10 @@ from security import (
     enforce_origin,
     hash_password,
     login_failure_limiter,
+    login_handle,
     password_needs_rehash,
     require_session_principal,
+    resolve_login_handle,
     revoke_session,
     set_session_cookies,
     verify_password,
@@ -39,17 +41,27 @@ def _raise_login_locked_out(retry_after: int) -> None:
 
 @router.get("/profiles", response_model=list[PublicProfile])
 @limiter.limit("30/minute")
-def list_public_profiles(request: Request, db: Session = Depends(get_db)):
-    """Minimal profile directory for the login screen.
+def list_public_profiles(
+    request: Request,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    """Anonymous directory for the login screen.
 
-    Only display data is exposed; no credential, preference or activity is
-    returned. The endpoint is rate limited and documented as a deliberate
-    trade-off in docs/ADR-AUTH-WEB.md.
+    An unauthenticated caller learns how many profiles exist and gets an
+    opaque handle per profile, but no name, initials, theme or profile slug.
+    The authenticated /api/users endpoint still returns the real display data.
+
+    The positional label lets the household tell the entries apart; the
+    mapping to real names is only visible after signing in.
     """
     users = db.query(User).order_by(User.id).all()
     return [
-        PublicProfile(profile_id=user.profile_id, name=user.name)
-        for user in users
+        PublicProfile(
+            login_id=login_handle(user.profile_id, settings),
+            label=f"Perfil {index}",
+        )
+        for index, user in enumerate(users, start=1)
     ]
 
 
@@ -71,7 +83,8 @@ def login(
     if retry_after:
         _raise_login_locked_out(retry_after)
 
-    user = db.query(User).filter(User.profile_id == payload.profile_id).first()
+    candidates = db.query(User).order_by(User.id).all()
+    user = resolve_login_handle(candidates, payload.profile_id, settings)
     password_ok = verify_password(
         user.password_hash if user is not None else None,
         payload.password,

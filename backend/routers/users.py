@@ -29,7 +29,9 @@ def list_users(
     """
     if principal.method == "session":
         return db.query(User).filter(User.id == principal.user_id).all()
-    return db.query(User).all()
+    # Ordered by id so the positional labels used on the login screen stay
+    # consistent with the authenticated list.
+    return db.query(User).order_by(User.id).all()
 
 
 @router.get("/{user_id}", response_model=UserResponse)

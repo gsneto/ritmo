@@ -188,10 +188,10 @@ export default function App() {
     } catch (error) {
       console.error('Failed to sign out before profile switch:', error)
     }
-    await showLogin(
-      'Entre com a senha deste perfil para continuar.',
-      user.profile_id,
-    )
+    // The anonymous login list only exposes opaque handles, so there is no
+    // way to preselect the chosen profile. The user picks the label shown in
+    // Settings for that profile.
+    await showLogin('Entre com a senha deste perfil para continuar.')
   }
 
   function handleHeaderMenuNavigate(destination: '/workouts' | '/reading' | '/progress' | '/settings') {

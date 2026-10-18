@@ -24,14 +24,15 @@ class SessionResponse(ApiSchema):
 
 
 class PublicProfile(ApiSchema):
-    """Minimal directory entry shown before authentication.
+    """Directory entry shown before authentication.
 
-    Only what the login screen needs: an identifier and a human label. No
-    initials, theme, id, e-mail, activity or preference is exposed.
+    Deliberately anonymous: an opaque handle that only works for the login
+    form, plus a positional label. The real profile id, name, initials and
+    theme are never returned to an unauthenticated caller.
     """
 
-    profile_id: str
-    name: str
+    login_id: str
+    label: str
 
 
 class LogoutResponse(ApiSchema):

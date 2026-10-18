@@ -244,6 +244,39 @@ def resolve_session(db: Session, token: str) -> UserSession | None:
     return row
 
 
+def login_handle(profile_id: str, settings: Settings) -> str:
+    """Opaque, stable handle for the unauthenticated login screen.
+
+    The public profile list must not leak the household's names. The handle is
+    derived with HMAC so it cannot be reversed by guessing common first names,
+    and it changes only if the access token is rotated. The client fetches the
+    list on every page load, so rotation is harmless.
+    """
+    key = (settings.access_token or "ritmo-login-handle-dev").encode("utf-8")
+    digest = hmac.new(key, profile_id.encode("utf-8"), hashlib.sha256)
+    return digest.hexdigest()[:16]
+
+
+def resolve_login_handle(
+    users: list[User],
+    supplied: str,
+    settings: Settings,
+) -> User | None:
+    """Find the user behind a login handle, or behind a raw profile id.
+
+    Accepting the raw profile id keeps the CLI scripts and the test suite
+    working; it is still protected by the password and the login lockout.
+    """
+    for user in users:
+        if user.profile_id == supplied:
+            return user
+    for user in users:
+        handle = login_handle(cast(str, user.profile_id), settings)
+        if hmac.compare_digest(handle, supplied):
+            return user
+    return None
+
+
 def csrf_matches(session_row: UserSession, supplied: str | None) -> bool:
     if not supplied:
         return False

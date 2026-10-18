@@ -17,7 +17,7 @@ export default function LoginGate({
   onSubmit,
 }: LoginGateProps) {
   const [profileId, setProfileId] = useState(
-    initialProfileId || profiles[0]?.profile_id || '',
+    initialProfileId || profiles[0]?.login_id || '',
   )
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -56,8 +56,8 @@ export default function LoginGate({
               required
             >
               {profiles.map(profile => (
-                <option key={profile.profile_id} value={profile.profile_id}>
-                  {profile.name}
+                <option key={profile.login_id} value={profile.login_id}>
+                  {profile.label}
                 </option>
               ))}
             </select>

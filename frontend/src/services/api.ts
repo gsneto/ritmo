@@ -44,11 +44,11 @@ export interface User {
   theme: 'light' | 'dark'
 }
 
+// Anonymous directory entry used by the login screen. The backend deliberately
+// returns no name, initials, theme or profile slug before authentication.
 export interface PublicProfile {
-  profile_id: string
-  name: string
-  initials: string
-  theme: 'light' | 'dark'
+  login_id: string
+  label: string
 }
 
 export interface SessionResponse {
